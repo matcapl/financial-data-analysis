@@ -43,6 +43,7 @@ CREATE TABLE financial_metrics (
     source_page INT,
     source_type TEXT CHECK (source_type IN ('Raw', 'Calculated')),
     notes TEXT,
+    corroboration_status VARCHAR(50),
     hash VARCHAR(64) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

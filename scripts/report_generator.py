@@ -3,6 +3,7 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib import colors
 import psycopg2
+import json
 from datetime import datetime
 from utils import get_db_connection, log_event
 
@@ -19,7 +20,7 @@ def generate_report(company_id: int, output_path: str):
                 cur.execute(
                     """
                     SELECT lid.name, p.period_label, fm.value_type, fm.value, fm.currency,
-                           fm.source_file, fm.source_page, fm.notes, fm.corroboration_status
+                        fm.source_file, fm.source_page, fm.notes, fm.corroboration_status
                     FROM financial_metrics fm
                     JOIN line_item_definitions lid ON fm.line_item_id = lid.id
                     JOIN periods p ON fm.period_id = p.id
@@ -48,10 +49,11 @@ def generate_report(company_id: int, output_path: str):
                 # Fetch top questions
                 cur.execute(
                     """
-                    SELECT lq.question_text, lq.composite_score, lq.owner, lq.deadline
+                    SELECT lq.question_text, lq.status, lq.composite_score
                     FROM live_questions lq
-                    WHERE lq.company_id = %s AND lq.status = 'Open'
-                    ORDER BY lq.composite_score DESC LIMIT 35
+                    JOIN derived_metrics dm ON lq.derived_metric_id = dm.id
+                    WHERE dm.company_id = %s AND lq.status = 'Open'
+                    ORDER BY lq.composite_score DESC
                     """,
                     (company_id,)
                 )

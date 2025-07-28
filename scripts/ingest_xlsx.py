@@ -1,4 +1,5 @@
 import pandas as pd
+import datetime
 import psycopg2
 import sys
 import os
@@ -24,7 +25,7 @@ class XLSXIngester:
     def process_file(self):
         log_event("ingestion_started", {"file_path": self.file_path, "company_id": self.company_id})
         try:
-            df = pd.read_excel(self.file_path, sheet_name=0)
+            df = pd.read_csv(self.file_path)
             df.columns = [col.lower().strip() for col in df.columns]
             for _, row in df.iterrows():
                 self._process_row(row)
