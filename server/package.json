@@ -1,0 +1,15 @@
+{
+  "name": "financial-data-server",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "express": "^4.18.0",
+    "express-fileupload": "^1.4.0",
+    "@vercel/blob": "^0.23.0",
+    "pg": "^8.10.0"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "vercel-build": "echo 'No build required'"
+  }
+}

@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "financial-data-analysis"
+version = "0.1.0"
+dependencies = [
+    "pandas>=2.0.0",
+    "psycopg2-binary>=2.9.0",
+    "pymupdf>=1.22.0",
+    "pytesseract>=0.3.10",
+    "pdf2image>=1.16.0",
+    "reportlab>=4.0.0"
+]
