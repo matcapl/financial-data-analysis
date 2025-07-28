@@ -13,3 +13,6 @@ dependencies = [
     "pdf2image>=1.16.0",
     "reportlab>=4.0.0"
 ]
+
+[tool.poetry.dependencies]
+python = ">=3.9,<3.10"
