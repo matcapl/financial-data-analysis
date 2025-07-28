@@ -59,7 +59,7 @@ data/*.pdf
 reports/*.pdf
 
 # Database dumps
-*.sql
+# *.sql
 *.sql.gz
 
 # Cache and misc
