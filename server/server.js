@@ -3,7 +3,7 @@ const dotenv = require('dotenv');
 const { exec } = require('child_process');
 const util = require('util');
 const path = require('path');
-const { BlobServiceClient } = require('@azure/storage-blob');
+const { put, get } = require('@vercel/blob');
 const cors = require('cors');
 
 dotenv.config();
@@ -11,17 +11,26 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
-const blobServiceClient = BlobServiceClient.fromConnectionString(process.env.VERCEL_BLOB_TOKEN);
-const containerClient = blobServiceClient.getContainerClient('financial-data');
+// Validate VERCEL_BLOB_TOKEN
+if (!process.env.VERCEL_BLOB_TOKEN) {
+  console.error('Error: VERCEL_BLOB_TOKEN is not set in .env');
+  process.exit(1);
+}
 
 app.post('/api/upload', async (req, res) => {
   try {
     const { file, fileType, companyId } = req.body;
     const fileName = `${Date.now()}.${fileType}`;
-    const blobClient = containerClient.getBlockBlobClient(fileName);
     const buffer = Buffer.from(file, 'base64');
-    await blobClient.upload(buffer, buffer.length);
-    const filePath = path.join(__dirname, 'uploads', fileName);
+
+    // Upload to Vercel Blob
+    const blob = await put(fileName, buffer, {
+      access: 'public',
+      token: process.env.VERCEL_BLOB_TOKEN
+    });
+
+    // Save locally for script processing
+    const filePath = path.join(__dirname, 'Uploads', fileName);
     require('fs').writeFileSync(filePath, buffer);
 
     const script = fileType === 'csv' ? 'ingest_xlsx.py' : 'ingest_pdf.py';
@@ -29,7 +38,7 @@ app.post('/api/upload', async (req, res) => {
     const execPromise = util.promisify(exec);
     await execPromise(command);
 
-    res.json({ message: 'File uploaded and processed', fileName });
+    res.json({ message: 'File uploaded and processed', fileName, url: blob.url });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to process file' });
@@ -44,11 +53,14 @@ app.post('/api/generate-report', async (req, res) => {
     const execPromise = util.promisify(exec);
     await execPromise(command);
 
-    const blobClient = containerClient.getBlockBlobClient(path.basename(reportPath));
-    await blobClient.uploadFile(reportPath);
-    const reportUrl = blobClient.url;
+    // Upload report to Vercel Blob
+    const reportBuffer = require('fs').readFileSync(reportPath);
+    const blob = await put(`${companyId}_report.pdf`, reportBuffer, {
+      access: 'public',
+      token: process.env.VERCEL_BLOB_TOKEN
+    });
 
-    res.json({ reportUrl });
+    res.json({ reportUrl: blob.url });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to generate report' });
