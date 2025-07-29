@@ -13,6 +13,8 @@ The system operates through these key steps:
 
 Data is managed in a PostgreSQL database with tables for companies, periods, financial metrics, derived metrics, questions, and reports, as defined in `financial_schema.sql` and `question_templates.sql`.
 
+Running make db after cloning guarantees that every new developer has the schema and role in place before touching the UI.
+
 ## Technologies
 
 - **Front-End**: React for the user interface (`client/` directory).

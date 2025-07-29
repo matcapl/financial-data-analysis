@@ -7,6 +7,8 @@ import sys
 import os
 import re
 from datetime import datetime
+import sys, pathlib
+sys.path.append(str(pathlib.Path(__file__).resolve().parent))
 from utils import hash_datapoint, log_event, get_db_connection, clean_numeric_value, parse_period
 
 class PDFIngester:
