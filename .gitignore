@@ -67,3 +67,8 @@ reports/*.pdf
 *.pid
 *.seed
 *.pid.lock
+logs/
+server/Uploads/
+server/logs/
+server/reports/
+
