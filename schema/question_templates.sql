@@ -1,71 +1,47 @@
--- Updated Question Templates - Phase 1 Critical Fix
--- Key changes:
--- 1. Lower MoM threshold from 10% to 5%
--- 2. Lower QoQ threshold from 8% to 4%  
--- 3. Lower YoY threshold from 5% to 3%
--- 4. Lower Budget variance threshold from 5% to 3%
--- 5. Add additional question types for better coverage
 
--- Question templates with proper constraint handling
--- Drop existing table if it exists to avoid constraint conflicts
-DROP TABLE IF EXISTS question_templates;
+-- Drop and recreate question_templates with the correct column names
+DROP TABLE IF EXISTS question_templates CASCADE;
 
 CREATE TABLE question_templates (
     id SERIAL PRIMARY KEY,
-    template_name VARCHAR(100) UNIQUE NOT NULL,
-    question_text TEXT NOT NULL,
-    metric_type VARCHAR(50) NOT NULL,
-    period_type VARCHAR(20) NOT NULL,
-    threshold_type VARCHAR(30) NOT NULL,
-    threshold_value DECIMAL(10,4) NOT NULL,
-    weight INTEGER DEFAULT 1,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    metric TEXT NOT NULL,                    -- scripts expect 'metric' not 'metric_type'
+    calculation_type TEXT NOT NULL,          -- scripts expect 'calculation_type'
+    base_question TEXT NOT NULL,             -- scripts expect 'base_question' not 'question_text'
+    trigger_threshold NUMERIC NOT NULL,      -- scripts expect 'trigger_threshold'
+    trigger_operator TEXT CHECK (trigger_operator IN ('>', '<', '>=', '<=', '=')),
+    default_weight NUMERIC(5,2) NOT NULL,   -- scripts expect 'default_weight'
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Insert question templates with lowered thresholds
-INSERT INTO question_templates (template_name, question_text, metric_type, period_type, threshold_type, threshold_value, weight) VALUES
+-- Insert templates that match the script expectations with lower thresholds
+INSERT INTO question_templates (metric, calculation_type, base_question, trigger_threshold, trigger_operator, default_weight) VALUES 
 
--- Monthly Revenue Questions (5% threshold)
-('revenue_mom_increase', 'Revenue increased by {change:.1f}% month-over-month in {period}. What factors contributed to this growth?', 'Revenue', 'monthly', 'mom_increase', 5.0, 3),
-('revenue_mom_decrease', 'Revenue decreased by {change:.1f}% month-over-month in {period}. What caused this decline?', 'Revenue', 'monthly', 'mom_decrease', 5.0, 4),
+-- Monthly Questions (lowered thresholds)
+('Revenue', 'MoM Growth', 'Revenue increased by {change}% month-over-month. What factors contributed to this growth?', 2.0, '>=', 3.0),
+('Revenue', 'MoM Growth', 'Revenue decreased by {change}% month-over-month. What caused this decline?', -2.0, '<=', 4.0),
+('Gross Profit', 'MoM Growth', 'Gross profit rose by {change}% month-over-month. What operational improvements contributed?', 2.0, '>=', 3.0),
+('Gross Profit', 'MoM Growth', 'Gross profit dropped by {change}% month-over-month. What cost pressures emerged?', -2.0, '<=', 4.0),
+('EBITDA', 'MoM Growth', 'EBITDA increased by {change}% month-over-month. What operational efficiencies were achieved?', 2.0, '>=', 4.0),
+('EBITDA', 'MoM Growth', 'EBITDA decreased by {change}% month-over-month. What cost controls are needed?', -2.0, '<=', 5.0),
 
--- Quarterly Revenue Questions (4% threshold)
-('revenue_qoq_increase', 'Revenue grew by {change:.1f}% quarter-over-quarter in {period}. What drove this performance?', 'Revenue', 'quarterly', 'qoq_increase', 4.0, 3),
-('revenue_qoq_decrease', 'Revenue fell by {change:.1f}% quarter-over-quarter in {period}. What were the key challenges?', 'Revenue', 'quarterly', 'qoq_decrease', 4.0, 4),
+-- Quarterly Questions (lowered thresholds)
+('Revenue', 'QoQ Growth', 'Revenue grew by {change}% quarter-over-quarter. What drove this performance?', 1.5, '>=', 3.0),
+('Revenue', 'QoQ Growth', 'Revenue fell by {change}% quarter-over-quarter. What were the key challenges?', -1.5, '<=', 4.0),
+('Gross Profit', 'QoQ Growth', 'Gross profit improved by {change}% quarter-over-quarter. What margin expansion strategies worked?', 1.5, '>=', 3.0),
+('Gross Profit', 'QoQ Growth', 'Gross profit contracted by {change}% quarter-over-quarter. How can margins be protected?', -1.5, '<=', 4.0),
+('EBITDA', 'QoQ Growth', 'EBITDA grew by {change}% quarter-over-quarter. What scalability factors emerged?', 1.5, '>=', 4.0),
+('EBITDA', 'QoQ Growth', 'EBITDA fell by {change}% quarter-over-quarter. What expense management is required?', -1.5, '<=', 5.0),
 
--- Yearly Revenue Questions (3% threshold)
-('revenue_yoy_increase', 'Revenue increased by {change:.1f}% year-over-year in {period}. How sustainable is this growth trajectory?', 'Revenue', 'yearly', 'yoy_increase', 3.0, 2),
-('revenue_yoy_decrease', 'Revenue declined by {change:.1f}% year-over-year in {period}. What is the recovery strategy?', 'Revenue', 'yearly', 'yoy_decrease', 3.0, 4),
+-- Yearly Questions (lowered thresholds)
+('Revenue', 'YoY Growth', 'Revenue increased by {change}% year-over-year. How sustainable is this growth trajectory?', 1.0, '>=', 2.0),
+('Revenue', 'YoY Growth', 'Revenue declined by {change}% year-over-year. What is the recovery strategy?', -1.0, '<=', 4.0),
+('Gross Profit', 'YoY Growth', 'Gross profit expanded by {change}% year-over-year. What structural advantages were gained?', 1.0, '>=', 2.0),
+('Gross Profit', 'YoY Growth', 'Gross profit eroded by {change}% year-over-year. What competitive pressures exist?', -1.0, '<=', 4.0),
+('EBITDA', 'YoY Growth', 'EBITDA rose by {change}% year-over-year. What long-term value creation occurred?', 1.0, '>=', 3.0),
+('EBITDA', 'YoY Growth', 'EBITDA declined by {change}% year-over-year. What restructuring is needed?', -1.0, '<=', 5.0),
 
--- Monthly Gross Profit Questions (5% threshold)
-('gross_profit_mom_increase', 'Gross profit rose by {change:.1f}% month-over-month in {period}. What operational improvements contributed?', 'Gross Profit', 'monthly', 'mom_increase', 5.0, 3),
-('gross_profit_mom_decrease', 'Gross profit dropped by {change:.1f}% month-over-month in {period}. What cost pressures emerged?', 'Gross Profit', 'monthly', 'mom_decrease', 5.0, 4),
-
--- Quarterly Gross Profit Questions (4% threshold)  
-('gross_profit_qoq_increase', 'Gross profit improved by {change:.1f}% quarter-over-quarter in {period}. What margin expansion strategies worked?', 'Gross Profit', 'quarterly', 'qoq_increase', 4.0, 3),
-('gross_profit_qoq_decrease', 'Gross profit contracted by {change:.1f}% quarter-over-quarter in {period}. How can margins be protected?', 'Gross Profit', 'quarterly', 'qoq_decrease', 4.0, 4),
-
--- Yearly Gross Profit Questions (3% threshold)
-('gross_profit_yoy_increase', 'Gross profit expanded by {change:.1f}% year-over-year in {period}. What structural advantages were gained?', 'Gross Profit', 'yearly', 'yoy_increase', 3.0, 2),
-('gross_profit_yoy_decrease', 'Gross profit eroded by {change:.1f}% year-over-year in {period}. What competitive pressures exist?', 'Gross Profit', 'yearly', 'yoy_decrease', 3.0, 4),
-
--- Monthly EBITDA Questions (5% threshold)
-('ebitda_mom_increase', 'EBITDA increased by {change:.1f}% month-over-month in {period}. What operational efficiencies were achieved?', 'EBITDA', 'monthly', 'mom_increase', 5.0, 4),
-('ebitda_mom_decrease', 'EBITDA decreased by {change:.1f}% month-over-month in {period}. What cost controls are needed?', 'EBITDA', 'monthly', 'mom_decrease', 5.0, 5),
-
--- Quarterly EBITDA Questions (4% threshold)
-('ebitda_qoq_increase', 'EBITDA grew by {change:.1f}% quarter-over-quarter in {period}. What scalability factors emerged?', 'EBITDA', 'quarterly', 'qoq_increase', 4.0, 4),
-('ebitda_qoq_decrease', 'EBITDA fell by {change:.1f}% quarter-over-quarter in {period}. What expense management is required?', 'EBITDA', 'quarterly', 'qoq_decrease', 4.0, 5),
-
--- Yearly EBITDA Questions (3% threshold)
-('ebitda_yoy_increase', 'EBITDA rose by {change:.1f}% year-over-year in {period}. What long-term value creation occurred?', 'EBITDA', 'yearly', 'yoy_increase', 3.0, 3),
-('ebitda_yoy_decrease', 'EBITDA declined by {change:.1f}% year-over-year in {period}. What restructuring is needed?', 'EBITDA', 'yearly', 'yoy_decrease', 3.0, 5),
-
--- Low threshold catchall questions (1% threshold for guaranteed coverage)
-('revenue_small_change', 'Revenue changed by {change:.1f}% in {period}. What market dynamics influenced this result?', 'Revenue', 'any', 'any_change', 1.0, 1),
-('gross_profit_small_change', 'Gross profit shifted by {change:.1f}% in {period}. What supply chain factors were involved?', 'Gross Profit', 'any', 'any_change', 1.0, 1),
-('ebitda_small_change', 'EBITDA moved by {change:.1f}% in {period}. What operational adjustments occurred?', 'EBITDA', 'any', 'any_change', 1.0, 1),
-
--- Seasonal and trend questions
-('revenue_seasonal', 'Revenue patterns in {period} show seasonal variation. How does this compare to historical trends?', 'Revenue', 'any', 'seasonal', 0.1, 2),
-('profitability_trend', 'Profitability metrics in {period} indicate trend changes. What strategic pivots are planned?', 'EBITDA', 'any', 'trend', 0.1, 2);
+-- Low threshold catchall questions
+('Revenue', 'Variance vs Budget', 'Revenue variance vs budget is {change}%. What market dynamics influenced this result?', 0.5, '>=', 1.0),
+('Gross Profit', 'Variance vs Budget', 'Gross profit variance vs budget is {change}%. What supply chain factors were involved?', 0.5, '>=', 1.0),
+('EBITDA', 'Variance vs Budget', 'EBITDA variance vs budget is {change}%. What operational adjustments occurred?', 0.5, '>=', 1.0);
