@@ -1,6 +1,8 @@
 import psycopg2
 import json
+import sys
 from datetime import datetime, date, timedelta
+from decimal import Decimal
 from utils import get_db_connection, log_event
 
 def calculate_percentage(current, previous):
@@ -171,6 +173,9 @@ def main():
 
                 # Calculate YoY growth
                 for year in years:
+                    # CRITICAL FIX: Convert Decimal year to int before using in date()
+                    year_int = int(year) if isinstance(year, Decimal) else year
+                    
                     for period_id, value_type in [(p, v) for p, v in monthly.keys() if v == "Actual"] + [(p, v) for p, v in quarterly.keys() if v == "Actual"]:
                         cur.execute("SELECT start_date FROM periods WHERE id = %s", (period_id,))
                         result = cur.fetchone()
@@ -222,28 +227,31 @@ def main():
 
                 # Calculate YTD
                 for year in years:
-                    ytd_sum, source_ids = calculate_ytd(cur, company_id, year, line_item_id)
+                    # CRITICAL FIX: Convert Decimal year to int
+                    year_int = int(year) if isinstance(year, Decimal) else year
+                    
+                    ytd_sum, source_ids = calculate_ytd(cur, company_id, year_int, line_item_id)
                     if ytd_sum is None:
-                        log_event("ytd_skipped", {"reason": "No monthly data for YTD", "year": year, "line_item": line_item_name})
+                        log_event("ytd_skipped", {"reason": "No monthly data for YTD", "year": year_int, "line_item": line_item_name})
                         continue
 
                     # Create or find YTD period
                     cur.execute(
                         "SELECT id FROM periods WHERE period_type = 'Yearly' AND period_label = %s",
-                        (f"YTD {year}",)
+                        (f"YTD {year_int}",)
                     )
                     period = cur.fetchone()
                     if not period:
                         cur.execute(
                             "INSERT INTO periods (period_type, period_label, start_date, end_date, created_at, updated_at) "
                             "VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
-                            ("Yearly", f"YTD {year}", date(year, 1, 1), date(year, 12, 31), datetime.now(), datetime.now())
+                            ("Yearly", f"YTD {year_int}", date(year_int, 1, 1), date(year_int, 12, 31), datetime.now(), datetime.now())
                         )
                         period_id = cur.fetchone()[0]
                     else:
                         period_id = period[0]
 
-                    prev_ytd_sum, _ = calculate_ytd(cur, company_id, year - 1, line_item_id)
+                    prev_ytd_sum, _ = calculate_ytd(cur, company_id, year_int - 1, line_item_id)
                     ytd_growth = calculate_percentage(ytd_sum, prev_ytd_sum) if prev_ytd_sum else None
 
                     if ytd_growth is not None:
@@ -311,5 +319,4 @@ def main():
             print(f"Metrics calculation completed for company {company_id}")
 
 if __name__ == "__main__":
-    import sys
     main()

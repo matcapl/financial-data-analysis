@@ -6,26 +6,25 @@ const sanitize = require('sanitize-filename');
 
 module.exports = async (req, res) => {
     /**
-     * Fixed Upload Pipeline - Phase 1 Critical Fix
+     * Fixed Upload Handler - FINAL VERSION
      * 
      * Key fixes implemented:
-     * 1. Chain full processing pipeline: ingestion → calculation → questions → ready
-     * 2. Add security measures: sanitize filenames, use spawn instead of execSync
-     * 3. Add progress feedback through response streaming
-     * 4. Add proper error handling for each step
-     * 5. Add validation for file types and company_id
+     * 1. Fix multer file handling: use req.file instead of req.files
+     * 2. Chain full processing pipeline with proper error handling
+     * 3. Add security measures and file validation
+     * 4. Ensure complete pipeline runs: ingestion → calculation → questions
      */
     
-    if (!req.files || !req.files.file) {
-        return res.status(400).json({ error: 'No file uploaded' });
+    if (!req.file) {
+        return res.status(400).json({ error: 'No file uploaded. Make sure to use form field name "file".' });
     }
     
-    const file = req.files.file;
-    const ext = path.extname(file.name).toLowerCase();
+    const file = req.file;
+    const ext = path.extname(file.originalname).toLowerCase();
     
     // Validate file type
-    if (!['.xlsx', '.pdf'].includes(ext)) {
-        return res.status(400).json({ error: 'Invalid file type. Only .xlsx and .pdf files are supported.' });
+    if (!['.xlsx', '.csv', '.pdf'].includes(ext)) {
+        return res.status(400).json({ error: 'Invalid file type. Only .xlsx, .csv, and .pdf files are supported.' });
     }
     
     // Get company_id from request body or default to 1
@@ -36,68 +35,57 @@ module.exports = async (req, res) => {
     }
     
     try {
-        // Sanitize filename to prevent security issues
-        const safeName = sanitize(file.name);
-        const filePath = path.resolve(__dirname, '..', '..', 'data', safeName);
-        
-        // Ensure data directory exists
-        const dataDir = path.dirname(filePath);
-        if (!fs.existsSync(dataDir)) {
-            fs.mkdirSync(dataDir, { recursive: true });
-        }
-        
-        // Save uploaded file
-        await file.mv(filePath);
+        console.log(`🚀 Starting complete pipeline for file: ${file.originalname}`);
         
         // Step 1: File Ingestion
-        console.log('Starting file ingestion...');
-        const script = ext === '.xlsx' ? 'ingest_xlsx.py' : 'ingest_pdf.py';
+        console.log('📁 Step 1: File ingestion...');
+        const script = (ext === '.xlsx' || ext === '.csv') ? 'ingest_xlsx.py' : 'ingest_pdf.py';
         
-        await runPythonScript(script, [filePath, company_id.toString()]);
-        console.log('✓ File ingestion completed');
+        await runPythonScript(script, [file.path, company_id.toString()]);
+        console.log('✅ Step 1: File ingestion completed');
         
         // Step 2: Calculate Metrics
-        console.log('Starting metric calculations...');
-        await runPythonScript('calc_metrics.py', []);
-        console.log('✓ Metric calculations completed');
+        console.log('📊 Step 2: Metric calculations...');
+        await runPythonScript('calc_metrics.py', [company_id.toString()]);
+        console.log('✅ Step 2: Metric calculations completed');
         
         // Step 3: Generate Questions
-        console.log('Starting question generation...');
+        console.log('❓ Step 3: Question generation...');
         await runPythonScript('questions_engine.py', []);
-        console.log('✓ Question generation completed');
+        console.log('✅ Step 3: Question generation completed');
         
         // Step 4: Upload to Vercel Blob for storage
-        const blob = await put(safeName, fs.readFileSync(filePath), { access: 'public' });
+        const safeName = sanitize(file.originalname);
+        const blob = await put(safeName, fs.readFileSync(file.path), { access: 'public' });
         
         // Clean up local file
-        if (fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath);
+        if (fs.existsSync(file.path)) {
+            fs.unlinkSync(file.path);
         }
         
         // Return success response with processing summary
         res.json({ 
+            success: true,
             message: 'File processed successfully through complete pipeline',
             filename: safeName,
             company_id: company_id,
             blobUrl: blob.url,
             processing_steps: [
-                '✓ File uploaded and validated',
-                '✓ Data ingested from file',
-                '✓ Metrics calculated',
-                '✓ Questions generated',
-                '✓ File stored in blob storage'
+                '✅ File uploaded and validated',
+                '✅ Data ingested from file', 
+                '✅ Metrics calculated',
+                '✅ Questions generated',
+                '✅ File stored in blob storage'
             ],
             next_steps: 'You can now generate a report using the /api/generate-report endpoint'
         });
         
     } catch (err) {
-        console.error('Pipeline processing failed:', err);
+        console.error('❌ Pipeline processing failed:', err);
         
         // Clean up file if it exists
-        const safeName = sanitize(file.name);
-        const filePath = path.resolve(__dirname, '..', '..', 'data', safeName);
-        if (fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath);
+        if (fs.existsSync(file.path)) {
+            fs.unlinkSync(file.path);
         }
         
         res.status(500).json({ 

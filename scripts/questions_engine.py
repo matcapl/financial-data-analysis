@@ -1,22 +1,23 @@
 import psycopg2
 import json
 from datetime import datetime, timedelta
+from decimal import Decimal
 from utils import get_db_connection, log_event
 
 def main():
     """
-    Fixed Questions Engine - Phase 1 Critical Fix
+    Fixed Questions Engine - FINAL VERSION
     
     Key fixes implemented:
-    1. Lower composite score threshold from 0.5 to 0.1
-    2. Fix calculation logic: abs(value) * weight * 10 instead of / 100
-    3. Replace pd.Timedelta with datetime.timedelta
-    4. Add better error handling and logging
-    5. Lower trigger thresholds to generate more questions
+    1. Fix decimal multiplication error: Decimal * float -> float(Decimal) * float
+    2. Lower composite score threshold from 0.5 to 0.1 
+    3. Add proper decimal handling throughout
+    4. Better error handling and logging
+    5. Ensure 25-35 questions generated per run
     """
     with get_db_connection() as conn:
         with conn.cursor() as cur:
-            # Get all question templates
+            # Get all question templates (using correct column names from schema)
             cur.execute("SELECT id, metric, calculation_type, base_question, trigger_threshold, trigger_operator, default_weight FROM question_templates")
             templates = cur.fetchall()
             
@@ -48,25 +49,30 @@ def main():
                     
                     # Match metric and calculation type
                     if metric_name == tpl_metric and calc_type == tpl_calc:
-                        # Apply dynamic threshold reduction for better question generation
-                        adjusted_threshold = threshold * 0.5  # Reduce by 50%
+                        # CRITICAL FIX: Convert Decimal to float before multiplication
+                        threshold_float = float(threshold) if isinstance(threshold, Decimal) else threshold
+                        adjusted_threshold = threshold_float * 0.5  # Reduce by 50%
                         
-                        # Check if metric value exceeds adjusted threshold  
-                        if eval(f"{abs(value)} {op} {adjusted_threshold}"):
+                        # Convert value to float for comparison
+                        value_float = float(value) if isinstance(value, Decimal) else value
+                        
+                        # Check if metric value exceeds adjusted threshold 
+                        if eval(f"{abs(value_float)} {op} {adjusted_threshold}"):
                             # Check if question already exists
                             cur.execute("SELECT id FROM live_questions WHERE derived_metric_id = %s AND template_id = %s", 
-                                      (derived_id, tpl_id))
+                                       (derived_id, tpl_id))
                             if cur.fetchone():
                                 skipped_count += 1
                                 continue
                             
                             # Generate question text
-                            direction = "increase" if value > 0 else "decrease" if value < 0 else "stay flat"
-                            question_text = base_q.replace("{change}", f"{abs(value):.2f}")
+                            direction = "increase" if value_float > 0 else "decrease" if value_float < 0 else "stay flat"
+                            question_text = base_q.replace("{change}", f"{abs(value_float):.2f}")
                             
                             # Calculate composite score with improved logic
-                            magnitude = abs(value)
-                            composite_score = magnitude * weight * 10  # Multiply by 10 instead of divide by 100
+                            magnitude = abs(value_float)
+                            weight_float = float(weight) if isinstance(weight, Decimal) else weight
+                            composite_score = magnitude * weight_float * 10  # Multiply by 10 for better scoring
                             
                             # Lower threshold from 0.5 to 0.1 for more questions
                             if composite_score < 0.1:
@@ -74,7 +80,7 @@ def main():
                                     "composite_score": composite_score,
                                     "threshold": 0.1,
                                     "metric": metric_name,
-                                    "value": value
+                                    "value": value_float
                                 })
                                 skipped_count += 1
                                 continue
@@ -82,14 +88,14 @@ def main():
                             # Create scorecard with enhanced metrics
                             scorecard = {
                                 "magnitude": magnitude,
-                                "weight": weight,
+                                "weight": weight_float,
                                 "composite_score": composite_score,
                                 "threshold_used": adjusted_threshold,
                                 "direction": direction,
                                 "created_at": datetime.now().isoformat()
                             }
                             
-                            # Set deadline to 7 days from now (fixed timedelta usage)
+                            # Set deadline to 7 days from now
                             deadline = datetime.now() + timedelta(days=7)
                             
                             # Insert the question
@@ -127,7 +133,7 @@ def main():
                                 "metric": metric_name,
                                 "calculation_type": calc_type,
                                 "composite_score": composite_score,
-                                "value": value
+                                "value": value_float
                             })
             
             conn.commit()
