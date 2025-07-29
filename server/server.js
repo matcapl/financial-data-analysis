@@ -1,6 +1,7 @@
 const express = require('express');
     const dotenv = require('dotenv');
     const { exec } = require('child_process');
+    // const { execSync } = require('child_process');
     const util = require('util');
     const path = require('path');
     const fs = require('fs');
@@ -72,11 +73,11 @@ const express = require('express');
           throw new Error('Missing companyId');
         }
 
-        const reportPath = path.join(__dirname, 'reports', `${companyId}_report.pdf`);
         const reportsDir = path.join(__dirname, 'reports');
         if (!fs.existsSync(reportsDir)) {
           fs.mkdirSync(reportsDir, { recursive: true });
         }
+        const reportPath = path.join(reportsDir, `${companyId}_report.pdf`);
 
         const command = `python ../scripts/report_generator.py ${companyId} ${reportPath}`;
         const execPromise = util.promisify(exec);

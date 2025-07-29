@@ -1,5 +1,5 @@
 import pandas as pd
-import datetime
+from datetime import datetime
 import psycopg2
 import sys
 import os
@@ -116,6 +116,7 @@ class XLSXIngester:
         except Exception as e:
             self.error_count += 1
             log_event("row_processing_error", {"error": str(e), "row": row.to_dict()})
+            self.conn.rollback()
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:

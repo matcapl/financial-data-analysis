@@ -1,83 +1,24 @@
-Financial Data Analysis System
-A system to ingest financial data from Excel and PDF board packs, compute metrics (Revenue, Gross Profit, EBITDA), generate questions, and produce PDF reports. Deployable on Vercel with a React front-end and Node.js back-end.
-Prerequisites
+# Financial Data Analysis System
 
-Python 3.9+
-Node.js 18+
-PostgreSQL 13+
-Tesseract OCR
-Vercel account
+This repository hosts a system for analyzing financial data from Excel and PDF files. It calculates key metrics like Revenue, Gross Profit, and EBITDA, generates insightful questions, and produces PDF reports. Deployable on Vercel, it features a React front-end for user interaction and a Node.js back-end for processing, with Python scripts handling data ingestion and report generation.
 
-Setup
+## Methodology
 
-Clone Repository:
-git clone https://github.com/yourusername/financial-data-analysis.git
-cd financial-data-analysis
+The system operates through these key steps:
 
+1. **Data Ingestion**: Custom Python scripts (`ingest_xlsx.py` and `ingest_pdf.py`) process Excel and PDF files, extracting financial data.
+2. **Metric Calculation**: Scripts (`calc_metrics.py`) compute financial metrics based on the ingested data.
+3. **Question Generation**: The `questions_engine.py` script creates questions from the metrics to drive deeper analysis.
+4. **Report Generation**: The `report_generator.py` script compiles metrics and questions into PDF reports, stored and served via Vercel Blob.
 
-Python Environment:
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r <(poetry export --without-hashes)
+Data is managed in a PostgreSQL database with tables for companies, periods, financial metrics, derived metrics, questions, and reports, as defined in `financial_schema.sql` and `question_templates.sql`.
 
+## Technologies
 
-PostgreSQL Setup:
-psql -U postgres -d finance -f schema/financial_schema.sql
-psql -U postgres -d finance -f schema/question_templates.sql
+- **Front-End**: React for the user interface (`client/` directory).
+- **Back-End**: Node.js (`server/server.js`) for API endpoints and processing.
+- **Scripts**: Python for data handling and report generation (`scripts/` directory).
+- **Database**: PostgreSQL for structured data storage (`schema/` directory).
+- **Deployment**: Vercel for hosting and scalability.
 
-
-Client Setup:
-cd client
-npm install
-npm run build
-
-
-Server Setup:
-cd server
-npm install
-
-
-Environment Variables:Create a .env file in the root:
-DB_HOST=localhost
-DB_NAME=finance
-DB_USER=postgres
-DB_PASSWORD=yourpass
-DB_PORT=5432
-VERCEL_BLOB_TOKEN=your_vercel_blob_token
-
-
-Run Locally:
-cd server
-npm start
-cd ../client
-npm start
-
-
-Deploy to Vercel:
-
-Push to a GitHub repository.
-Connect to Vercel and deploy the client and server directories as separate projects.
-Set environment variables in Vercel dashboard.
-Configure vercel.json for routing:{
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": "/server/api/$1" },
-    { "source": "/(.*)", "destination": "/client/build/$1" }
-  ]
-}
-
-
-
-
-
-Usage
-
-Upload .xlsx or .pdf files via the web interface (http://localhost:3000).
-Click "Generate Report" to create a PDF with metrics, observations, and questions.
-Download or preview the report.
-
-Notes
-
-Supports Revenue, Gross Profit, EBITDA with monthly, quarterly, and yearly (YTD) calculations.
-Handles data gaps with notes and logging.
-Questions are generated for changes exceeding thresholds (e.g., 10% MoM, 5% YoY).
-Reports include sourced assertions and no adverbs.
+For installation, usage, and further details, refer to the repository’s documentation.
