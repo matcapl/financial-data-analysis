@@ -75,6 +75,10 @@ module.exports = async (req, res) => {
       // VERCEL ENVIRONMENT: Limited processing
       console.log('🔄 Running in Vercel mode - limited processing');
       
+      console.log('Current working directory:', process.cwd());
+      console.log('Directory contents:', fs.readdirSync('.'));
+      console.log('Scripts directory exists:', fs.existsSync('./scripts'));
+
       // Upload to Vercel Blob immediately
       try {
         const fileBuffer = fs.readFileSync(permanentFilePath);
