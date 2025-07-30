@@ -235,7 +235,7 @@ function runPythonScript(scriptName, args) {
     }
     
     // Spawn Python process with arguments
-    const python = spawn('python', [scriptPath, ...args], {
+    const python = spawn('python3', [scriptPath, ...args], {
       cwd: path.resolve(__dirname, '..', '..'),
       stdio: ['pipe', 'pipe', 'pipe'],
       timeout: 60000 // 60 second timeout

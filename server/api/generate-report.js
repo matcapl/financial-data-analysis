@@ -124,7 +124,7 @@ function runPythonScript(scriptName, args) {
         }
         
         // Spawn Python process with arguments
-        const python = spawn('python', [scriptPath, ...args], {
+        const python = spawn('python3', [scriptPath, ...args], {
             cwd: path.resolve(__dirname, '..', '..'),
             stdio: ['pipe', 'pipe', 'pipe']
         });
@@ -196,7 +196,7 @@ if __name__ == "__main__":
     verify_data(${companyId})
 `;
         
-        const python = spawn('python', ['-c', verifyScript], {
+        const python = spawn('python3', ['-c', verifyScript], {
             cwd: path.resolve(__dirname, '..', '..'),
             stdio: ['pipe', 'pipe', 'pipe']
         });
