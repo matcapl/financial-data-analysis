@@ -1,0 +1,10 @@
+{
+  "services": [
+    {
+      "name": "api",
+      "environment": {
+        "RAILPACK": "python"
+      }
+    }
+  ]
+}
