@@ -2,7 +2,6 @@
   "name": "financial-data-client",
   "version": "0.1.0",
   "private": true,
-  "proxy": "http://localhost:4000",
   "homepage": ".",
   "dependencies": {
     "react": "^18.3.1",

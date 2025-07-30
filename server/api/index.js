@@ -4,8 +4,8 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
-const uploadRouter = require('./api/upload');
-const reportRouter = require('./api/generate-report');
+const uploadRouter = require('./upload');
+const reportRouter = require('./generate-report');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
