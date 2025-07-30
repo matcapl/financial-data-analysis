@@ -6,21 +6,20 @@ const sanitize = require('sanitize-filename');
 
 module.exports = async (req, res) => {
   /**
-   * ENHANCED Upload Pipeline - Vercel Compatible
+   * FIXED Upload Pipeline - Key Issues Resolved:
    * 
-   * Key fixes implemented:
-   * 1. Vercel environment detection
-   * 2. Fallback processing for serverless environments
-   * 3. Enhanced error handling and logging
-   * 4. Secure file handling with sanitization
-   * 5. Progress feedback through response streaming
-   * 6. Full pipeline automation with proper chaining
+   * CRITICAL FIXES:
+   * 1. Files are preserved instead of deleted (copy-based processing)
+   * 2. Proper file type detection and handling
+   * 3. Enhanced error handling with detailed feedback
+   * 4. Secure file processing with sanitization
+   * 5. Progress tracking through response
    */
   
   const isVercel = process.env.VERCEL === '1';
   const isProduction = process.env.NODE_ENV === 'production';
   
-  // CRITICAL FIX: Use req.file (not req.files) for standard multer
+  // Use req.file (not req.files) for standard multer
   if (!req.file) {
     return res.status(400).json({ 
       error: 'No file uploaded',
@@ -32,11 +31,11 @@ module.exports = async (req, res) => {
   const ext = path.extname(file.originalname).toLowerCase();
   
   // Validate file type
-  if (!['.xlsx', '.pdf'].includes(ext)) {
+  if (!['.xlsx', '.pdf', '.csv'].includes(ext)) {
     return res.status(400).json({ 
-      error: 'Invalid file type. Only .xlsx and .pdf files are supported.',
+      error: 'Invalid file type. Only .xlsx, .pdf, and .csv files are supported.',
       received: ext,
-      allowed: ['.xlsx', '.pdf']
+      allowed: ['.xlsx', '.pdf', '.csv']
     });
   }
   
@@ -56,20 +55,16 @@ module.exports = async (req, res) => {
     // Sanitize filename to prevent security issues
     const safeName = sanitize(file.originalname);
     const dataDir = path.resolve(__dirname, '..', '..', 'data');
-    const filePath = path.join(dataDir, safeName);
+    const permanentFilePath = path.join(dataDir, safeName);
     
     // Ensure data directory exists
     if (!fs.existsSync(dataDir)) {
       fs.mkdirSync(dataDir, { recursive: true });
     }
     
-    // Copy uploaded file to data directory
-    fs.copyFileSync(file.path, filePath);
-    
-    // Clean up multer temp file
-    if (fs.existsSync(file.path)) {
-      fs.unlinkSync(file.path);
-    }
+    // CRITICAL FIX: Copy file to permanent location, don't move it
+    // This preserves the original uploaded file
+    fs.copyFileSync(file.path, permanentFilePath);
     
     console.log('✓ File saved successfully');
     
@@ -82,7 +77,7 @@ module.exports = async (req, res) => {
       
       // Upload to Vercel Blob immediately
       try {
-        const fileBuffer = fs.readFileSync(filePath);
+        const fileBuffer = fs.readFileSync(permanentFilePath);
         const blob = await put(safeName, fileBuffer, { access: 'public' });
         blobUrl = blob.url;
         processingSteps.push('✓ File stored in blob storage');
@@ -102,10 +97,16 @@ module.exports = async (req, res) => {
       console.log('🔄 Running full local processing pipeline');
       
       try {
-        // Step 1: File Ingestion
+        // Step 1: File Ingestion - Use correct script based on file type
         console.log('Starting file ingestion...');
-        const script = ext === '.xlsx' ? 'ingest_xlsx.py' : 'ingest_pdf.py';
-        await runPythonScript(script, [filePath, company_id.toString()]);
+        let script;
+        if (ext === '.xlsx' || ext === '.csv') {
+          script = 'ingest_xlsx.py';
+        } else if (ext === '.pdf') {
+          script = 'ingest_pdf.py';
+        }
+        
+        await runPythonScript(script, [permanentFilePath, company_id.toString()]);
         processingSteps.push('✓ Data ingested from file');
         console.log('✓ File ingestion completed');
         
@@ -124,7 +125,7 @@ module.exports = async (req, res) => {
         // Step 4: Upload to Vercel Blob (if available)
         if (process.env.VERCEL_BLOB_TOKEN) {
           try {
-            const fileBuffer = fs.readFileSync(filePath);
+            const fileBuffer = fs.readFileSync(permanentFilePath);
             const blob = await put(safeName, fileBuffer, { access: 'public' });
             blobUrl = blob.url;
             processingSteps.push('✓ File stored in blob storage');
@@ -143,18 +144,19 @@ module.exports = async (req, res) => {
       }
     }
     
-    // Clean up local file
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
+    // CRITICAL FIX: Clean up only the multer temp file, not the permanent copy
+    if (fs.existsSync(file.path)) {
+      fs.unlinkSync(file.path);
     }
     
     // Return success response with processing summary
     const response = { 
       message: isVercel 
         ? 'File uploaded successfully (limited processing in serverless environment)'
-        : 'File processed successfully through complete pipeline',
+        : 'File processed successfully! All pipeline steps completed.',
       filename: safeName,
       company_id: company_id,
+      file_path: permanentFilePath,
       environment: {
         vercel: isVercel,
         production: isProduction,
@@ -164,22 +166,17 @@ module.exports = async (req, res) => {
       processing_steps: processingSteps,
       next_steps: isVercel
         ? 'For full processing, please run locally or implement JavaScript-based processing'
-        : 'You can now generate a report using the /api/generate-report endpoint',
+        : 'File processed successfully! All pipeline steps completed.',
       timestamp: new Date().toISOString()
     };
     
-    console.log('🎉 Upload pipeline completed successfully');
+    console.log('🎉 Upload pipeline completed successfully.');
     res.json(response);
     
   } catch (err) {
     console.error('Pipeline processing failed:', err);
     
-    // Clean up files if they exist
-    const safeName = sanitize(file.originalname);
-    const filePath = path.resolve(__dirname, '..', '..', 'data', safeName);
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
-    }
+    // Clean up only temp files if they exist, preserve permanent files
     if (fs.existsSync(file.path)) {
       fs.unlinkSync(file.path);
     }
@@ -198,7 +195,8 @@ module.exports = async (req, res) => {
           'Python not installed or not in PATH',
           'Database connection issues',
           'Missing environment variables',
-          'File permissions'
+          'File permissions',
+          'Unicode encoding issues with file content'
         ]
       }
     });

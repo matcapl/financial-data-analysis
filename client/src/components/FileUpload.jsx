@@ -11,11 +11,13 @@ const FileUpload = () => {
    * 4. Progress indicators for each processing step
    * 5. Company ID input validation
    * 6. Automatic server health check
+   * 7. **REPORT GENERATION FUNCTIONALITY ADDED**
    */
   
   const [file, setFile] = useState(null);
   const [companyId, setCompanyId] = useState('1');
   const [uploading, setUploading] = useState(false);
+  const [generatingReport, setGeneratingReport] = useState(false);
   const [serverInfo, setServerInfo] = useState(null);
   const [progress, setProgress] = useState({
     upload: false,
@@ -27,6 +29,7 @@ const FileUpload = () => {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [processingSteps, setProcessingSteps] = useState([]);
+  const [reportUrl, setReportUrl] = useState('');
 
   // Get API base URL - works for both development and production
   const getApiUrl = () => {
@@ -74,11 +77,11 @@ const FileUpload = () => {
     }
 
     // Validate file type
-    const allowedTypes = ['.xlsx', '.pdf'];
+    const allowedTypes = ['.xlsx', '.pdf', '.csv'];
     const fileExtension = selectedFile.name.toLowerCase().substring(selectedFile.name.lastIndexOf('.'));
     
     if (!allowedTypes.includes(fileExtension)) {
-      setError('Invalid file type. Please upload an Excel (.xlsx) or PDF (.pdf) file.');
+      setError('Invalid file type. Please upload an Excel (.xlsx), PDF (.pdf), or CSV (.csv) file.');
       setFile(null);
       return;
     }
@@ -180,7 +183,7 @@ const FileUpload = () => {
       // Show next steps
       setTimeout(() => {
         setMessage(prevMessage => 
-          prevMessage + '\n\n🎉 Ready to generate reports! Use the report generation feature below.'
+          prevMessage + '\n\n🎉 Ready to generate reports! Use the report generation button below.'
         );
       }, 2000);
 
@@ -197,6 +200,49 @@ const FileUpload = () => {
       resetProgress();
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleGenerateReport = async () => {
+    if (!companyId || parseInt(companyId) <= 0) {
+      setError('Please enter a valid company ID to generate a report.');
+      return;
+    }
+
+    setGeneratingReport(true);
+    setError('');
+    setReportUrl('');
+
+    try {
+      setMessage('Generating report... This may take a few moments.');
+
+      const response = await fetch(`${getApiUrl()}/api/generate-report`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ company_id: companyId }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || `Server error: ${response.status}`);
+      }
+
+      setMessage('Report generated successfully!');
+      setReportUrl(result.reportPath);
+      setProcessingSteps(result.processing_steps || []);
+
+    } catch (err) {
+      console.error('Report generation error:', err);
+      setError(`Report generation failed: ${err.message}`);
+      
+      if (err.message.includes('No financial metrics found')) {
+        setError(prev => prev + '\n\n💡 Please upload and process some financial data first before generating a report.');
+      }
+    } finally {
+      setGeneratingReport(false);
     }
   };
 
@@ -222,133 +268,159 @@ const FileUpload = () => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-6 bg-white rounded-lg shadow-lg">
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-800 mb-2">
-          Financial Data Analysis Upload
-        </h2>
+    <div className="max-w-4xl mx-auto p-6 bg-white shadow-lg rounded-lg">
+      <div className="mb-8">
+        <h2 className="text-2xl font-bold text-gray-800 mb-4">Financial Data Analysis Upload</h2>
         
         {/* Server Status Indicator */}
         {serverInfo && (
-          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
-            <div className="flex items-center space-x-2">
-              <span className="text-green-600">🟢</span>
-              <span className="text-sm text-gray-700">
+          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+            <div className="flex items-center">
+              <span className="text-green-500 mr-2">🟢</span>
+              <span className="text-sm text-green-700">
                 Server running on port {serverInfo.server_port} 
                 {serverInfo.vercel ? ' (Vercel)' : ' (Local)'}
                 {!serverInfo.python_available && (
-                  <span className="text-orange-600"> - Limited functionality (no Python)</span>
+                  <span className="text-yellow-600"> - Limited functionality (no Python)</span>
                 )}
               </span>
             </div>
           </div>
         )}
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Left Column - File Upload */}
+          <div className="space-y-4">
+            {/* Company ID Input */}
+            <div>
+              <label htmlFor="company-id" className="block text-sm font-medium text-gray-700 mb-2">
+                Company ID
+              </label>
+              <input
+                id="company-id"
+                type="number"
+                min="1"
+                value={companyId}
+                onChange={handleCompanyIdChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Enter company ID"
+              />
+            </div>
+
+            {/* File Input */}
+            <div>
+              <label htmlFor="file-input" className="block text-sm font-medium text-gray-700 mb-2">
+                Select File (.xlsx, .pdf, or .csv)
+              </label>
+              <input
+                id="file-input"
+                type="file"
+                accept=".xlsx,.pdf,.csv"
+                onChange={handleFileChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              {file && (
+                <div className="mt-2 text-sm text-gray-600">
+                  Selected: <span className="font-medium">{file.name}</span> ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                </div>
+              )}
+            </div>
+
+            {/* Upload Button */}
+            <button
+              onClick={handleUpload}
+              disabled={uploading || !file}
+              className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+            >
+              {uploading ? 'Processing...' : 'Upload and Process'}
+            </button>
+          </div>
+
+          {/* Right Column - Report Generation */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-gray-800">Report Generation</h3>
+            
+            <p className="text-sm text-gray-600">
+              Generate a comprehensive financial report with metrics, insights, and questions.
+            </p>
+
+            <button
+              onClick={handleGenerateReport}
+              disabled={generatingReport || !companyId}
+              className="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+            >
+              {generatingReport ? 'Generating Report...' : 'Generate Report'}
+            </button>
+
+            {reportUrl && (
+              <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-700 mb-2">Report generated successfully!</p>
+                <a
+                  href={reportUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-block bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+                >
+                  Download Report PDF
+                </a>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
-      <div className="space-y-6">
-        {/* Company ID Input */}
-        <div>
-          <label htmlFor="company-id" className="block text-sm font-medium text-gray-700 mb-2">
-            Company ID
-          </label>
-          <input
-            id="company-id"
-            type="text"
-            value={companyId}
-            onChange={handleCompanyIdChange}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            placeholder="Enter company ID (positive integer)"
-          />
+      {/* Progress Indicators */}
+      {(uploading || Object.values(progress).some(Boolean)) && (
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-3">Processing Pipeline:</h3>
+          <div className="space-y-2">
+            {Object.entries(progress).map(([step, completed]) => (
+              <div key={step} className="flex items-center">
+                <span className="mr-3 text-lg">{getProgressIcon(step, completed)}</span>
+                <span className="text-sm text-gray-700">{getProgressDescription(step)}</span>
+              </div>
+            ))}
+          </div>
         </div>
+      )}
 
-        {/* File Input */}
-        <div>
-          <label htmlFor="file-input" className="block text-sm font-medium text-gray-700 mb-2">
-            Select File (.xlsx or .pdf)
-          </label>
-          <input
-            id="file-input"
-            type="file"
-            accept=".xlsx,.pdf"
-            onChange={handleFileChange}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
-          {file && (
-            <p className="mt-2 text-sm text-gray-600">
-              Selected: {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
-            </p>
-          )}
+      {/* Processing Steps */}
+      {processingSteps.length > 0 && (
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-3">Completed Steps:</h3>
+          <ul className="space-y-1">
+            {processingSteps.map((step, index) => (
+              <li key={index} className="text-sm text-gray-700">• {step}</li>
+            ))}
+          </ul>
         </div>
+      )}
 
-        {/* Upload Button */}
-        <button
-          onClick={handleUpload}
-          disabled={uploading || !file}
-          className={`w-full py-3 px-4 rounded-md font-medium transition-colors ${
-            uploading || !file
-              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              : 'bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500'
-          }`}
-        >
-          {uploading ? 'Processing Pipeline...' : 'Upload and Process'}
-        </button>
-
-        {/* Progress Indicators */}
-        {(uploading || Object.values(progress).some(Boolean)) && (
-          <div className="bg-gray-50 p-4 rounded-md">
-            <h3 className="text-lg font-medium text-gray-800 mb-3">Processing Pipeline:</h3>
-            <div className="space-y-2">
-              {Object.entries(progress).map(([step, completed]) => (
-                <div key={step} className="flex items-center space-x-3">
-                  <span className="text-lg">{getProgressIcon(step, completed)}</span>
-                  <span className={`text-sm ${completed ? 'text-green-700' : 'text-gray-600'}`}>
-                    {getProgressDescription(step)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Processing Steps */}
-        {processingSteps.length > 0 && (
-          <div className="bg-green-50 p-4 rounded-md">
-            <h3 className="text-lg font-medium text-green-800 mb-3">Completed Steps:</h3>
-            <ul className="space-y-1">
-              {processingSteps.map((step, index) => (
-                <li key={index} className="text-sm text-green-700">
-                  • {step}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {/* Success Message */}
-        {message && !error && (
-          <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-md">
-            <pre className="whitespace-pre-wrap text-sm">{message}</pre>
-          </div>
-        )}
-
-        {/* Error Message */}
-        {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-md">
-            <pre className="whitespace-pre-wrap text-sm">{error}</pre>
-          </div>
-        )}
-
-        {/* Instructions */}
-        <div className="bg-gray-50 p-4 rounded-md">
-          <h3 className="text-lg font-medium text-gray-800 mb-3">Instructions:</h3>
-          <ol className="list-decimal list-inside space-y-1 text-sm text-gray-700">
-            <li>Enter your company ID (must be a positive integer)</li>
-            <li>Select an Excel (.xlsx) or PDF (.pdf) file containing financial data</li>
-            <li>Click "Upload and Process" to run the complete analysis pipeline</li>
-            <li>Wait for all processing steps to complete</li>
-            <li>Generate reports using the report generation feature</li>
-          </ol>
+      {/* Success Message */}
+      {message && !error && (
+        <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+          <pre className="text-sm text-green-700 whitespace-pre-wrap">{message}</pre>
         </div>
+      )}
+
+      {/* Error Message */}
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <pre className="text-sm text-red-700 whitespace-pre-wrap">{error}</pre>
+        </div>
+      )}
+
+      {/* Instructions */}
+      <div className="border-t pt-6">
+        <h3 className="text-lg font-semibold text-gray-800 mb-3">Instructions:</h3>
+        <ol className="list-decimal list-inside space-y-2 text-sm text-gray-700">
+          <li>Enter your company ID (must be a positive integer)</li>
+          <li>Select an Excel (.xlsx), PDF (.pdf), or CSV (.csv) file containing financial data</li>
+          <li>Click "Upload and Process" to run the complete analysis pipeline</li>
+          <li>Wait for all processing steps to complete</li>
+          <li>Click "Generate Report" to create a comprehensive PDF report</li>
+          <li>Download and review your financial analysis report</li>
+        </ol>
       </div>
     </div>
   );
