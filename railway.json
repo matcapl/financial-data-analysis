@@ -1,0 +1,9 @@
+{
+  "build": {
+    "builder": "dockerfile",
+    "dockerfilePath": "server/Dockerfile"
+  },
+  "deploy": {
+    "startCommand": "cd server && node api/index.js"
+  }
+}
