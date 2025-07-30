@@ -28,16 +28,5 @@
   ],
   "env": {
     "NODE_ENV": "production"
-  },
-  "functions": {
-    "server/index.js": {
-      "maxDuration": 30
-    },
-    "server/api/upload.js": {
-      "maxDuration": 30
-    },
-    "server/api/generate-report.js": {
-      "maxDuration": 30
-    }
   }
 }
