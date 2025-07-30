@@ -4,6 +4,17 @@ const path = require('path');
 const fs = require('fs');
 const sanitize = require('sanitize-filename');
 
+// CORS headers for cross-origin uploads
+const express = require('express');
+express()
+  .use((req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    if (req.method === 'OPTIONS') return res.sendStatus(200);
+    next();
+});
+
 module.exports = async (req, res) => {
   /**
    * FIXED Upload Pipeline - Key Issues Resolved:
@@ -213,7 +224,7 @@ module.exports = async (req, res) => {
  */
 function runPythonScript(scriptName, args) {
   return new Promise((resolve, reject) => {
-    const scriptPath = path.resolve(__dirname, '..', '..', 'scripts', scriptName);
+    const scriptPath = path.resolve(__dirname, '..', 'scripts', scriptName);
     
     // Verify script exists
     if (!fs.existsSync(scriptPath)) {
