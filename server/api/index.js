@@ -1,8 +1,13 @@
-require('dotenv').config();
+try {
+  require('dotenv').config();
+} catch(e) {
+  console.error('Error loading .env:', e);
+}
 const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const isVercel = process.env.VERCEL === '1';
 
 const uploadRouter = require('./upload');
 const reportRouter = require('./generate-report');
@@ -157,6 +162,11 @@ app.listen(PORT, () => {
   if (process.env.VERCEL_BLOB_TOKEN) {
     console.log('☁️  Vercel Blob storage configured');
   }
+});
+
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err.stack || err);
+  res.status(500).send(err.stack || err.toString());
 });
 
 module.exports = app;
