@@ -1,5 +1,6 @@
 const { spawn } = require('child_process');
 const { put } = require('@vercel/blob');
+const BLOB_TOKEN = process.env.BLOB_READ_WRITE_TOKEN || process.env.VERCEL_BLOB_TOKEN;
 const path = require('path');
 const fs = require('fs');
 
@@ -69,7 +70,8 @@ module.exports = async (req, res) => {
         const reportData = fs.readFileSync(outputPath);
         const blob = await put(reportFileName, reportData, { 
             access: 'public',
-            contentType: 'application/pdf'
+            contentType: 'application/pdf',
+            token: BLOB_TOKEN
         });
         
         // Step 7: Clean up local report file
