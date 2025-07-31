@@ -5,6 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "financial-data-analysis"
 version = "0.1.0"
+description = "Financial data analysis system"
 dependencies = [
     "pandas>=2.0.0",
     "psycopg2-binary>=2.9.0",
@@ -15,6 +16,9 @@ dependencies = [
     "python-dotenv>=1.0.0"
 ]
 
+[tool.poetry]
+package-mode = false
+
 [tool.setuptools]
 packages = []
 
@@ -22,4 +26,4 @@ packages = []
 "*" = ["*.sql", "*.json", "*.md"]
 
 [tool.poetry.dependencies]
-python = ">=3.9,<4.0"
+python = ">=3.10,<4.0"

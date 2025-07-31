@@ -1,10 +1,12 @@
 # Python
 venv/
+.venv/
 *.pyc
 __pycache__/
 *.pyo
 *.pyd
 .Python
+.python-version
 env/
 build/
 dist/
