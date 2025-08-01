@@ -113,7 +113,7 @@ module.exports = async (req, res) => {
  */
 function runPythonScript(scriptName, args) {
     return new Promise((resolve, reject) => {
-        const scriptPath = path.resolve(__dirname, '..', '..', 'scripts', scriptName);
+        const scriptPath = path.resolve(__dirname, '..', 'scripts', scriptName);
         
         // Verify script exists
         if (!fs.existsSync(scriptPath)) {
@@ -169,7 +169,8 @@ function verifyDataExists(companyId) {
         const verifyScript = `
 import sys
 import psycopg2
-from scripts.utils import get_db_connection
+sys.path.append('/app/server/scripts')
+from utils import get_db_connection
 
 def verify_data(company_id):
     try:
