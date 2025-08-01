@@ -10,6 +10,8 @@ from datetime import datetime
 import sys, pathlib
 sys.path.append(str(pathlib.Path(__file__).resolve().parent))
 from utils import hash_datapoint, log_event, get_db_connection, clean_numeric_value, parse_period
+from field_mapper import map_and_filter_row
+
 
 class PDFIngester:
     def __init__(self, file_path: str, company_id: int = 1):
@@ -22,6 +24,7 @@ class PDFIngester:
         3. Improved table header matching
         4. Better handling of mixed-case labels like "Adjusted EBITDA"
         5. More robust number parsing including parentheses as negatives
+        6. Integration with field_mapper for filtering only target metrics
         """
         self.file_path = file_path
         self.company_id = company_id
@@ -30,13 +33,16 @@ class PDFIngester:
         self.skipped_count = 0
         self.error_count = 0
 
+
     def __enter__(self):
         self.conn = get_db_connection()
         return self
 
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.conn:
             self.conn.close()
+
 
     def process_file(self):
         log_event("pdf_ingestion_started", {"file_path": self.file_path, "company_id": self.company_id})
@@ -59,6 +65,7 @@ class PDFIngester:
             log_event("pdf_ingestion_failed", {"file_path": self.file_path, "error": str(e)})
             raise
 
+
     def _process_page(self, page, page_num):
         log_event("page_processing_started", {"page_number": page_num})
         try:
@@ -80,8 +87,9 @@ class PDFIngester:
             self.error_count += 1
             log_event("page_processing_error", {"page_number": page_num, "error": str(e)})
 
+
     def _process_table(self, df, page_num, table_idx):
-        """Enhanced table processing with better column header detection"""
+        """Enhanced table processing with field mapping integration"""
         # Clean column names - preserve case for better matching
         df.columns = [str(col).strip() for col in df.columns]
         original_columns = df.columns.tolist()
@@ -99,18 +107,6 @@ class PDFIngester:
             if not row_label or row_label.lower() in ['nan', 'none', '']:
                 continue
                 
-            # Identify metric using enhanced logic
-            metric = self._identify_metric(row_label)
-            if not metric:
-                continue
-                
-            log_event("metric_identified", {
-                "metric": metric,
-                "row_label": row_label,
-                "page": page_num,
-                "table": table_idx
-            })
-            
             # Process each data column
             for col_idx, col in enumerate(df.columns[1:], 1):  # Skip first column (labels)
                 if col_idx >= len(row):
@@ -120,17 +116,36 @@ class PDFIngester:
                 value = self._extract_number(cell_value)
                 
                 if value is None:
-                    self.skipped_count += 1
                     continue
                 
                 # Enhanced period parsing with column header context
                 period_info = self._parse_period_from_header(col, page_num, table_idx)
                 
-                self._insert_metric(metric, period_info, value, page_num, 
-                                  f"Table {table_idx + 1}, Row '{row_label}', Column '{col}'")
+                # Create raw row dict for field mapping
+                raw_row = {
+                    "line_item": row_label,
+                    "period_label": period_info["label"],
+                    "period_type": period_info["type"],
+                    "value_type": "Actual",
+                    "frequency": period_info["type"],
+                    "value": value,
+                    "currency": "USD",
+                    "source_file": os.path.basename(self.file_path),
+                    "source_page": page_num,
+                    "notes": f"Table {table_idx + 1}, Row '{row_label}', Column '{col}'"
+                }
+                
+                # Apply field mapping and filtering
+                mapped = map_and_filter_row(raw_row)
+                if mapped is None:
+                    continue
+                
+                # Insert the mapped row
+                self._insert_mapped_metric(mapped, page_num)
+
 
     def _process_text(self, text, page_num):
-        """Enhanced text processing with better line parsing"""
+        """Enhanced text processing with field mapping integration"""
         lines = text.split('\n')
         current_metric = None
         
@@ -139,75 +154,133 @@ class PDFIngester:
             if not line:
                 continue
                 
-            # Check if this line contains a metric identifier
-            metric = self._identify_metric(line)
-            if metric:
-                current_metric = metric
-                
             # Extract numbers from the line
             numbers = self._extract_numbers_from_line(line)
             
             for num_value in numbers:
-                if current_metric:
-                    # Try to infer period from context
-                    period_info = self._infer_period_from_context(line, page_num)
-                    
-                    self._insert_metric(current_metric, period_info, num_value, page_num,
-                                      f"Text line {line_idx + 1}: '{line[:50]}...'")
+                # Try to infer period from context
+                period_info = self._infer_period_from_context(line, page_num)
+                
+                # Create raw row dict for field mapping
+                raw_row = {
+                    "line_item": line,
+                    "period_label": period_info["label"],
+                    "period_type": period_info["type"],
+                    "value_type": "Actual",
+                    "frequency": period_info["type"],
+                    "value": num_value,
+                    "currency": "USD",
+                    "source_file": os.path.basename(self.file_path),
+                    "source_page": page_num,
+                    "notes": f"Text line {line_idx + 1}: '{line[:50]}...'"
+                }
+                
+                # Apply field mapping and filtering
+                mapped = map_and_filter_row(raw_row)
+                if mapped is None:
+                    continue
+                
+                # Insert the mapped row
+                self._insert_mapped_metric(mapped, page_num)
 
-    def _identify_metric(self, text):
-        """Enhanced metric identification with case-insensitive matching"""
-        text_lower = text.lower()
-        text_original = text  # Keep original case for logging
-        
-        # Revenue patterns
-        revenue_patterns = [
-            'revenue', 'turnover', 'sales', 'net sales', 'total revenue', 
-            'gross revenue', 'operating revenue'
-        ]
-        
-        # Gross Profit patterns  
-        gross_profit_patterns = [
-            'gross profit', 'gross margin', 'gross income', 'gross earnings'
-        ]
-        
-        # EBITDA patterns (including adjusted variations)
-        ebitda_patterns = [
-            'ebitda', 'adjusted ebitda', 'proforma ebitda', 'normalised ebitda',
-            'normalized ebitda', 'underlying ebitda', 'core ebitda'
-        ]
-        
-        # Check for EBITDA first (most specific)
-        for pattern in ebitda_patterns:
-            if pattern in text_lower:
-                log_event("metric_pattern_matched", {
-                    "metric": "EBITDA",
-                    "pattern": pattern,
-                    "text": text_original
+
+    def _insert_mapped_metric(self, mapped_row, page_num):
+        """Insert a mapped and filtered metric row"""
+        try:
+            with self.conn.cursor() as cur:
+                # Get line item ID
+                cur.execute("SELECT id FROM line_item_definitions WHERE name = %s", (mapped_row["line_item"],))
+                line_item_result = cur.fetchone()
+                if not line_item_result:
+                    self.error_count += 1
+                    log_event("line_item_not_found", {"line_item": mapped_row["line_item"]})
+                    return
+                line_item_id = line_item_result[0]
+
+                # Parse period
+                period_info = parse_period(mapped_row["period_label"], mapped_row.get("period_type", "Monthly"))
+                if not period_info:
+                    period_info = {
+                        "type": mapped_row.get("period_type", "Monthly"),
+                        "label": mapped_row["period_label"],
+                        "start_date": None,
+                        "end_date": None
+                    }
+
+                # Get or create period
+                cur.execute(
+                    "SELECT id FROM periods WHERE period_type = %s AND period_label = %s",
+                    (period_info["type"], period_info["label"])
+                )
+                period = cur.fetchone()
+                if not period:
+                    cur.execute(
+                        "INSERT INTO periods (period_type, period_label, start_date, end_date, created_at, updated_at) "
+                        "VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
+                        (period_info["type"], period_info["label"], period_info["start_date"], 
+                         period_info["end_date"], datetime.now(), datetime.now())
+                    )
+                    period_id = cur.fetchone()[0]
+                else:
+                    period_id = period[0]
+
+                # Coerce source_page to integer
+                try:
+                    source_page = int(mapped_row.get("source_page", page_num))
+                except (TypeError, ValueError):
+                    source_page = page_num
+
+                # Prepare data for insertion
+                data = {
+                    "company_id": self.company_id,
+                    "period_id": period_id,
+                    "line_item_id": line_item_id,
+                    "value_type": mapped_row.get("value_type", "Actual"),
+                    "frequency": mapped_row.get("frequency", period_info["type"]),
+                    "value": clean_numeric_value(mapped_row.get("value")),
+                    "currency": mapped_row.get("currency", "USD"),
+                    "source_file": mapped_row.get("source_file", os.path.basename(self.file_path)),
+                    "source_page": source_page,
+                    "source_type": "Raw",
+                    "notes": mapped_row.get("notes", "")
+                }
+                
+                data["hash"] = hash_datapoint(data["company_id"], data["period_id"], 
+                                            mapped_row["line_item"], data["value_type"], data["frequency"])
+
+                # Check for duplicates
+                cur.execute("SELECT id FROM financial_metrics WHERE hash = %s", (data["hash"],))
+                if cur.fetchone():
+                    self.skipped_count += 1
+                    log_event("duplicate_skipped", {"hash": data["hash"]})
+                    return
+
+                # Insert the metric
+                cur.execute(
+                    """INSERT INTO financial_metrics (
+                        company_id, period_id, line_item_id, value_type, frequency, value, currency,
+                        source_file, source_page, source_type, notes, hash, created_at, updated_at
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                    (
+                        data["company_id"], data["period_id"], data["line_item_id"], data["value_type"],
+                        data["frequency"], data["value"], data["currency"], data["source_file"],
+                        data["source_page"], data["source_type"], data["notes"], data["hash"],
+                        datetime.now(), datetime.now()
+                    )
+                )
+                
+                self.ingested_count += 1
+                log_event("metric_inserted", {
+                    "line_item": mapped_row["line_item"],
+                    "period_label": period_info["label"],
+                    "value": data["value"],
+                    "source": mapped_row.get("notes", "")
                 })
-                return "EBITDA"
-        
-        # Check for Gross Profit (before Revenue to avoid false positives)
-        for pattern in gross_profit_patterns:
-            if pattern in text_lower:
-                log_event("metric_pattern_matched", {
-                    "metric": "Gross Profit", 
-                    "pattern": pattern,
-                    "text": text_original
-                })
-                return "Gross Profit"
-        
-        # Check for Revenue (but exclude gross revenue variations)
-        for pattern in revenue_patterns:
-            if pattern in text_lower and 'gross' not in text_lower:
-                log_event("metric_pattern_matched", {
-                    "metric": "Revenue",
-                    "pattern": pattern, 
-                    "text": text_original
-                })
-                return "Revenue"
-        
-        return None
+                
+        except Exception as e:
+            self.error_count += 1
+            log_event("insert_error", {"error": str(e), "mapped_row": mapped_row})
+
 
     def _extract_number(self, cell_value):
         """Enhanced number extraction with better formatting support"""
@@ -236,6 +309,7 @@ class PDFIngester:
         except (ValueError, TypeError):
             return None
 
+
     def _extract_numbers_from_line(self, line):
         """Extract all numbers from a text line"""
         # Enhanced regex to capture numbers with various formats
@@ -253,6 +327,7 @@ class PDFIngester:
                     numbers.append(value)
         
         return numbers
+
 
     def _parse_period_from_header(self, column_header, page_num, table_idx):
         """Enhanced period parsing from table column headers"""
@@ -277,6 +352,7 @@ class PDFIngester:
             "start_date": None,
             "end_date": None
         }
+
 
     def _infer_period_from_context(self, line, page_num):
         """Infer period information from text context"""
@@ -306,86 +382,6 @@ class PDFIngester:
             "end_date": None
         }
 
-    def _insert_metric(self, metric, period_info, value, page_num, source_detail):
-        """Insert metric with enhanced error handling and logging"""
-        try:
-            with self.conn.cursor() as cur:
-                # Get line item ID
-                cur.execute("SELECT id FROM line_item_definitions WHERE name = %s", (metric,))
-                line_item_result = cur.fetchone()
-                if not line_item_result:
-                    self.error_count += 1
-                    log_event("line_item_not_found", {"line_item": metric})
-                    return
-                line_item_id = line_item_result[0]
-
-                # Get or create period
-                cur.execute(
-                    "SELECT id FROM periods WHERE period_type = %s AND period_label = %s",
-                    (period_info["type"], period_info["label"])
-                )
-                period = cur.fetchone()
-                if not period:
-                    cur.execute(
-                        "INSERT INTO periods (period_type, period_label, start_date, end_date, created_at, updated_at) "
-                        "VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
-                        (period_info["type"], period_info["label"], period_info["start_date"], 
-                         period_info["end_date"], datetime.now(), datetime.now())
-                    )
-                    period_id = cur.fetchone()[0]
-                else:
-                    period_id = period[0]
-
-                # Prepare data for insertion
-                data = {
-                    "company_id": self.company_id,
-                    "period_id": period_id,
-                    "line_item_id": line_item_id,
-                    "value_type": "Actual",
-                    "frequency": period_info["type"],
-                    "value": value,
-                    "currency": "USD",
-                    "source_file": os.path.basename(self.file_path),
-                    "source_page": page_num,
-                    "source_type": "Raw",
-                    "notes": f"Enhanced extraction: {source_detail}"
-                }
-                
-                data["hash"] = hash_datapoint(data["company_id"], data["period_id"], metric, 
-                                            data["value_type"], data["frequency"])
-
-                # Check for duplicates
-                cur.execute("SELECT id FROM financial_metrics WHERE hash = %s", (data["hash"],))
-                if cur.fetchone():
-                    self.skipped_count += 1
-                    log_event("duplicate_skipped", {"hash": data["hash"]})
-                    return
-
-                # Insert the metric
-                cur.execute(
-                    """INSERT INTO financial_metrics (
-                        company_id, period_id, line_item_id, value_type, frequency, value, currency,
-                        source_file, source_page, source_type, notes, hash, created_at, updated_at
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
-                    (
-                        data["company_id"], data["period_id"], data["line_item_id"], data["value_type"],
-                        data["frequency"], data["value"], data["currency"], data["source_file"],
-                        data["source_page"], data["source_type"], data["notes"], data["hash"],
-                        datetime.now(), datetime.now()
-                    )
-                )
-                
-                self.ingested_count += 1
-                log_event("metric_inserted", {
-                    "line_item": metric,
-                    "period_label": period_info["label"],
-                    "value": value,
-                    "source": source_detail
-                })
-                
-        except Exception as e:
-            self.error_count += 1
-            log_event("insert_error", {"error": str(e), "metric": metric, "source": source_detail})
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
