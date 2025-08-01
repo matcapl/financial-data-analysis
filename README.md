@@ -90,17 +90,51 @@ echo "DATABASE_URL=postgresql://your_user:your_password@ep-xxx.neon.tech:5432/yo
 # Build Docker image
 docker build -t finance-server -f server/Dockerfile .
 
+# Find and kill process on a port
+lsof -ti:4000 | xargs -r kill -9  
+
+# Check Docker is open
+open -a Docker
+
 # Run container
 docker run --rm --env-file .env -p 4000:4000 finance-server &
-
-# Wait 10 seconds for startup, then test
 sleep 10
+# sleep 5 or sleep 10 is optional - gives cursor for running commands in terminal but lose tail
+
+# OR, if troubleshooting
+# Stop any running container named finance-server (if you gave it a name)
+docker stop finance-server 2>/dev/null || true
+
+# Or kill any container using that image
+docker ps -q --filter ancestor=finance-server | xargs -r docker stop
+
+# Then rebuild and run
+docker build -t finance-server -f server/Dockerfile .
+docker run --rm --env-file .env -p 4000:4000 --name finance-server finance-server &
 
 # Test health endpoint
 curl http://localhost:4000/health
 
+# Inspect available endpoints
+curl http://localhost:4000/api/info
+
 # Test file upload
+for file in data/*; do
+  echo "→ Uploading $file"
+  curl -F "file=@$file" http://localhost:4000/api/upload
+done
+# or point to specific file if prefered
 curl -F "file=@data/financial_data_template.csv" http://localhost:4000/api/upload
+
+# Test database connection and contents
+psql "$DATABASE_URL" -c "SELECT current_database();"
+psql "$DATABASE_URL" -c "\dt public.*"
+
+docker run --rm --env-file .env -p 4000:4000 finance-server &
+sleep 5
+psql "$DATABASE_URL" -c "\dt public.*"
+psql "$DATABASE_URL" -c "SELECT COUNT(*) FROM financial_metrics;"
+
 
 # Test report generation
 curl -X POST http://localhost:4000/api/generate-report \
