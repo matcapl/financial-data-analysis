@@ -1,117 +1,146 @@
-import psycopg2
+import os
+import sys
 import json
 import datetime
-from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.lib import colors
-import sys
-print(f"Script started with args: {sys.argv}")
+import logging
+import psycopg2
+from utils import get_db_connection
+from fpdf import FPDF
 
-def generate_report(company_id, output_path):
-    print(f"Generating report for company_id: {company_id}, output_path: {output_path}")
+
+# Setup logging
+def setup_logging():
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(Y-%m-%d %H:%M:%S) %(levelname)s: %(message)s",
+        handlers=[
+            logging.StreamHandler(sys.stdout),
+            logging.FileHandler("report_generator.log")
+        ]
+    )
+    return logging.getLogger(__name__)
+
+
+logger = setup_logging()
+
+
+class Report(FPDF):
+    def __init__(self, company_id):
+        super().__init__(orientation='P', unit='mm', format='A4')
+        self.company_id = company_id
+        self.set_auto_page_break(auto=True, margin=15)
+        # Register corporate font if provided
+        font_path = os.getenv('FONT_PATH')
+        if font_path and os.path.isfile(font_path):
+            self.add_font('Corporate', '', font_path, uni=True)
+            self.set_font('Corporate', '', 12)
+        else:
+            self.set_font('Arial', '', 12)
+
+
+    def header(self):
+        # Title on first page only
+        if self.page_no() == 1:
+            self.set_font_size(18)
+            self.set_text_color(0, 51, 102)
+            self.cell(0, 10, f"Financial Report — Company ID: {self.company_id}", ln=True, align='C')
+            self.ln(5)
+            self.set_text_color(0, 0, 0)
+
+
+    def add_table(self, data, headers, col_widths):
+        # Header row
+        self.set_fill_color(0, 51, 102)
+        self.set_text_color(255, 255, 255)
+        self.set_font(style='B')
+        for header, w in zip(headers, col_widths):
+            self.cell(w, 8, header, border=1, fill=True)
+        self.ln()
+        # Data rows
+        self.set_fill_color(245, 245, 245)
+        self.set_text_color(0, 0, 0)
+        self.set_font(style='')
+        fill = False
+        for row in data:
+            for item, w in zip(row, col_widths):
+                text = str(item) if item is not None else ''
+                self.cell(w, 7, text, border=1, fill=fill)
+            self.ln()
+            fill = not fill
+        self.ln(5)
+
+
+def generate_report(company_id: int, output_path: str):
+    logger.info(f"Starting report generation for company_id={company_id}")
+    conn = None
+    cur = None
     try:
-        # Use context manager for database connection
-        with psycopg2.connect(
-            dbname="finance",
-            user="a",
-            host="localhost",
-            port="5432"
-        ) as conn:
-            with conn.cursor() as cur:
-                # Fetch financial metrics
-                cur.execute(
-                    """
-                    SELECT lid.name, p.period_label, fm.value_type, fm.value, fm.currency,
-                           fm.source_file, fm.source_page, fm.notes, fm.corroboration_status
-                    FROM financial_metrics fm
-                    JOIN line_item_definitions lid ON fm.line_item_id = lid.id
-                    JOIN periods p ON fm.period_id = p.id
-                    WHERE fm.company_id = %s
-                    ORDER BY p.start_date, lid.name
-                    """,
-                    (company_id,)
-                )
-                metrics = cur.fetchall()
+        conn = get_db_connection()
+        cur = conn.cursor()
+        # Fetch metrics
+        cur.execute(
+            """
+            SELECT lid.name, p.period_label, fm.value_type, fm.value, fm.currency,
+                   fm.source_file, fm.source_page, fm.notes, fm.corroboration_status
+              FROM financial_metrics fm
+              JOIN line_item_definitions lid ON fm.line_item_id = lid.id
+              JOIN periods p ON fm.period_id = p.id
+             WHERE fm.company_id = %s
+             ORDER BY p.start_date, lid.name
+            """, (company_id,)
+        )
+        metrics = cur.fetchall()
+        # Fetch questions
+        cur.execute(
+            """
+            SELECT lq.question_text, lq.status, lq.composite_score
+              FROM live_questions lq
+              JOIN derived_metrics dm ON lq.derived_metric_id = dm.id
+             WHERE dm.company_id = %s AND lq.status = 'Open'
+             ORDER BY lq.composite_score DESC
+            """, (company_id,)
+        )
+        questions = cur.fetchall()
 
-                # Fetch live questions
-                cur.execute(
-                    """
-                    SELECT lq.question_text, lq.status, lq.composite_score
-                    FROM live_questions lq
-                    JOIN derived_metrics dm ON lq.derived_metric_id = dm.id
-                    WHERE dm.company_id = %s AND lq.status = 'Open'
-                    ORDER BY lq.composite_score DESC
-                    """,
-                    (company_id,)
-                )
-                questions = cur.fetchall()
+        # Generate PDF
+        pdf = Report(company_id)
+        pdf.add_page()
 
-                # Generate PDF
-                doc = SimpleDocTemplate(output_path, pagesize=letter)
-                styles = getSampleStyleSheet()
-                elements = []
+        # Metrics table
+        headers = ['Line Item','Period','Type','Value','Currency','Source','Page','Notes','Status']
+        col_widths = [40, 20, 20, 20, 20, 30, 15, 40, 20]
+        pdf.add_table(metrics, headers, col_widths)
 
-                elements.append(Paragraph(f"Financial Report - Company ID: {company_id}", styles['Title']))
-                elements.append(Spacer(1, 12))
+        # Questions table
+        q_headers = ['Question','Status','Score']
+        q_col_widths = [120, 30, 20]
+        pdf.add_table(questions, q_headers, q_col_widths)
 
-                # Metrics table
-                data = [['Line Item', 'Period', 'Type', 'Value', 'Currency', 'Source', 'Page', 'Notes', 'Status']]
-                for metric in metrics:
-                    data.append(list(metric))
-                table = Table(data)
-                table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                    ('FONTSIZE', (0, 0), (-1, 0), 14),
-                    ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                    ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-                    ('GRID', (0, 0), (-1, -1), 1, colors.black)
-                ]))
-                elements.append(table)
-                elements.append(Spacer(1, 12))
+        pdf.output(output_path)
+        logger.info(f"PDF written to {output_path}")
 
-                # Questions table
-                elements.append(Paragraph("Open Questions", styles['Heading2']))
-                data = [['Question', 'Status', 'Score']]
-                for question in questions:
-                    data.append(list(question))
-                table = Table(data)
-                table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                    ('FONTSIZE', (0, 0), (-1, 0), 14),
-                    ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                    ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-                    ('GRID', (0, 0), (-1, -1), 1, colors.black)
-                ]))
-                elements.append(table)
+        # Record metadata
+        cur.execute(
+            "INSERT INTO generated_reports (generated_on, parameters, report_file_path, company_id) VALUES (%s, %s, %s, %s)",
+            (datetime.datetime.now(), json.dumps({"company_id": company_id}), output_path, company_id)
+        )
+        conn.commit()
+        logger.info("Metadata recorded in generated_reports")
 
-                # Build the PDF
-                doc.build(elements)
+    except Exception:
+        logger.exception("Error generating report")
+        sys.exit(1)
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
 
-                # Save metadata to generated_reports
-                cur.execute(
-                    """
-                    INSERT INTO generated_reports (generated_on, filter_type, parameters, output_summary, report_file_path, company_id)
-                    VALUES (%s, %s, %s, %s, %s, %s)
-                    """,
-                    (datetime.datetime.now(), "Top 35 Questions", json.dumps({"company_id": company_id}),
-                     f"Summary for company_id {company_id}", output_path, company_id)
-                )
-                conn.commit()
-        print(f"PDF generated successfully at: {output_path}")
-
-    except Exception as e:
-        print(f"Error generating report: {e}")
-        raise
 
 if __name__ == "__main__":
-    company_id = sys.argv[1]
+    if len(sys.argv) != 3:
+        print("Usage: python report_generator.py <company_id> <output_path>")
+        sys.exit(1)
+    company_id = int(sys.argv[1])
     output_path = sys.argv[2]
     generate_report(company_id, output_path)
-    generate_report(1, "reports/financial_report.pdf")
