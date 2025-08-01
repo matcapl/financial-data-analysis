@@ -10,21 +10,9 @@ import re
 load_dotenv()
 
 def get_db_connection():
-    """Get database connection using environment variables"""
-    conn_params = {
-        'host': os.getenv('DB_HOST', 'localhost'),
-        'database': os.getenv('DB_NAME', 'finance'),
-        'user': os.getenv('DB_USER', 'postgres'),
-        'port': int(os.getenv('DB_PORT', '5432'))
-    }
-    
-    # Add password if provided
-    db_password = os.getenv('DB_PASSWORD')
-    if db_password:
-        conn_params['password'] = db_password
-    
+    """Get database connection using DATABASE_URL"""
     try:
-        return psycopg2.connect(**conn_params)
+        return psycopg2.connect(os.environ["DATABASE_URL"])
     except psycopg2.Error as e:
         log_event('database_error', {'error': str(e)})
         raise
