@@ -4,10 +4,7 @@ import json
 import datetime
 import logging
 import psycopg2
-
-sys.path.append('/app/server/scripts')
 from utils import get_db_connection
-
 from fpdf import FPDF
 
 
