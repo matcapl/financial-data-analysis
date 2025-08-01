@@ -34,5 +34,5 @@ COPY server/api ./server/api
 COPY server/scripts ./server/scripts
 
 # Expose and start
-EXPOSE 8080
+EXPOSE 4000
 CMD ["node", "server/api/index.js"]

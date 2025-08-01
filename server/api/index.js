@@ -13,7 +13,7 @@ const uploadRouter = require('./upload');
 const reportRouter = require('./generate-report');
 
 const app = express();
-const PORT = process.env.PORT || 8080;
+const PORT = process.env.PORT || 4000;
 
 app.use(express.json());
 
