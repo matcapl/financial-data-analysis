@@ -33,4 +33,192 @@ By aligning each part of the stack with the platform that best supports its runt
 - **Database**: PostgreSQL for structured data storage (`schema/` directory).
 - **Deployment**: Vercel for hosting and scalability.
 
-For installation, usage, and further details, refer to the repository’s documentation.
+
+
+# Complete Setup Guide: Financial Data Analysis System
+
+## Prerequisites
+- Git
+- Docker Desktop
+- Node.js 18+
+- Python 3.10+
+- A terminal/command line
+
+## Step 1: Clone and Setup Repository
+
+```bash
+# Clone the repository
+git clone https://github.com/matcapl/financial-data-analysis.git
+cd financial-data-analysis
+
+# Create Python virtual environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install Python dependencies
+pip install poetry
+poetry install
+
+# Install Node.js dependencies
+cd server
+npm install
+cd ..
+```
+
+## Step 2: Setup Database (NeonDB - Free Tier)
+
+1. **Sign up for NeonDB**: Go to https://neon.tech and create a free account
+2. **Create a new project**: Choose your region and project name
+3. **Get connection string**: Copy the connection string from the dashboard
+4. **Apply database schema**:
+   ```bash
+   # Use the connection string from Neon dashboard
+   psql "postgresql://username:password@ep-xxx.neon.tech:5432/database?sslmode=require" -f schema/financial_schema.sql
+   psql "postgresql://username:password@ep-xxx.neon.tech:5432/database?sslmode=require" -f schema/question_templates.sql
+   ```
+
+## Step 3: Environment Configuration
+
+Create `.env` file in project root:
+```bash
+echo "DATABASE_URL=postgresql://your_user:your_password@ep-xxx.neon.tech:5432/your_db?sslmode=require" > .env
+```
+
+## Step 4: Build and Test Locally
+
+```bash
+# Build Docker image
+docker build -t finance-server -f server/Dockerfile .
+
+# Run container
+docker run --rm --env-file .env -p 4000:4000 finance-server &
+
+# Wait 10 seconds for startup, then test
+sleep 10
+
+# Test health endpoint
+curl http://localhost:4000/health
+
+# Test file upload
+curl -F "file=@data/financial_data_template.csv" http://localhost:4000/api/upload
+
+# Test report generation
+curl -X POST http://localhost:4000/api/generate-report \
+     -H "Content-Type: application/json" \
+     -d '{"company_id":1}'
+```
+
+## Step 5: Deploy to Railway (Optional - for Production)
+
+1. **Sign up for Railway**: Go to https://railway.app and create account
+2. **Install Railway CLI**: `npm install -g @railway/cli`
+3. **Deploy**:
+   ```bash
+   cd server
+   railway login
+   railway new
+   
+   # Set environment variable in Railway dashboard:
+   # DATABASE_URL=your_neon_connection_string
+   
+   railway up --dockerfile Dockerfile
+   ```
+
+## Step 6: Deploy Frontend to Vercel (Optional)
+
+1. **Sign up for Vercel**: Go to https://vercel.com and create account
+2. **Configure and deploy**:
+   ```bash
+   cd client
+   echo "REACT_APP_API_URL=https://your-railway-url.up.railway.app" > .env.production
+   npm run build
+   npx vercel --prod
+   ```
+
+## Expected Test Results
+
+### Health Check:
+```json
+{"status":"ok","timestamp":"2025-08-01T11:41:01.225Z","port":4000,"environment":"development"}
+```
+
+### File Upload Success:
+```json
+{
+  "message":"File processed successfully! All pipeline steps completed.",
+  "filename":"financial_data_template.csv",
+  "company_id":1,
+  "processing_steps":[
+    "✓ File uploaded and validated",
+    "✓ Data ingested from file", 
+    "✓ Metrics calculated",
+    "✓ Questions generated"
+  ]
+}
+```
+
+### Report Generation Success:
+```json
+{
+  "message": "Report generated successfully",
+  "company_id": 1,
+  "report_filename": "report_1_1722513661225.pdf",
+  "processing_steps": [
+    "✓ Data availability verified",
+    "✓ Metrics calculated", 
+    "✓ Questions generated",
+    "✓ PDF report created"
+  ]
+}
+```
+
+## Troubleshooting
+
+### Database Connection Issues:
+```bash
+# Test connection string manually
+psql "your_database_url_here" -c "SELECT 1;"
+```
+
+### Docker Issues:
+```bash
+# Clear Docker cache
+docker system prune -a
+
+# Check container logs
+docker logs $(docker ps -q --filter "ancestor=finance-server")
+```
+
+### Port Conflicts:
+```bash
+# Find and kill processes on port 4000
+lsof -ti:4000 | xargs kill -9
+```
+
+## Minimal Working Setup
+
+For just testing the core functionality (without deployment), you only need:
+1. **Steps 1-4** above
+2. **NeonDB account** (free tier)
+3. **Docker Desktop**
+
+The Railway and Vercel deployments are optional for production hosting.
+
+-
+
+This setup gives you a fully functional financial data analysis system running locally with cloud database persistence.
+
+-
+
+Your current structure is already well-organized and follows standard conventions. The Docker /app directory is just a container mount point - it doesn't dictate your repo structure.
+Current Structure (Good):
+text
+financial-data-analysis/
+├── client/              # React frontend
+├── server/              # Node.js API + Python scripts
+│   ├── api/            # Express routes
+│   ├── scripts/        # Python processing scripts
+│   └── Dockerfile      # Container definition
+├── data/               # Sample data
+├── schema/             # Database schemas
+└── pyproject.toml      # Python dependencies
