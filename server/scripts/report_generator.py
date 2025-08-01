@@ -11,8 +11,9 @@ from fpdf import FPDF
 # Setup logging
 def setup_logging():
     logging.basicConfig(
-        level=logging.INFO,
-        format="%(Y-%m-%d %H:%M:%S) %(levelname)s: %(message)s",
+       level=logging.INFO,
+        format="%(asctime)s %(levelname)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
         handlers=[
             logging.StreamHandler(sys.stdout),
             logging.FileHandler("report_generator.log")
@@ -43,7 +44,7 @@ class Report(FPDF):
         if self.page_no() == 1:
             self.set_font_size(18)
             self.set_text_color(0, 51, 102)
-            self.cell(0, 10, f"Financial Report — Company ID: {self.company_id}", ln=True, align='C')
+            self.cell(0, 10, f"Financial Report - Company ID: {self.company_id}", ln=True, align='C')
             self.ln(5)
             self.set_text_color(0, 0, 0)
 
