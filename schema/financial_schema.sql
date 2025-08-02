@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS companies (
 
 -- Seed companies with default company
 INSERT INTO companies (id, name, industry)
-VALUES (1, 'Example Company', 'Example Industry')
+VALUES (1, 'Wilson Group', 'Technology')
 ON CONFLICT (id) DO NOTHING;
 
 -- Reset sequence to continue from id=2 for future companies
@@ -29,13 +29,21 @@ CREATE TABLE IF NOT EXISTS periods (
 -- Create line_item_definitions table
 CREATE TABLE IF NOT EXISTS line_item_definitions (
   id SERIAL PRIMARY KEY,
-  name TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
   statement_type TEXT,
   category TEXT,
   default_weight NUMERIC(5,2),
   created_at TIMESTAMP NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+
+-- Add unique constraint if it doesn't exist
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'line_item_definitions_name_key') THEN
+        ALTER TABLE line_item_definitions ADD CONSTRAINT line_item_definitions_name_key UNIQUE (name);
+    END IF;
+END $$;
 
 -- Seed line_item_definitions
 INSERT INTO line_item_definitions (name, statement_type, category, default_weight)
@@ -98,25 +106,25 @@ CREATE INDEX IF NOT EXISTS idx_derived_metrics_company_period
 -- Create question_templates table
 CREATE TABLE IF NOT EXISTS question_templates (
   id SERIAL PRIMARY KEY,
-  metric TEXT,
-  calculation_type TEXT,
-  base_question TEXT,
-  trigger_threshold NUMERIC,
-  trigger_operator TEXT,
-  default_weight NUMERIC(5,2),
+  metric TEXT NOT NULL,
+  calculation_type TEXT NOT NULL,
+  base_question TEXT NOT NULL,
+  trigger_threshold NUMERIC NOT NULL,
+  trigger_operator TEXT CHECK (trigger_operator IN ('>', '<', '>=', '<=', '=')),
+  default_weight NUMERIC(5,2) NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
--- Seed question_templates (examples)
+-- Seed question_templates (basic set)
 INSERT INTO question_templates (metric, calculation_type, base_question, trigger_threshold, trigger_operator, default_weight)
 VALUES
-  ('Revenue',      'MoM Growth', 'Revenue increased by {change}% month-over-month. What factors contributed to this growth?',  2.0, '>=', 3.00),
-  ('Revenue',      'MoM Growth', 'Revenue decreased by {change}% month-over-month. What caused this decline?',           -2.0, '<=', 4.00),
-  ('Gross Profit', 'MoM Growth', 'Gross profit rose by {change}% month-over-month. What operational improvements contributed?', 2.0, '>=', 3.00),
-  ('Gross Profit', 'MoM Growth', 'Gross profit dropped by {change}% month-over-month. What cost pressures emerged?',     -2.0, '<=', 4.00),
-  ('EBITDA',       'MoM Growth', 'EBITDA increased by {change}% month-over-month. What operational efficiencies were achieved?', 2.0, '>=', 4.00),
-  ('EBITDA',       'MoM Growth', 'EBITDA decreased by {change}% month-over-month. What cost controls are needed?',       -2.0, '<=', 5.00)
+  ('Revenue',      'MoM Growth', 'Revenue increased by {change}% month-over-month. What factors contributed to this growth?',      2.0, '>=', 3.00),
+  ('Revenue',      'MoM Growth', 'Revenue decreased by {change}% month-over-month. What caused this decline?',                    -2.0, '<=', 4.00),
+  ('Gross Profit', 'MoM Growth', 'Gross profit rose by {change}% month-over-month. What operational improvements contributed?',   2.0, '>=', 3.00),
+  ('Gross Profit', 'MoM Growth', 'Gross profit dropped by {change}% month-over-month. What cost pressures emerged?',             -2.0, '<=', 4.00),
+  ('EBITDA',       'MoM Growth', 'EBITDA increased by {change}% month-over-month. What operational efficiencies were achieved?',  2.0, '>=', 4.00),
+  ('EBITDA',       'MoM Growth', 'EBITDA decreased by {change}% month-over-month. What cost controls are needed?',               -2.0, '<=', 5.00)
 ON CONFLICT DO NOTHING;
 
 -- Create live_questions table

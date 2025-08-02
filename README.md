@@ -77,6 +77,16 @@ cd ..
    psql "postgresql://username:password@ep-xxx.neon.tech:5432/database?sslmode=require" -f schema/question_templates.sql
    ```
 
+question_templates.sql must be deployed with matching financial_schema.sql.
+If changes to metric definitions occur in the schema, corresponding question templates updates should be part of the same PR and deployment.
+
+psql "$LOCAL_DATABASE_URL" -f schema/financial_schema.sql
+psql "$LOCAL_DATABASE_URL" -f schema/question_templates.sql
+
+psql "$DATABASE_URL" -f schema/financial_schema.sql
+psql "$DATABASE_URL" -f schema/question_templates.sql
+
+
 ## Step 3: Environment Configuration
 
 Create `.env` file in project root:
@@ -296,7 +306,7 @@ financial-data-analysis/
 ├── schema/             # Database schemas
 └── pyproject.toml      # Python dependencies
 
-
+-
 
 - **CI (Continuous Integration):** An automated process that builds and tests your code on each commit, ensuring new changes don’t break existing functionality.  
 - **`set -euo pipefail`:**  
@@ -304,6 +314,39 @@ financial-data-analysis/
   - `-u` treats unset variables as errors.  
   - `-o pipefail` returns failure if any command in a pipeline fails.  
 This combination makes your script *fail fast* and avoids hidden errors.
+
+The smoke test automates these core steps end-to-end:
+
+1. **Prepare a Known Input**  
+   - Generates a minimal CSV (`smoke.csv`) containing exactly one “Revenue” row for February 2025 with a value of 2,390,873.
+
+2. **Seed Master Data**  
+   - Ensures your database has entries for the three metrics (“Revenue,” “Gross Profit,” “EBITDA”) in `line_item_definitions`.
+
+3. **Start the API Server**  
+   - Builds the Docker image (or uses your local server) and launches it on port 4000.
+
+4. **Upload the Test File**  
+   - Calls `POST /api/upload` with `smoke.csv`, triggering ingestion, metric calculation, and question generation.
+
+5. **Verify the Result**  
+   - Queries the database for a “Revenue” metric record in the period “Feb 2025” and formats it as Excel would (with commas and two decimals).  
+   - Compares this formatted value against the expected string “2,390,873.00.”
+
+6. **Clean Up**  
+   - Stops the test server container.
+
+Running this against **your local database** uses the same commands but skips the Docker build/run steps. Pointing `$DATABASE_URL` at Neon (external) versus `localhost:5432` (local) is the only variable—everything else is identical. Docker simply packages your code and environment so the test works *consistently* for anyone, wherever they run it.
+
+What’s essential now:
+- Confirming that single revenue datapoint flows through ingestion and lands in `financial_metrics`.
+- Automating that check so it fails loudly if anything in the pipeline breaks.
+
+What’s distracting:
+- Deep dives into PDF parsing variants, question‐generation details, or undici/Blob credential errors.  
+- Multiple iterations on decimal‐stripping versus formatting—pick one format (`to_char(..., 'FM9G999G999D00')`) and standardize.  
+
+Focus on solidifying this one smoke test. Once it reliably passes against both your local and your Neon database, you’ll have confidence the core ingestion works. All other concerns—fully parsing board packs, generating nuanced questions—can proceed once the pipeline’s foundation is verified.
 
 **Step-by-Step Setup:**
 
@@ -403,3 +446,23 @@ psql (Postgres client)
 curl
 grep
 Assuming those are in your PATH and your .env is configured, you can run the entire smoke test in one go 
+--
+
+Medium-term (company identification):
+Extend the companies table:
+sql
+ALTER TABLE companies ADD COLUMN 
+  company_house_number TEXT,
+  ticker_symbol TEXT,
+  aliases TEXT[];
+Add company selection to upload flow:
+After file upload, scan for company indicators (letterhead, company names)
+Present a dropdown: "Is this [Detected Company Name] or create new?"
+Pass company_id parameter to ingestion
+Implement fuzzy matching:
+Use pg_trgm extension for similarity scoring
+Alert: "This data is 85% similar to [Existing Company]. Same entity?"
+Focus for now: Get your smoke test passing by seeding the companies table in both databases. Company disambiguation can be layered on once the core pipeline is solid.
+
+--
+
