@@ -9,25 +9,22 @@ import sys
 import os
 import re
 from datetime import datetime
-import sys, pathlib
+import pathlib
+
+# Ensure local imports resolve
 sys.path.append(str(pathlib.Path(__file__).resolve().parent))
-from utils import hash_datapoint, log_event, get_db_connection, clean_numeric_value, parse_period
+from utils import (
+    hash_datapoint, log_event, get_db_connection,
+    clean_numeric_value, parse_period
+)
 from field_mapper import map_and_filter_row
 
 
 class PDFIngester:
     def __init__(self, file_path: str, company_id: int = 1):
         """
-        Enhanced PDF Ingester - Phase 1 Critical Fix
-        
-        Key improvements:
-        1. Case-insensitive metric identification
-        2. Enhanced regex patterns for better number extraction
-        3. Improved table header matching
-        4. Better handling of mixed-case labels like "Adjusted EBITDA"
-        5. More robust number parsing including parentheses as negatives
-        6. Integration with field_mapper for filtering only target metrics
-        7. Fixed TableFinder compatibility for PyMuPDF >= 1.22
+        Enhanced PDF Ingester with fixed TableFinder handling
+        and stable hashing for duplicate detection.
         """
         self.file_path = file_path
         self.company_id = company_id
@@ -35,6 +32,8 @@ class PDFIngester:
         self.ingested_count = 0
         self.skipped_count = 0
         self.error_count = 0
+        # Track hashes within this file
+        self.current_file_hashes = set()
 
     def __enter__(self):
         self.conn = get_db_connection()
@@ -45,13 +44,16 @@ class PDFIngester:
             self.conn.close()
 
     def process_file(self):
-        log_event("pdf_ingestion_started", {"file_path": self.file_path, "company_id": self.company_id})
+        log_event("pdf_ingestion_started", {
+            "file_path": self.file_path,
+            "company_id": self.company_id
+        })
         try:
             doc = fitz.open(self.file_path)
-            for page_num in range(len(doc)):
-                self._process_page(doc[page_num], page_num + 1)
+            for page_index in range(len(doc)):
+                self._process_page(doc[page_index], page_index + 1)
             doc.close()
-            
+
             summary = {
                 "file_path": self.file_path,
                 "ingested_count": self.ingested_count,
@@ -61,361 +63,300 @@ class PDFIngester:
             }
             log_event("pdf_ingestion_completed", summary)
             return summary
+
         except Exception as e:
-            log_event("pdf_ingestion_failed", {"file_path": self.file_path, "error": str(e)})
+            log_event("pdf_ingestion_failed", {
+                "file_path": self.file_path,
+                "error": str(e)
+            })
             raise
 
     def _process_page(self, page, page_num):
         log_event("page_processing_started", {"page_number": page_num})
         try:
-            # Try table extraction first - FIXED for PyMuPDF >= 1.22
-            tables_finder = page.find_tables()
-            
-            # Convert TableFinder to list if needed - THIS IS THE KEY FIX
+            # Fixed: handle TableFinder properly for PyMuPDF >= 1.22
+            tf = page.find_tables()
             tables = []
-            if tables_finder:
+            if tf:
                 try:
-                    # For newer PyMuPDF versions, TableFinder is iterable
-                    tables = list(tables_finder)
+                    tables = list(tf)
                 except TypeError:
-                    # For older versions, it might already be a list
-                    if hasattr(tables_finder, '__len__'):
-                        tables = tables_finder
+                    if hasattr(tf, "__len__"):
+                        tables = tf
                     else:
-                        # If it's neither iterable nor has length, try extracting tables attribute
-                        tables = getattr(tables_finder, 'tables', [])
-            
+                        tables = getattr(tf, "tables", [])
+
             if tables:
-                log_event("tables_found", {"page_number": page_num, "table_count": len(tables)})
-                for table_idx, table in enumerate(tables):
+                log_event("tables_found", {
+                    "page_number": page_num,
+                    "table_count": len(tables)
+                })
+                for tbl_idx, tbl in enumerate(tables):
                     try:
-                        df = pd.DataFrame(table.extract())
-                        self._process_table(df, page_num, table_idx)
-                    except Exception as table_error:
+                        df = pd.DataFrame(tbl.extract())
+                        self._process_table(df, page_num, tbl_idx)
+                    except Exception as tbl_err:
                         log_event("table_extraction_error", {
-                            "page_number": page_num, 
-                            "table_index": table_idx,
-                            "error": str(table_error)
+                            "page_number": page_num,
+                            "table_index": tbl_idx,
+                            "error": str(tbl_err)
                         })
-                        continue
             else:
-                # Fallback to OCR text extraction
                 log_event("no_tables_found_using_ocr", {"page_number": page_num})
                 try:
-                    images = convert_from_path(self.file_path, first_page=page_num, last_page=page_num)
+                    images = convert_from_path(
+                        self.file_path, first_page=page_num, last_page=page_num
+                    )
                     text = pytesseract.image_to_string(images[0])
                     self._process_text(text, page_num)
-                except Exception as ocr_error:
+                except Exception as ocr_err:
                     log_event("ocr_extraction_error", {
                         "page_number": page_num,
-                        "error": str(ocr_error)
+                        "error": str(ocr_err)
                     })
-                
+
         except Exception as e:
             self.error_count += 1
-            log_event("page_processing_error", {"page_number": page_num, "error": str(e)})
+            log_event("page_processing_error", {
+                "page_number": page_num,
+                "error": str(e)
+            })
 
     def _process_table(self, df, page_num, table_idx):
-        """Enhanced table processing with field mapping integration"""
+        """Process extracted DataFrame table rows"""
         if df.empty:
-            log_event("empty_table_skipped", {"page_number": page_num, "table_index": table_idx})
+            log_event("empty_table_skipped", {
+                "page_number": page_num,
+                "table_index": table_idx
+            })
             return
-            
-        # Clean column names - preserve case for better matching
-        df.columns = [str(col).strip() for col in df.columns]
-        original_columns = df.columns.tolist()
-        
+
+        df.columns = [str(c).strip() for c in df.columns]
         log_event("table_processing", {
-            "page_number": page_num, 
+            "page_number": page_num,
             "table_index": table_idx,
-            "columns": original_columns,
+            "columns": df.columns.tolist(),
             "rows": len(df)
         })
-        
+
         for row_idx, row in df.iterrows():
-            # Get row label (first column)
-            row_label = str(row.iloc[0]).strip() if len(row) > 0 else ""
-            if not row_label or row_label.lower() in ['nan', 'none', '']:
+            label = str(row.iloc[0]).strip()
+            if not label or label.lower() in ["nan", "none", ""]:
                 continue
-                
-            # Process each data column
-            for col_idx, col in enumerate(df.columns[1:], 1):  # Skip first column (labels)
+
+            for col_idx, col in enumerate(df.columns[1:], start=1):
                 if col_idx >= len(row):
                     continue
-                    
-                cell_value = row.iloc[col_idx] if col_idx < len(row) else None
-                value = self._extract_number(cell_value)
-                
-                if value is None:
+                val = self._extract_number(row.iloc[col_idx])
+                if val is None:
                     continue
-                
-                # Enhanced period parsing with column header context
+
                 period_info = self._parse_period_from_header(col, page_num, table_idx)
-                
-                # Create raw row dict for field mapping
-                raw_row = {
-                    "line_item": row_label,
+                raw = {
+                    "line_item": label,
                     "period_label": period_info["label"],
                     "period_type": period_info["type"],
                     "value_type": "Actual",
                     "frequency": period_info["type"],
-                    "value": value,
+                    "value": val,
                     "currency": "USD",
                     "source_file": os.path.basename(self.file_path),
                     "source_page": page_num,
-                    "notes": f"Table {table_idx + 1}, Row '{row_label}', Column '{col}'"
+                    "notes": f"Table {table_idx+1}, Row '{label}', Col '{col}'"
                 }
-                
-                # Apply field mapping and filtering
-                mapped = map_and_filter_row(raw_row)
-                if mapped is None:
-                    continue
-                
-                # Insert the mapped row
-                self._insert_mapped_metric(mapped, page_num)
+                mapped = map_and_filter_row(raw)
+                if mapped:
+                    self._insert_mapped(mapped, page_num)
 
     def _process_text(self, text, page_num):
-        """Enhanced text processing with field mapping integration"""
-        lines = text.split('\n')
-        current_metric = None
-        
-        for line_idx, line in enumerate(lines):
-            line = line.strip()
-            if not line:
+        """Fallback OCR text processing"""
+        for idx, line in enumerate(text.split("\n"), start=1):
+            ln = line.strip()
+            if not ln:
                 continue
-                
-            # Extract numbers from the line
-            numbers = self._extract_numbers_from_line(line)
-            
-            for num_value in numbers:
-                # Try to infer period from context
-                period_info = self._infer_period_from_context(line, page_num)
-                
-                # Create raw row dict for field mapping
-                raw_row = {
-                    "line_item": line,
+            nums = self._extract_numbers_from_line(ln)
+            for num in nums:
+                period_info = self._infer_period_from_context(ln, page_num)
+                raw = {
+                    "line_item": ln,
                     "period_label": period_info["label"],
                     "period_type": period_info["type"],
                     "value_type": "Actual",
                     "frequency": period_info["type"],
-                    "value": num_value,
+                    "value": num,
                     "currency": "USD",
                     "source_file": os.path.basename(self.file_path),
                     "source_page": page_num,
-                    "notes": f"Text line {line_idx + 1}: '{line[:50]}...'"
+                    "notes": f"Text line {idx}"
                 }
-                
-                # Apply field mapping and filtering
-                mapped = map_and_filter_row(raw_row)
-                if mapped is None:
-                    continue
-                
-                # Insert the mapped row
-                self._insert_mapped_metric(mapped, page_num)
+                mapped = map_and_filter_row(raw)
+                if mapped:
+                    self._insert_mapped(mapped, page_num)
 
-    def _insert_mapped_metric(self, mapped_row, page_num):
-        """Insert a mapped and filtered metric row"""
+    def _insert_mapped(self, mapped_row, page_num):
+        """Insert mapped row into DB with stable hash"""
         try:
             with self.conn.cursor() as cur:
-                # Get line item ID
-                cur.execute("SELECT id FROM line_item_definitions WHERE name = %s", (mapped_row["line_item"],))
-                line_item_result = cur.fetchone()
-                if not line_item_result:
+                cur.execute(
+                    "SELECT id FROM line_item_definitions WHERE name = %s",
+                    (mapped_row["line_item"],)
+                )
+                li = cur.fetchone()
+                if not li:
                     self.error_count += 1
                     log_event("line_item_not_found", {"line_item": mapped_row["line_item"]})
                     return
-                line_item_id = line_item_result[0]
+                line_item_id = li[0]
 
-                # Parse period
-                period_info = parse_period(mapped_row["period_label"], mapped_row.get("period_type", "Monthly"))
-                if not period_info:
-                    period_info = {
-                        "type": mapped_row.get("period_type", "Monthly"),
-                        "label": mapped_row["period_label"],
-                        "start_date": None,
-                        "end_date": None
-                    }
-
-                # Get or create period
+                period_info = parse_period(
+                    mapped_row["period_label"],
+                    mapped_row.get("period_type", "Monthly")
+                )
                 cur.execute(
                     "SELECT id FROM periods WHERE period_type = %s AND period_label = %s",
                     (period_info["type"], period_info["label"])
                 )
-                period = cur.fetchone()
-                if not period:
+                pr = cur.fetchone()
+                if pr:
+                    period_id = pr[0]
+                else:
                     cur.execute(
-                        "INSERT INTO periods (period_type, period_label, start_date, end_date, created_at, updated_at) "
-                        "VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
-                        (period_info["type"], period_info["label"], period_info["start_date"], 
-                         period_info["end_date"], datetime.now(), datetime.now())
+                        "INSERT INTO periods "
+                        "(period_type, period_label, start_date, end_date, created_at, updated_at) "
+                        "VALUES (%s,%s,%s,%s,%s,%s) RETURNING id",
+                        (
+                            period_info["type"], period_info["label"],
+                            period_info["start_date"], period_info["end_date"],
+                            datetime.now(), datetime.now()
+                        )
                     )
                     period_id = cur.fetchone()[0]
-                else:
-                    period_id = period[0]
 
-                # Coerce source_page to integer
                 try:
-                    source_page = int(mapped_row.get("source_page", page_num))
-                except (TypeError, ValueError):
-                    source_page = page_num
+                    src_pg = int(mapped_row.get("source_page", page_num))
+                except:
+                    src_pg = page_num
 
-                # Prepare data for insertion
                 data = {
                     "company_id": self.company_id,
                     "period_id": period_id,
                     "line_item_id": line_item_id,
                     "value_type": mapped_row.get("value_type", "Actual"),
                     "frequency": mapped_row.get("frequency", period_info["type"]),
-                    "value": clean_numeric_value(mapped_row.get("value")),
+                    "value": clean_numeric_value(mapped_row["value"]),
                     "currency": mapped_row.get("currency", "USD"),
-                    "source_file": mapped_row.get("source_file", os.path.basename(self.file_path)),
-                    "source_page": source_page,
+                    "source_file": mapped_row.get("source_file"),
+                    "source_page": src_pg,
                     "source_type": "Raw",
                     "notes": mapped_row.get("notes", "")
                 }
-                
-                data["hash"] = hash_datapoint(data["company_id"], data["period_id"], 
-                                            mapped_row["line_item"], data["value_type"], data["frequency"], data["value"])
 
-                # Check for duplicates
-                cur.execute("SELECT id FROM financial_metrics WHERE hash = %s", (data["hash"],))
+                # Stable hash (no timestamp)
+                row_hash = hash_datapoint(
+                    data["company_id"], data["period_id"],
+                    mapped_row["line_item"], data["value_type"],
+                    data["frequency"], data["value"]
+                )
+
+                if row_hash in self.current_file_hashes:
+                    self.skipped_count += 1
+                    log_event("duplicate_skipped", {"hash": row_hash})
+                    return
+                self.current_file_hashes.add(row_hash)
+
+                cur.execute(
+                    "SELECT 1 FROM financial_metrics WHERE hash = %s",
+                    (row_hash,)
+                )
                 if cur.fetchone():
                     self.skipped_count += 1
-                    log_event("duplicate_skipped", {"hash": data["hash"]})
+                    log_event("duplicate_skipped", {"hash": row_hash})
                     return
 
-                # Insert the metric
                 cur.execute(
-                    """INSERT INTO financial_metrics (
-                        company_id, period_id, line_item_id, value_type, frequency, value, currency,
-                        source_file, source_page, source_type, notes, hash, created_at, updated_at
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                    """INSERT INTO financial_metrics(
+                        company_id, period_id, line_item_id, value_type, frequency,
+                        value, currency, source_file, source_page, source_type,
+                        notes, hash, created_at, updated_at
+                    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
                     (
-                        data["company_id"], data["period_id"], data["line_item_id"], data["value_type"],
-                        data["frequency"], data["value"], data["currency"], data["source_file"],
-                        data["source_page"], data["source_type"], data["notes"], data["hash"],
+                        data["company_id"], data["period_id"],
+                        data["line_item_id"], data["value_type"],
+                        data["frequency"], data["value"], data["currency"],
+                        data["source_file"], data["source_page"],
+                        data["source_type"], data["notes"], row_hash,
                         datetime.now(), datetime.now()
                     )
                 )
-                
                 self.ingested_count += 1
                 log_event("metric_inserted", {
                     "line_item": mapped_row["line_item"],
                     "period_label": period_info["label"],
-                    "value": data["value"],
-                    "source": mapped_row.get("notes", "")
+                    "value": data["value"]
                 })
-                
+
         except Exception as e:
             self.error_count += 1
             log_event("insert_error", {"error": str(e), "mapped_row": mapped_row})
 
-    def _extract_number(self, cell_value):
-        """Enhanced number extraction with better formatting support"""
-        if cell_value is None or pd.isna(cell_value):
+    def _extract_number(self, cell):
+        if cell is None or pd.isna(cell):
             return None
-            
-        text = str(cell_value).strip()
-        if not text or text.lower() in ['nan', 'none', '', '-']:
+        text = str(cell).strip()
+        if not text or text.lower() in ["nan", "none", "-", ""]:
             return None
-            
-        # Handle parentheses as negative numbers: (1,234) -> -1234
-        is_negative = False
-        if text.startswith('(') and text.endswith(')'):
-            is_negative = True
-            text = text[1:-1]  # Remove parentheses
-        
-        # Remove currency symbols and other non-numeric characters except digits, decimal points, commas, and minus signs
-        cleaned = re.sub(r'[^\d\.\,\-]', '', text)
-        
-        # Handle comma-separated thousands
-        cleaned = cleaned.replace(',', '')
-        
+        is_neg = text.startswith("(") and text.endswith(")")
+        if is_neg:
+            text = text[1:-1]
+        cleaned = re.sub(r"[^\d\.\,\-]", "", text).replace(",", "")
         try:
-            value = float(cleaned)
-            return -value if is_negative else value
-        except (ValueError, TypeError):
+            val = float(cleaned)
+            return -val if is_neg else val
+        except:
             return None
 
     def _extract_numbers_from_line(self, line):
-        """Extract all numbers from a text line"""
-        # Enhanced regex to capture numbers with various formats
-        number_patterns = [
-            r'\(\s*[\d,]+\.?\d*\s*\)',  # Parentheses format: (1,234.56)
-            r'-?\s*[\d,]+\.?\d*',       # Regular format: -1,234.56 or 1234
-        ]
-        
-        numbers = []
-        for pattern in number_patterns:
-            matches = re.findall(pattern, line)
-            for match in matches:
-                value = self._extract_number(match)
-                if value is not None:
-                    numbers.append(value)
-        
-        return numbers
+        patterns = [r"\(\s*[\d,]+\.?\d*\s*\)", r"-?[\d,]+\.?\d*"]
+        nums = []
+        for p in patterns:
+            for m in re.findall(p, line):
+                v = self._extract_number(m)
+                if v is not None:
+                    nums.append(v)
+        return nums
 
-    def _parse_period_from_header(self, column_header, page_num, table_idx):
-        """Enhanced period parsing from table column headers"""
-        header = str(column_header).strip()
-        
-        # Common header patterns
-        if any(word in header.lower() for word in ['actual', 'ytd', 'current']):
-            period_type = "YTD"
-        elif any(word in header.lower() for word in ['budget', 'forecast', 'plan']):
-            period_type = "Budget"
-        elif any(word in header.lower() for word in ['prior', 'previous', 'last year', 'py']):
-            period_type = "Prior Year"
+    def _parse_period_from_header(self, header, page_num, table_idx):
+        hdr = str(header)
+        lhdr = hdr.lower()
+        if any(w in lhdr for w in ["ytd", "current"]):
+            tp = "YTD"
+        elif any(w in lhdr for w in ["budget", "forecast", "plan"]):
+            tp = "Budget"
+        elif any(w in lhdr for w in ["prior", "previous", "py"]):
+            tp = "Prior Year"
         else:
-            period_type = "Monthly"
-        
-        # Try to extract specific period from header
-        period_label = f"{header} (Page {page_num}, Table {table_idx + 1})"
-        
-        return {
-            "type": period_type,
-            "label": period_label,
-            "start_date": None,
-            "end_date": None
-        }
+            tp = "Monthly"
+        lbl = f"{hdr} (Page {page_num}, Table {table_idx+1})"
+        return {"type": tp, "label": lbl, "start_date": None, "end_date": None}
 
     def _infer_period_from_context(self, line, page_num):
-        """Infer period information from text context"""
-        line_lower = line.lower()
-        
-        # Look for month indicators
-        months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun',
-                 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
-        
-        found_month = None
-        for month in months:
-            if month in line_lower:
-                found_month = month
-                break
-        
-        if found_month:
-            period_label = f"{found_month.title()} 2025"
-            period_type = "Monthly"
+        months = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"]
+        fl = next((m for m in months if m in line.lower()), None)
+        if fl:
+            lbl = f"{fl.title()} {datetime.now().year}"
         else:
-            period_label = f"Unknown (Page {page_num})"
-            period_type = "Monthly"
-        
-        return {
-            "type": period_type,
-            "label": period_label,
-            "start_date": None,
-            "end_date": None
-        }
+            lbl = f"Unknown (Page {page_num})"
+        return {"type": "Monthly", "label": lbl, "start_date": None, "end_date": None}
 
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Usage: python ingest_pdf.py <file_path> [company_id]")
         sys.exit(1)
-        
+
     file_path = sys.argv[1]
     company_id = int(sys.argv[2]) if len(sys.argv) > 2 else 1
-    
+
     with PDFIngester(file_path, company_id) as ingester:
         result = ingester.process_file()
-        print(f"Enhanced PDF ingestion result: {result}")
+        print(f"PDF ingestion result: {result}")

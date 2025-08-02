@@ -20,7 +20,7 @@ class XLSXIngester:
         self.ingested_count = 0
         self.skipped_count = 0
         self.error_count = 0
-        # Track hashes for this file only
+        # Track hashes within this file only
         self.current_file_hashes = set()
 
     def __enter__(self):
@@ -53,11 +53,11 @@ class XLSXIngester:
                 except UnicodeDecodeError:
                     df = pd.read_csv(self.file_path, encoding='latin-1')
                     log_event("file_read_success", {"type": "csv", "encoding": "latin-1", "file_path": self.file_path})
-                except Exception:
+                except Exception as e:
                     df = pd.read_csv(self.file_path, encoding='cp1252')
                     log_event("file_read_success", {"type": "csv", "encoding": "cp1252", "file_path": self.file_path})
             else:
-                raise Exception(f"Unsupported file type: {file_ext}. Only .xlsx and .csv supported.")
+                raise Exception(f"Unsupported file type: {file_ext}. Only .xlsx and .csv files are supported.")
 
             df.columns = [col.lower().strip() for col in df.columns]
             log_event("file_processing_started", {
@@ -72,7 +72,7 @@ class XLSXIngester:
                 if mapped is None:
                     continue
                 try:
-                    self._process_row(pd.Series(mapped), index + 1)
+                    self._process_row(mapped, index + 1)
                 except Exception as row_error:
                     self.error_count += 1
                     log_event("row_processing_error", {
@@ -102,7 +102,6 @@ class XLSXIngester:
             raise
 
     def _process_row(self, row, row_number):
-        # Skip invalid rows
         if pd.isna(row.get("line_item")) or pd.isna(row.get("period_label")):
             self.skipped_count += 1
             log_event("row_skipped", {
@@ -124,7 +123,7 @@ class XLSXIngester:
         period_info = parse_period(row["period_label"], row.get("period_type", "Monthly"))
 
         with self.conn.cursor() as cur:
-            # Lookup line_item_id
+            # Lookup or insert line_item_id
             cur.execute("SELECT id FROM line_item_definitions WHERE name = %s", (line_item,))
             li = cur.fetchone()
             if not li:
@@ -151,12 +150,14 @@ class XLSXIngester:
             else:
                 period_id = pr[0]
 
-            # Parse source_page
+            # Coerce source_page
+            raw_page = row.get("source_page")
             try:
-                source_page = int(row.get("source_page", 1))
+                source_page = int(raw_page)
             except (TypeError, ValueError):
                 source_page = 1
 
+            # Build data dict
             data = {
                 "company_id": self.company_id,
                 "period_id": period_id,
@@ -171,15 +172,19 @@ class XLSXIngester:
                 "notes": row.get("notes", "")
             }
 
-            # Compute hash for this row and file
+            # Compute stable hash (omit timestamp)
             row_hash = hash_datapoint(
                 data["company_id"], data["period_id"],
                 line_item, data["value_type"], data["frequency"], data["value"]
             )
+
             # Skip duplicates within this file
             if row_hash in self.current_file_hashes:
                 self.skipped_count += 1
-                log_event("duplicate_skipped", {"row_number": row_number, "hash": row_hash})
+                log_event("duplicate_skipped", {
+                    "row_number": row_number,
+                    "hash": row_hash
+                })
                 return
             self.current_file_hashes.add(row_hash)
 
@@ -187,7 +192,10 @@ class XLSXIngester:
             cur.execute("SELECT id FROM financial_metrics WHERE hash = %s", (row_hash,))
             if cur.fetchone():
                 self.skipped_count += 1
-                log_event("duplicate_skipped", {"row_number": row_number, "hash": row_hash})
+                log_event("duplicate_skipped", {
+                    "row_number": row_number,
+                    "hash": row_hash
+                })
                 return
 
             # Insert metric
@@ -226,7 +234,7 @@ if __name__ == "__main__":
         print(f"Error: File not found: {file_path}")
         sys.exit(1)
 
-    print(f"Enhanced XLSX/CSV ingestion starting for file: {file_path}")
+    print(f"Ingestion starting for file: {file_path}")
     with XLSXIngester(file_path, company_id) as ingester:
         result = ingester.process_file()
         print(f"Ingestion result: {result}")
