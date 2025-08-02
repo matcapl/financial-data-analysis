@@ -1,141 +1,166 @@
--- Companies
-CREATE TABLE companies (
-    id SERIAL PRIMARY KEY,
-    name TEXT NOT NULL,
-    industry TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+-- Create companies table
+CREATE TABLE IF NOT EXISTS companies (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  industry TEXT,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
--- Periods
-CREATE TABLE periods (
-    id SERIAL PRIMARY KEY,
-    period_type VARCHAR(10) CHECK (period_type IN ('Monthly', 'Quarterly', 'Yearly')),
-    period_label VARCHAR(20), -- e.g., 'Q1 2025', 'Jan 2025', 'YTD 2025'
-    start_date DATE,
-    end_date DATE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+-- Seed companies with default company
+INSERT INTO companies (id, name, industry)
+VALUES (1, 'Example Company', 'Example Industry')
+ON CONFLICT (id) DO NOTHING;
+
+-- Reset sequence to continue from id=2 for future companies
+SELECT setval(pg_get_serial_sequence('companies', 'id'), GREATEST(1, (SELECT MAX(id) FROM companies)));
+
+-- Create periods table
+CREATE TABLE IF NOT EXISTS periods (
+  id SERIAL PRIMARY KEY,
+  period_type TEXT NOT NULL,
+  period_label TEXT NOT NULL,
+  start_date DATE,
+  end_date DATE,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
--- Line Item Definitions
-CREATE TABLE line_item_definitions (
-    id SERIAL PRIMARY KEY,
-    name TEXT NOT NULL CHECK (name IN ('Revenue', 'Gross Profit', 'EBITDA')),
-    statement_type VARCHAR(50),
-    category TEXT, -- e.g., 'Revenue', 'Profitability'
-    default_weight NUMERIC(5,2) DEFAULT 0.5,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+-- Create line_item_definitions table
+CREATE TABLE IF NOT EXISTS line_item_definitions (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  statement_type TEXT,
+  category TEXT,
+  default_weight NUMERIC(5,2),
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
--- Financial Metrics (Raw Data)
-CREATE TABLE financial_metrics (
-    id SERIAL PRIMARY KEY,
-    company_id INT REFERENCES companies(id),
-    period_id INT REFERENCES periods(id),
-    line_item_id INT REFERENCES line_item_definitions(id),
-    value_type TEXT CHECK (value_type IN ('Actual', 'Budget', 'Prior')),
-    frequency TEXT CHECK (frequency IN ('Monthly', 'Quarterly', 'Yearly')),
-    value NUMERIC(18,2),
-    currency TEXT DEFAULT 'USD',
-    source_file TEXT,
-    source_page INT,
-    source_type TEXT CHECK (source_type IN ('Raw', 'Calculated')),
-    notes TEXT,
-    corroboration_status VARCHAR(50),
-    hash VARCHAR(64) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(hash)
+-- Seed line_item_definitions
+INSERT INTO line_item_definitions (name, statement_type, category, default_weight)
+VALUES
+  ('Revenue',      'Income Statement', 'Revenue',       1.00),
+  ('Gross Profit', 'Income Statement', 'Profitability', 0.80),
+  ('EBITDA',       'Income Statement', 'Profitability', 0.90)
+ON CONFLICT (name) DO NOTHING;
+
+-- Create financial_metrics table
+CREATE TABLE IF NOT EXISTS financial_metrics (
+  id SERIAL PRIMARY KEY,
+  company_id INT NOT NULL REFERENCES companies(id),
+  period_id INT NOT NULL REFERENCES periods(id),
+  line_item_id INT NOT NULL REFERENCES line_item_definitions(id),
+  value_type TEXT,
+  frequency TEXT,
+  value NUMERIC,
+  currency TEXT,
+  source_file TEXT,
+  source_page INT,
+  source_type TEXT,
+  notes TEXT,
+  corroboration_status TEXT,
+  hash TEXT UNIQUE,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
--- Derived Metrics (Calculated Values)
-CREATE TABLE derived_metrics (
-    id SERIAL PRIMARY KEY,
-    base_metric_id INT REFERENCES line_item_definitions(id),
-    calculation_type TEXT, -- e.g., 'YoY Growth', 'Variance vs Budget', 'YTD'
-    frequency TEXT CHECK (frequency IN ('Monthly', 'Quarterly', 'Yearly')),
-    company_id INT REFERENCES companies(id),
-    period_id INT REFERENCES periods(id),
-    calculated_value NUMERIC(18,2),
-    unit TEXT CHECK (unit IN ('%', 'USD')),
-    source_ids JSONB, -- Array of financial_metrics IDs
-    calculation_note TEXT,
-    corroboration_status TEXT DEFAULT 'Pending' CHECK (corroboration_status IN ('Pending', 'Ok', 'Conflict')),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+-- Indexes for financial_metrics
+CREATE INDEX IF NOT EXISTS idx_financial_metrics_company_period
+  ON financial_metrics(company_id, period_id);
+CREATE INDEX IF NOT EXISTS idx_financial_metrics_line_item
+  ON financial_metrics(line_item_id);
+CREATE INDEX IF NOT EXISTS idx_financial_metrics_hash
+  ON financial_metrics(hash);
+
+-- Create derived_metrics table
+CREATE TABLE IF NOT EXISTS derived_metrics (
+  id SERIAL PRIMARY KEY,
+  base_metric_id INT NOT NULL REFERENCES financial_metrics(id),
+  calculation_type TEXT,
+  frequency TEXT,
+  company_id INT NOT NULL REFERENCES companies(id),
+  period_id INT NOT NULL REFERENCES periods(id),
+  calculated_value NUMERIC,
+  unit TEXT,
+  source_ids TEXT,
+  calculation_note TEXT,
+  corroboration_status TEXT,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
--- Question Templates
-CREATE TABLE question_templates (
-    id SERIAL PRIMARY KEY,
-    metric TEXT NOT NULL,
-    calculation_type TEXT NOT NULL,
-    base_question TEXT NOT NULL,
-    trigger_threshold NUMERIC NOT NULL,
-    trigger_operator TEXT CHECK (trigger_operator IN ('>', '<', '>=', '<=', '=')),
-    default_weight NUMERIC(5,2) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+CREATE INDEX IF NOT EXISTS idx_derived_metrics_base
+  ON derived_metrics(base_metric_id);
+CREATE INDEX IF NOT EXISTS idx_derived_metrics_company_period
+  ON derived_metrics(company_id, period_id);
+
+-- Create question_templates table
+CREATE TABLE IF NOT EXISTS question_templates (
+  id SERIAL PRIMARY KEY,
+  metric TEXT,
+  calculation_type TEXT,
+  base_question TEXT,
+  trigger_threshold NUMERIC,
+  trigger_operator TEXT,
+  default_weight NUMERIC(5,2),
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
--- Live Questions
-CREATE TABLE live_questions (
-    id SERIAL PRIMARY KEY,
-    derived_metric_id INT REFERENCES derived_metrics(id),
-    template_id INT REFERENCES question_templates(id),
-    question_text TEXT NOT NULL,
-    category TEXT CHECK (category IN ('Financial')),
-    composite_score NUMERIC(5,2),
-    scorecard JSONB,
-    status TEXT DEFAULT 'Open' CHECK (status IN ('Open', 'Resolved')),
-    owner TEXT,
-    deadline DATE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Question Logs
-CREATE TABLE question_logs (
-    id SERIAL PRIMARY KEY,
-    live_question_id INT REFERENCES live_questions(id),
-    change_type TEXT,
-    changed_by TEXT,
-    old_value TEXT,
-    new_value TEXT,
-    change_note TEXT,
-    changed_on TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Generated Reports
-CREATE TABLE generated_reports (
-    id SERIAL PRIMARY KEY,
-    generated_on TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    filter_type TEXT,
-    parameters JSONB,
-    output_summary TEXT,
-    report_file_path TEXT,
-    company_id INT REFERENCES companies(id),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Indexes for performance
-CREATE INDEX idx_financial_metrics_company_period ON financial_metrics(company_id, period_id);
-CREATE INDEX idx_financial_metrics_line_item ON financial_metrics(line_item_id);
-CREATE INDEX idx_financial_metrics_hash ON financial_metrics(hash);
-CREATE INDEX idx_derived_metrics_base ON derived_metrics(base_metric_id);
-CREATE INDEX idx_derived_metrics_company_period ON derived_metrics(company_id, period_id);
-CREATE INDEX idx_live_questions_status ON live_questions(status);
-CREATE INDEX idx_live_questions_score ON live_questions(composite_score DESC);
-
--- Insert default company
-INSERT INTO companies (name, industry) VALUES ('Wilson Group', 'Technology') ON CONFLICT DO NOTHING;
-
--- Insert line item definitions
-INSERT INTO line_item_definitions (name, statement_type, category, default_weight) VALUES 
-    ('Revenue', 'Income Statement', 'Revenue', 1.0),
-    ('Gross Profit', 'Income Statement', 'Profitability', 0.8),
-    ('EBITDA', 'Income Statement', 'Profitability', 0.9)
+-- Seed question_templates (examples)
+INSERT INTO question_templates (metric, calculation_type, base_question, trigger_threshold, trigger_operator, default_weight)
+VALUES
+  ('Revenue',      'MoM Growth', 'Revenue increased by {change}% month-over-month. What factors contributed to this growth?',  2.0, '>=', 3.00),
+  ('Revenue',      'MoM Growth', 'Revenue decreased by {change}% month-over-month. What caused this decline?',           -2.0, '<=', 4.00),
+  ('Gross Profit', 'MoM Growth', 'Gross profit rose by {change}% month-over-month. What operational improvements contributed?', 2.0, '>=', 3.00),
+  ('Gross Profit', 'MoM Growth', 'Gross profit dropped by {change}% month-over-month. What cost pressures emerged?',     -2.0, '<=', 4.00),
+  ('EBITDA',       'MoM Growth', 'EBITDA increased by {change}% month-over-month. What operational efficiencies were achieved?', 2.0, '>=', 4.00),
+  ('EBITDA',       'MoM Growth', 'EBITDA decreased by {change}% month-over-month. What cost controls are needed?',       -2.0, '<=', 5.00)
 ON CONFLICT DO NOTHING;
+
+-- Create live_questions table
+CREATE TABLE IF NOT EXISTS live_questions (
+  id SERIAL PRIMARY KEY,
+  derived_metric_id INT NOT NULL REFERENCES derived_metrics(id),
+  template_id INT NOT NULL REFERENCES question_templates(id),
+  question_text TEXT,
+  category TEXT,
+  composite_score NUMERIC,
+  scorecard TEXT,
+  status TEXT,
+  owner TEXT,
+  deadline DATE,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_live_questions_status
+  ON live_questions(status);
+CREATE INDEX IF NOT EXISTS idx_live_questions_score
+  ON live_questions(composite_score);
+
+-- Create question_logs table
+CREATE TABLE IF NOT EXISTS question_logs (
+  id SERIAL PRIMARY KEY,
+  live_question_id INT NOT NULL REFERENCES live_questions(id),
+  change_type TEXT,
+  changed_by TEXT,
+  old_value TEXT,
+  new_value TEXT,
+  change_note TEXT,
+  changed_on TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+-- Create generated_reports table
+CREATE TABLE IF NOT EXISTS generated_reports (
+  id SERIAL PRIMARY KEY,
+  generated_on TIMESTAMP NOT NULL DEFAULT NOW(),
+  filter_type TEXT,
+  parameters JSONB,
+  output_summary TEXT,
+  report_file_path TEXT,
+  company_id INT NOT NULL REFERENCES companies(id),
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);

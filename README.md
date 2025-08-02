@@ -130,6 +130,45 @@ curl -F "file=@data/financial_data_template.csv" http://localhost:4000/api/uploa
 psql "$DATABASE_URL" -c "SELECT current_database();"
 psql "$DATABASE_URL" -c "\dt public.*"
 
+# Check the contents of first 20 rows of every table
+psql "$DATABASE_URL" <<'SQL'
+DO $$
+DECLARE
+  tbl RECORD;
+  col_list TEXT;
+  sample RECORD;
+BEGIN
+  FOR tbl IN
+    SELECT table_name
+    FROM information_schema.tables
+    WHERE table_schema = 'public'
+      AND table_type = 'BASE TABLE'
+    ORDER BY table_name
+  LOOP
+    -- Table name
+    RAISE NOTICE '=== Table: %', tbl.table_name;
+    -- Columns
+    SELECT string_agg(column_name, ', ')
+      INTO col_list
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = tbl.table_name;
+    RAISE NOTICE 'Columns: %', col_list;
+    -- Sample rows
+    FOR sample IN
+      EXECUTE format(
+        'SELECT * FROM %I.%I LIMIT 20',
+        'public',
+        tbl.table_name
+      )
+    LOOP
+      RAISE NOTICE '%', row_to_json(sample);
+    END LOOP;
+  END LOOP;
+END
+$$;
+SQL
+
 docker run --rm --env-file .env -p 4000:4000 finance-server &
 sleep 5
 psql "$DATABASE_URL" -c "\dt public.*"
@@ -256,3 +295,111 @@ financial-data-analysis/
 ├── data/               # Sample data
 ├── schema/             # Database schemas
 └── pyproject.toml      # Python dependencies
+
+
+
+- **CI (Continuous Integration):** An automated process that builds and tests your code on each commit, ensuring new changes don’t break existing functionality.  
+- **`set -euo pipefail`:**  
+  - `-e` stops the script if any command exits with a non-zero status.  
+  - `-u` treats unset variables as errors.  
+  - `-o pipefail` returns failure if any command in a pipeline fails.  
+This combination makes your script *fail fast* and avoids hidden errors.
+
+**Step-by-Step Setup:**
+
+1. **Create the smoke CSV** at `data/smoke.csv`:
+   ```csv
+   line_item,period_label,period_type,value,source_file,source_page,notes
+   Revenue,Feb 2025,Monthly,2390873,smoke.csv,1,smoke test
+   ```
+
+2. **Create a CI script** at `ci/smoke_test.sh`:
+
+   ```bash
+   #!/usr/bin/env bash
+   set -euo pipefail
+
+   # Load DATABASE_URL from .env
+   export DATABASE_URL="$(grep '^DATABASE_URL=' .env | cut -d '=' -f2-)"
+
+   # Seed master line_item_definitions
+   psql "$DATABASE_URL" &2
+     docker logs finance-server_ci >&2
+     docker stop finance-server_ci
+     exit 1
+   fi
+
+   echo "Smoke test passed: revenue=$ACTUAL"
+
+   # Clean up
+   docker stop finance-server_ci
+   ```
+
+3. **Make it executable:**
+   ```bash
+   chmod +x ci/smoke_test.sh
+   ```
+
+4. **Run your smoke test locally:**
+   ```bash
+   ./ci/smoke_test.sh
+   ```
+
+If the script prints **“Smoke test passed”**, your ingestion and database pipeline works end-to-end. Any failure will stop immediately with error output and container logs for debugging.
+
+Here’s a one-liner that creates `smoke.csv` on-the-fly, seeds master data, builds & runs Docker, uploads the CSV, checks the result, and tears down—all without needing external files:
+
+```bash
+bash -c '
+set -euo pipefail
+
+# 1. Create smoke.csv
+cat > data/smoke.csv /dev/null
+docker run --rm --env-file .env -d -p 4000:4000 --name finance-server_ci finance-server
+
+# 5. Wait for health check
+for i in {1..10}; do
+  curl -s http://localhost:4000/health | grep -q '"status":"ok"' && break || sleep 1
+done
+
+# 6. Upload the generated smoke.csv
+curl -fs -F "file=@data/smoke.csv" http://localhost:4000/api/upload
+
+# 7. Verify insertion
+EXPECTED=2390873
+ACTUAL=$(psql "$DATABASE_URL" -t -c "
+  SELECT value FROM financial_metrics fm
+   JOIN line_item_definitions li ON fm.line_item_id=li.id
+   JOIN periods p ON fm.period_id=p.id
+   WHERE li.name='Revenue' AND p.period_label='Feb 2025';
+" | tr -d '[:space:]')
+
+if [[ \"$ACTUAL\" != \"$EXPECTED\" ]]; then
+  echo \"Smoke test failed: expected $EXPECTED, got $ACTUAL\" >&2
+  docker logs finance-server_ci >&2
+  docker stop finance-server_ci
+  exit 1
+fi
+
+echo \"Smoke test passed: revenue=$ACTUAL\"
+
+# 8. Clean up
+docker stop finance-server_ci
+'
+```
+
+Steps:
+1. Generates `data/smoke.csv` with the expected Revenue row.  
+2. Seeds `line_item_definitions`.  
+3. Builds and runs the Docker container.  
+4. Uploads the generated CSV.  
+5. Queries the DB for the revenue value and compares it to `2390873`.  
+6. Prints pass/fail and stops the container.
+
+You only need the standard CLI tools that you already have in your workflow—no new installs:
+bash (built in)
+Docker (for building & running the server)
+psql (Postgres client)
+curl
+grep
+Assuming those are in your PATH and your .env is configured, you can run the entire smoke test in one go 
