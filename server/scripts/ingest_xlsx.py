@@ -170,7 +170,7 @@ class XLSXIngester:
             }
             data["hash"] = hash_datapoint(
                 data["company_id"], data["period_id"],
-                line_item, data["value_type"], data["frequency"]
+                line_item, data["value_type"], data["frequency"], datetime.now()
             )
 
             cur.execute("SELECT id FROM financial_metrics WHERE hash = %s", (data["hash"],))

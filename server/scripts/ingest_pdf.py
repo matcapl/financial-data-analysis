@@ -13,6 +13,7 @@ from utils import hash_datapoint, log_event, get_db_connection, clean_numeric_va
 from field_mapper import map_and_filter_row
 
 
+
 class PDFIngester:
     def __init__(self, file_path: str, company_id: int = 1):
         """
@@ -25,6 +26,7 @@ class PDFIngester:
         4. Better handling of mixed-case labels like "Adjusted EBITDA"
         5. More robust number parsing including parentheses as negatives
         6. Integration with field_mapper for filtering only target metrics
+        7. Fixed TableFinder compatibility for PyMuPDF >= 1.22
         """
         self.file_path = file_path
         self.company_id = company_id
@@ -34,14 +36,17 @@ class PDFIngester:
         self.error_count = 0
 
 
+
     def __enter__(self):
         self.conn = get_db_connection()
         return self
 
 
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.conn:
             self.conn.close()
+
 
 
     def process_file(self):
@@ -66,30 +71,61 @@ class PDFIngester:
             raise
 
 
+
     def _process_page(self, page, page_num):
         log_event("page_processing_started", {"page_number": page_num})
         try:
-            # Try table extraction first
-            tables = page.find_tables()
+            # Try table extraction first - FIXED for PyMuPDF >= 1.22
+            tables_finder = page.find_tables()
+            
+            # Convert TableFinder to list if needed
+            tables = []
+            if tables_finder:
+                try:
+                    # For newer PyMuPDF versions, TableFinder is iterable
+                    tables = list(tables_finder)
+                except TypeError:
+                    # For older versions, it might already be a list
+                    tables = tables_finder if hasattr(tables_finder, '__len__') else []
+            
             if tables:
                 log_event("tables_found", {"page_number": page_num, "table_count": len(tables)})
                 for table_idx, table in enumerate(tables):
-                    df = pd.DataFrame(table.extract())
-                    self._process_table(df, page_num, table_idx)
+                    try:
+                        df = pd.DataFrame(table.extract())
+                        self._process_table(df, page_num, table_idx)
+                    except Exception as table_error:
+                        log_event("table_extraction_error", {
+                            "page_number": page_num, 
+                            "table_index": table_idx,
+                            "error": str(table_error)
+                        })
+                        continue
             else:
                 # Fallback to OCR text extraction
                 log_event("no_tables_found_using_ocr", {"page_number": page_num})
-                images = convert_from_path(self.file_path, first_page=page_num, last_page=page_num)
-                text = pytesseract.image_to_string(images[0])
-                self._process_text(text, page_num)
+                try:
+                    images = convert_from_path(self.file_path, first_page=page_num, last_page=page_num)
+                    text = pytesseract.image_to_string(images[0])
+                    self._process_text(text, page_num)
+                except Exception as ocr_error:
+                    log_event("ocr_extraction_error", {
+                        "page_number": page_num,
+                        "error": str(ocr_error)
+                    })
                 
         except Exception as e:
             self.error_count += 1
             log_event("page_processing_error", {"page_number": page_num, "error": str(e)})
 
 
+
     def _process_table(self, df, page_num, table_idx):
         """Enhanced table processing with field mapping integration"""
+        if df.empty:
+            log_event("empty_table_skipped", {"page_number": page_num, "table_index": table_idx})
+            return
+            
         # Clean column names - preserve case for better matching
         df.columns = [str(col).strip() for col in df.columns]
         original_columns = df.columns.tolist()
@@ -144,6 +180,7 @@ class PDFIngester:
                 self._insert_mapped_metric(mapped, page_num)
 
 
+
     def _process_text(self, text, page_num):
         """Enhanced text processing with field mapping integration"""
         lines = text.split('\n')
@@ -184,6 +221,7 @@ class PDFIngester:
                 self._insert_mapped_metric(mapped, page_num)
 
 
+
     def _insert_mapped_metric(self, mapped_row, page_num):
         """Insert a mapped and filtered metric row"""
         try:
@@ -197,6 +235,7 @@ class PDFIngester:
                     return
                 line_item_id = line_item_result[0]
 
+
                 # Parse period
                 period_info = parse_period(mapped_row["period_label"], mapped_row.get("period_type", "Monthly"))
                 if not period_info:
@@ -206,6 +245,7 @@ class PDFIngester:
                         "start_date": None,
                         "end_date": None
                     }
+
 
                 # Get or create period
                 cur.execute(
@@ -224,11 +264,13 @@ class PDFIngester:
                 else:
                     period_id = period[0]
 
+
                 # Coerce source_page to integer
                 try:
                     source_page = int(mapped_row.get("source_page", page_num))
                 except (TypeError, ValueError):
                     source_page = page_num
+
 
                 # Prepare data for insertion
                 data = {
@@ -246,7 +288,7 @@ class PDFIngester:
                 }
                 
                 data["hash"] = hash_datapoint(data["company_id"], data["period_id"], 
-                                            mapped_row["line_item"], data["value_type"], data["frequency"])
+                                            mapped_row["line_item"], data["value_type"], data["frequency"], datetime.now())
 
                 # Check for duplicates
                 cur.execute("SELECT id FROM financial_metrics WHERE hash = %s", (data["hash"],))
@@ -254,6 +296,7 @@ class PDFIngester:
                     self.skipped_count += 1
                     log_event("duplicate_skipped", {"hash": data["hash"]})
                     return
+
 
                 # Insert the metric
                 cur.execute(
@@ -280,6 +323,7 @@ class PDFIngester:
         except Exception as e:
             self.error_count += 1
             log_event("insert_error", {"error": str(e), "mapped_row": mapped_row})
+
 
 
     def _extract_number(self, cell_value):
@@ -310,6 +354,7 @@ class PDFIngester:
             return None
 
 
+
     def _extract_numbers_from_line(self, line):
         """Extract all numbers from a text line"""
         # Enhanced regex to capture numbers with various formats
@@ -327,6 +372,7 @@ class PDFIngester:
                     numbers.append(value)
         
         return numbers
+
 
 
     def _parse_period_from_header(self, column_header, page_num, table_idx):
@@ -352,6 +398,7 @@ class PDFIngester:
             "start_date": None,
             "end_date": None
         }
+
 
 
     def _infer_period_from_context(self, line, page_num):
@@ -381,6 +428,7 @@ class PDFIngester:
             "start_date": None,
             "end_date": None
         }
+
 
 
 if __name__ == "__main__":

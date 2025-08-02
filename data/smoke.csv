@@ -1,2 +1,2 @@
-line_item,period_label,period_type,value,source_file,source_page,notes
-Revenue,Feb 2025,Monthly,2390873,smoke.csv,1,smoke test
+company_id,company_name,line_item,period_label,period_type,value,source_file,source_page,notes
+1,Wilson Group,Revenue,Feb 2025,Monthly,2390873,smoke.csv,1,smoke test

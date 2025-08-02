@@ -5,6 +5,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Run migrations first to ensure consistency
+./ci/migrate.sh
+
+# Load .env file if present
+if [[ -f .env ]]; then
+    set -a
+    source .env
+    set +a
+fi
+
 # Load environment variables from .env
 LOCAL_DB=$(grep '^LOCAL_DATABASE_URL=' .env 2>/dev/null | cut -d '=' -f2- || echo "")
 EXTERNAL_DB=$(grep '^DATABASE_URL=' .env 2>/dev/null | cut -d '=' -f2- || echo "")
@@ -26,9 +36,13 @@ for DB_NAME in "LOCAL" "EXTERNAL"; do
 
   echo "=== Testing with $DB_NAME database ==="
 
+  # Generate a random suffix for uniqueness (macOS compatible)
+  SUFFIX=$(date +%s)$(printf "%04d" $((RANDOM % 10000)))
+
+  # Create the smoke CSV with a unique notes field
   cat > data/smoke.csv <<EOF
-line_item,period_label,period_type,value,source_file,source_page,notes
-Revenue,Feb 2025,Monthly,2390873,smoke.csv,1,smoke test
+company_id,company_name,line_item,period_label,period_type,value,source_file,source_page,notes
+1,Wilson Group,Revenue,Feb 2025,Monthly,2390873,smoke.csv,1,smoke_test_$SUFFIX
 EOF
 
   psql "$DATABASE_URL" <<SQL
