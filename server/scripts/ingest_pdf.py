@@ -1,3 +1,5 @@
+# server/scripts/ingest_pdf.py
+
 import fitz
 import pytesseract
 from pdf2image import convert_from_path
@@ -11,7 +13,6 @@ import sys, pathlib
 sys.path.append(str(pathlib.Path(__file__).resolve().parent))
 from utils import hash_datapoint, log_event, get_db_connection, clean_numeric_value, parse_period
 from field_mapper import map_and_filter_row
-
 
 
 class PDFIngester:
@@ -35,19 +36,13 @@ class PDFIngester:
         self.skipped_count = 0
         self.error_count = 0
 
-
-
     def __enter__(self):
         self.conn = get_db_connection()
         return self
 
-
-
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.conn:
             self.conn.close()
-
-
 
     def process_file(self):
         log_event("pdf_ingestion_started", {"file_path": self.file_path, "company_id": self.company_id})
@@ -70,15 +65,13 @@ class PDFIngester:
             log_event("pdf_ingestion_failed", {"file_path": self.file_path, "error": str(e)})
             raise
 
-
-
     def _process_page(self, page, page_num):
         log_event("page_processing_started", {"page_number": page_num})
         try:
             # Try table extraction first - FIXED for PyMuPDF >= 1.22
             tables_finder = page.find_tables()
             
-            # Convert TableFinder to list if needed
+            # Convert TableFinder to list if needed - THIS IS THE KEY FIX
             tables = []
             if tables_finder:
                 try:
@@ -86,7 +79,11 @@ class PDFIngester:
                     tables = list(tables_finder)
                 except TypeError:
                     # For older versions, it might already be a list
-                    tables = tables_finder if hasattr(tables_finder, '__len__') else []
+                    if hasattr(tables_finder, '__len__'):
+                        tables = tables_finder
+                    else:
+                        # If it's neither iterable nor has length, try extracting tables attribute
+                        tables = getattr(tables_finder, 'tables', [])
             
             if tables:
                 log_event("tables_found", {"page_number": page_num, "table_count": len(tables)})
@@ -117,8 +114,6 @@ class PDFIngester:
         except Exception as e:
             self.error_count += 1
             log_event("page_processing_error", {"page_number": page_num, "error": str(e)})
-
-
 
     def _process_table(self, df, page_num, table_idx):
         """Enhanced table processing with field mapping integration"""
@@ -179,8 +174,6 @@ class PDFIngester:
                 # Insert the mapped row
                 self._insert_mapped_metric(mapped, page_num)
 
-
-
     def _process_text(self, text, page_num):
         """Enhanced text processing with field mapping integration"""
         lines = text.split('\n')
@@ -220,8 +213,6 @@ class PDFIngester:
                 # Insert the mapped row
                 self._insert_mapped_metric(mapped, page_num)
 
-
-
     def _insert_mapped_metric(self, mapped_row, page_num):
         """Insert a mapped and filtered metric row"""
         try:
@@ -235,7 +226,6 @@ class PDFIngester:
                     return
                 line_item_id = line_item_result[0]
 
-
                 # Parse period
                 period_info = parse_period(mapped_row["period_label"], mapped_row.get("period_type", "Monthly"))
                 if not period_info:
@@ -245,7 +235,6 @@ class PDFIngester:
                         "start_date": None,
                         "end_date": None
                     }
-
 
                 # Get or create period
                 cur.execute(
@@ -264,13 +253,11 @@ class PDFIngester:
                 else:
                     period_id = period[0]
 
-
                 # Coerce source_page to integer
                 try:
                     source_page = int(mapped_row.get("source_page", page_num))
                 except (TypeError, ValueError):
                     source_page = page_num
-
 
                 # Prepare data for insertion
                 data = {
@@ -288,7 +275,7 @@ class PDFIngester:
                 }
                 
                 data["hash"] = hash_datapoint(data["company_id"], data["period_id"], 
-                                            mapped_row["line_item"], data["value_type"], data["frequency"], datetime.now())
+                                            mapped_row["line_item"], data["value_type"], data["frequency"], data["value"])
 
                 # Check for duplicates
                 cur.execute("SELECT id FROM financial_metrics WHERE hash = %s", (data["hash"],))
@@ -296,7 +283,6 @@ class PDFIngester:
                     self.skipped_count += 1
                     log_event("duplicate_skipped", {"hash": data["hash"]})
                     return
-
 
                 # Insert the metric
                 cur.execute(
@@ -323,8 +309,6 @@ class PDFIngester:
         except Exception as e:
             self.error_count += 1
             log_event("insert_error", {"error": str(e), "mapped_row": mapped_row})
-
-
 
     def _extract_number(self, cell_value):
         """Enhanced number extraction with better formatting support"""
@@ -353,8 +337,6 @@ class PDFIngester:
         except (ValueError, TypeError):
             return None
 
-
-
     def _extract_numbers_from_line(self, line):
         """Extract all numbers from a text line"""
         # Enhanced regex to capture numbers with various formats
@@ -372,8 +354,6 @@ class PDFIngester:
                     numbers.append(value)
         
         return numbers
-
-
 
     def _parse_period_from_header(self, column_header, page_num, table_idx):
         """Enhanced period parsing from table column headers"""
@@ -398,8 +378,6 @@ class PDFIngester:
             "start_date": None,
             "end_date": None
         }
-
-
 
     def _infer_period_from_context(self, line, page_num):
         """Infer period information from text context"""
@@ -428,7 +406,6 @@ class PDFIngester:
             "start_date": None,
             "end_date": None
         }
-
 
 
 if __name__ == "__main__":

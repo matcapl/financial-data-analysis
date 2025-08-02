@@ -11,6 +11,7 @@ from utils import (
 )
 from field_mapper import map_and_filter_row
 
+
 class XLSXIngester:
     def __init__(self, file_path: str, company_id: int = 1):
         self.file_path = file_path
@@ -19,6 +20,8 @@ class XLSXIngester:
         self.ingested_count = 0
         self.skipped_count = 0
         self.error_count = 0
+        # Track hashes for this file only
+        self.current_file_hashes = set()
 
     def __enter__(self):
         self.conn = get_db_connection()
@@ -42,7 +45,7 @@ class XLSXIngester:
                     log_event("file_read_success", {"type": "xlsx", "file_path": self.file_path})
                 except Exception as e:
                     log_event("file_read_error", {"type": "xlsx", "error": str(e), "file_path": self.file_path})
-                    raise Exception(f"Failed to read Excel file: {str(e)}")
+                    raise
             elif file_ext == '.csv':
                 try:
                     df = pd.read_csv(self.file_path, encoding='utf-8')
@@ -54,7 +57,7 @@ class XLSXIngester:
                     df = pd.read_csv(self.file_path, encoding='cp1252')
                     log_event("file_read_success", {"type": "csv", "encoding": "cp1252", "file_path": self.file_path})
             else:
-                raise Exception(f"Unsupported file type: {file_ext}. Only .xlsx and .csv files are supported.")
+                raise Exception(f"Unsupported file type: {file_ext}. Only .xlsx and .csv supported.")
 
             df.columns = [col.lower().strip() for col in df.columns]
             log_event("file_processing_started", {
@@ -69,7 +72,6 @@ class XLSXIngester:
                 if mapped is None:
                     continue
                 try:
-                    # convert to Series for _process_row
                     self._process_row(pd.Series(mapped), index + 1)
                 except Exception as row_error:
                     self.error_count += 1
@@ -100,6 +102,7 @@ class XLSXIngester:
             raise
 
     def _process_row(self, row, row_number):
+        # Skip invalid rows
         if pd.isna(row.get("line_item")) or pd.isna(row.get("period_label")):
             self.skipped_count += 1
             log_event("row_skipped", {
@@ -121,7 +124,7 @@ class XLSXIngester:
         period_info = parse_period(row["period_label"], row.get("period_type", "Monthly"))
 
         with self.conn.cursor() as cur:
-            # Lookup or insert line_item_id
+            # Lookup line_item_id
             cur.execute("SELECT id FROM line_item_definitions WHERE name = %s", (line_item,))
             li = cur.fetchone()
             if not li:
@@ -148,10 +151,9 @@ class XLSXIngester:
             else:
                 period_id = pr[0]
 
-            # Coerce source_page
-            raw_page = row.get("source_page")
+            # Parse source_page
             try:
-                source_page = int(raw_page)
+                source_page = int(row.get("source_page", 1))
             except (TypeError, ValueError):
                 source_page = 1
 
@@ -168,20 +170,27 @@ class XLSXIngester:
                 "source_type": "Raw",
                 "notes": row.get("notes", "")
             }
-            data["hash"] = hash_datapoint(
-                data["company_id"], data["period_id"],
-                line_item, data["value_type"], data["frequency"], datetime.now()
-            )
 
-            cur.execute("SELECT id FROM financial_metrics WHERE hash = %s", (data["hash"],))
+            # Compute hash for this row and file
+            row_hash = hash_datapoint(
+                data["company_id"], data["period_id"],
+                line_item, data["value_type"], data["frequency"], data["value"]
+            )
+            # Skip duplicates within this file
+            if row_hash in self.current_file_hashes:
+                self.skipped_count += 1
+                log_event("duplicate_skipped", {"row_number": row_number, "hash": row_hash})
+                return
+            self.current_file_hashes.add(row_hash)
+
+            # Skip existing in DB
+            cur.execute("SELECT id FROM financial_metrics WHERE hash = %s", (row_hash,))
             if cur.fetchone():
                 self.skipped_count += 1
-                log_event("duplicate_skipped", {
-                    "row_number": row_number,
-                    "hash": data["hash"]
-                })
+                log_event("duplicate_skipped", {"row_number": row_number, "hash": row_hash})
                 return
 
+            # Insert metric
             cur.execute(
                 """INSERT INTO financial_metrics (
                     company_id, period_id, line_item_id, value_type, frequency,
@@ -192,7 +201,7 @@ class XLSXIngester:
                     data["company_id"], data["period_id"], data["line_item_id"],
                     data["value_type"], data["frequency"], data["value"],
                     data["currency"], data["source_file"], data["source_page"],
-                    data["source_type"], data["notes"], data["hash"],
+                    data["source_type"], data["notes"], row_hash,
                     datetime.now(), datetime.now()
                 )
             )
@@ -203,6 +212,7 @@ class XLSXIngester:
                 "period_label": period_info["label"],
                 "value": data["value"]
             })
+
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
