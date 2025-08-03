@@ -133,7 +133,7 @@ module.exports = async (req, res) => {
         
         // Step 3: Generate Questions
         console.log('Starting question generation...');
-        await runPythonScript('questions_engine.py', []);
+        await runPythonScript('questions_engine.py', [company_id.toString()]);
         processingSteps.push('✓ Questions generated');
         console.log('✓ Question generation completed');
         

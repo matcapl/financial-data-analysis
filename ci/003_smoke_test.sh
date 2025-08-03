@@ -5,8 +5,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Run migrations first to ensure consistency
-./ci/migrate.sh
+# If the DB is uninitialized (i.e. have run 001_reset but not 002_migrate.sh yet)
+# Then run migrations first to ensure consistency
+# ./ci/migrate.sh
+# Mayb use automated check below to test, if unknown
+
+# If the schema_migrations table doesn’t exist, run migrations
+if ! psql "$DATABASE_URL" -tAc "SELECT 1 FROM information_schema.tables WHERE table_name='schema_migrations'" | grep -q 1; then
+  echo "Schema not initialized—running migrations"
+  ci/002_migrate.sh
+fi
 
 # Load .env file if present
 if [[ -f .env ]]; then
