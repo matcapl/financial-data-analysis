@@ -47,16 +47,22 @@ By aligning each part of the stack with the platform that best supports its runt
 ## Step 1: Clone and Setup Repository
 
 ```bash
-# Clone the repository
+# 1. Clone the repository
 git clone https://github.com/matcapl/financial-data-analysis.git
 cd financial-data-analysis
 
-# Create Python virtual environment
+# 2. Create Python virtual environment
 python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+pip install --upgrade pip setuptools wheel
 
-# Install Python dependencies
+# 3. If you already have poetry installed globally: Ensure poetry uses this active venv rather than creating its own
+poetry config virtualenvs.create false --local
+
+# 4. If you do not have poetry installed: Install the Poetry CLI into this venv 
 pip install poetry
+
+# 5. Install project dependencies as defined in pyproject.toml
 poetry install
 
 # Install Node.js dependencies
@@ -465,4 +471,70 @@ Alert: "This data is 85% similar to [Existing Company]. Same entity?"
 Focus for now: Get your smoke test passing by seeding the companies table in both databases. Company disambiguation can be layered on once the core pipeline is solid.
 
 --
+# Development: Reset and migrate
+./ci/reset_local_db.sh
+./ci/migrate.sh
 
+# CI: Just migrate (idempotent)
+./ci/migrate.sh
+
+# Smoke test (unchanged)
+./ci/smoke_test.sh
+
+--
+
+# Expert Code Review and QA Test Plan for Financial Data Analysis System
+
+
+## Intended Functionality
+
+1. **Derived Metrics Calculation**  
+   - Month-over-Month, Quarter-over-Quarter, Year-over-Year, Year-to-Date, and variance metrics computed by `calc_metrics.py`.
+
+2. **Automatic Question Generation**  
+   - `questions_engine.py` applies threshold rules (e.g., ±10% variance) to generate targeted analytical questions for each metric.
+
+3. **PDF Report Bundling**  
+   - `report_generator.py` assembles metric tables and generated questions into a formatted PDF.
+
+4. **Blob Upload for Reports**  
+   - `generate-report.js` pushes the generated PDF to a Vercel Blob container and returns the accessible URL.
+
+## Comprehensive Test Plan
+
+The following 20 tests progress from high-level smoke tests through detailed unit and integration checks.
+
+| #  | Test Description                                        | Command / API Call                                                                                         | Expected Outcome / Assertion                                                                                                                                         |
+|----|---------------------------------------------------------|-------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 1  | **Smoke Test: Core Pipeline**                           | `./ci/smoke_test.sh`                                                                                         | Prints “Smoke test passed: revenue=2390873” and exits `0`. Smoke CSV ingested end-to-end into `financial_metrics`.                                                    |
+| 2  | **Health Endpoint**                                     | `curl -s http://localhost:4000/health`                                                                       | JSON `{ "status":"ok", ... }`.                                                                                                                                       |
+| 3  | **API Info Endpoint**                                   | `curl -s http://localhost:4000/api/info`                                                                     | Returns Express-configured routes or version info.                                                                                                                   |
+| 4  | **Upload CSV Template**                                 | `curl -F "file=@data/financial_data_template.csv" http://localhost:4000/api/upload`                          | JSON `{ "message":"File processed successfully!", "processing_steps":[…] }`.                                                                                          |
+| 5  | **Upload Smoke CSV**                                    | `curl -F "file=@data/smoke.csv" http://localhost:4000/api/upload`                                             | Same success JSON, with `company_id`=1.                                                                                                                              |
+| 6  | **Database Row Count Post-Upload**                      | `psql "$DATABASE_URL" -t -c "SELECT COUNT(*) FROM financial_metrics;"`                                        | Returns `>=1`.                                                                                                                                                        |
+| 7  | **Derived Metrics Unit Test**                           | `pytest server/scripts/test_calc_metrics.py` (create test file invoking `calc_metrics.py`)                   | Assert correct MoM, QoQ, YoY, YTD, variance for provided sample data.                                                                                                |
+| 8  | **Field Mapper Mapping**                                | `pytest server/scripts/test_field_mapper.py`                                                                  | Assert that input names map to canonical IDs (Revenue, Gross Profit, EBITDA).                                                                                        |
+| 9  | **Question Engine Variance Threshold**                  | `pytest server/scripts/test_questions_engine.py`                                                              | For a metric variance of +15%, ensure a “positive variance” question is generated.                                                                                   |
+| 10 | **Report Generator PDF Creation**                       | `python server/scripts/report_generator.py --input data/financial_data_template.csv --output out.pdf`         | `out.pdf` exists, nonzero file size, contains expected headings (“Revenue”, “Questions”).                                                                              |
+| 11 | **Report Generator Question Inclusion**                 | Same command as #10; then `grep -q "Why did Revenue change"` `strings out.pdf`                                | Returns `0`.                                                                                                                                                          |
+| 12 | **Blob Upload Simulation**                              | `node server/api/test_blob.js out.pdf`                                                                        | Returns a valid blob URL.                                                                                                                                             |
+| 13 | **Generate-Report API Integration**                     | `curl -X POST http://localhost:4000/api/generate-report -H "Content-Type: application/json" -d '{"company_id":1}'` | JSON `"report_filename":"report_1_*.pdf"`, `"processing_steps"` includes PDF creation.                                                                                |
+| 14 | **Error Handling: Missing File Upload**                 | `curl -X POST http://localhost:4000/api/upload`                                                               | HTTP `400` with error message “No file provided.”                                                                                                                     |
+| 15 | **Error Handling: Invalid Company ID**                  | `curl -X POST .../generate-report -d '{"company_id":9999}'`                                                    | HTTP `404` or JSON error “Company not found.”                                                                                                                         |
+| 16 | **Integration: Ingest PDF**                             | `curl -F "file=@data/test.pdf" http://localhost:4000/api/upload` (add a small PDF test file in `data/`)        | Data ingested successfully and metrics calculated.                                                                                                                    |
+| 17 | **Database Schema Migration Idempotency**               | `./ci/migrate.sh && ./ci/migrate.sh`                                                                          | Second run detects no changes and exits `0`.                                                                                                                          |
+| 18 | **Reset Local DB Script**                               | `./ci/reset_local_db.sh && psql "$DATABASE_URL" -c "\dt"`                                                      | Database tables are dropped and re-created; `\dt` shows only `public.*` base tables.                                                                                 |
+| 19 | **Docker Container End-to-End**                         | `docker build -t test-server -f server/Dockerfile . && docker run --rm -p 4000:4000 -e DATABASE_URL=$DATABASE_URL test-server` plus smoke upload | Container responds to `/health`, ingestion and report generation work identically to local.                                                                            |
+| 20 | **Code Style and Linting**                              | `npm run lint` (in `server/`) and `flake8 server/scripts`                                                      | No linting errors reported.                                                                                                                                           |
+
+Each test uses existing files under `data/` (e.g., `financial_data_template.csv`, `smoke.csv`) and the provided database schemas. This ensures thorough coverage from high-level pipeline verification to granular unit tests of individual scripts and API endpoints.
+
+[1] https://github.com/matcapl/financial-data-analysis
+[2] https://github.com/matcapl/financial-data-analysis
+[3] https://github.com/matcapl/financial-data-analysis/tree/main/server
+[4] https://github.com/matcapl/financial-data-analysis/tree/main/server/api
+[5] https://github.com/matcapl/financial-data-analysis/tree/main/server/scripts
+[6] https://github.com/matcapl/financial-data-analysis/tree/main/schema
+[7] https://github.com/matcapl/financial-data-analysis/tree/main/data
+[8] https://github.com/matcapl/financial-data-analysis/tree/main/client
+[9] https://github.com/matcapl/financial-data-analysis/tree/main/ci

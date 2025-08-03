@@ -40,12 +40,8 @@ class XLSXIngester:
         try:
             file_ext = os.path.splitext(self.file_path)[1].lower()
             if file_ext == '.xlsx':
-                try:
-                    df = pd.read_excel(self.file_path)
-                    log_event("file_read_success", {"type": "xlsx", "file_path": self.file_path})
-                except Exception as e:
-                    log_event("file_read_error", {"type": "xlsx", "error": str(e), "file_path": self.file_path})
-                    raise
+                df = pd.read_excel(self.file_path)
+                log_event("file_read_success", {"type": "xlsx", "file_path": self.file_path})
             elif file_ext == '.csv':
                 try:
                     df = pd.read_csv(self.file_path, encoding='utf-8')
@@ -53,11 +49,8 @@ class XLSXIngester:
                 except UnicodeDecodeError:
                     df = pd.read_csv(self.file_path, encoding='latin-1')
                     log_event("file_read_success", {"type": "csv", "encoding": "latin-1", "file_path": self.file_path})
-                except Exception as e:
-                    df = pd.read_csv(self.file_path, encoding='cp1252')
-                    log_event("file_read_success", {"type": "csv", "encoding": "cp1252", "file_path": self.file_path})
             else:
-                raise Exception(f"Unsupported file type: {file_ext}. Only .xlsx and .csv files are supported.")
+                raise Exception(f"Unsupported file type: {file_ext}. Only .xlsx and .csv supported.")
 
             df.columns = [col.lower().strip() for col in df.columns]
             log_event("file_processing_started", {
@@ -68,11 +61,8 @@ class XLSXIngester:
 
             for index, row in df.iterrows():
                 raw = row.to_dict()
-                mapped = map_and_filter_row(raw)
-                if mapped is None:
-                    continue
                 try:
-                    self._process_row(mapped, index + 1)
+                    self._process_row(raw, index + 1)
                 except Exception as row_error:
                     self.error_count += 1
                     log_event("row_processing_error", {
@@ -101,8 +91,35 @@ class XLSXIngester:
                 self.conn.rollback()
             raise
 
-    def _process_row(self, row, row_number):
-        if pd.isna(row.get("line_item")) or pd.isna(row.get("period_label")):
+    def _process_row(self, raw_row: dict, row_number: int):
+        # Fill missing optional fields with defaults
+        defaults = {
+            "statement_type": None,
+            "category": None,
+            "value_type": "Actual",
+            "frequency": raw_row.get("period_type", "Monthly"),
+            "currency": raw_row.get("currency", "USD")
+        }
+        for k, v in defaults.items():
+            raw_row.setdefault(k, v)
+
+        # Attempt mapping
+        mapped = map_and_filter_row(raw_row)
+        if mapped is None:
+            # Fallback: ingest raw data with note flag
+            mapped = {
+                "line_item": raw_row.get("line_item"),
+                "period_label": raw_row.get("period_label"),
+                "period_type": raw_row.get("period_type", "Monthly"),
+                "value_type": raw_row.get("value_type"),
+                "frequency": raw_row.get("frequency"),
+                "value": raw_row.get("value"),
+                "currency": raw_row.get("currency"),
+                "notes": f"unmapped_row:{row_number}"
+            }
+
+        # Coerce required fields
+        if not mapped.get("line_item") or not mapped.get("period_label"):
             self.skipped_count += 1
             log_event("row_skipped", {
                 "row_number": row_number,
@@ -110,25 +127,15 @@ class XLSXIngester:
             })
             return
 
-        line_item = str(row["line_item"]).strip()
-        valid_items = ["Revenue", "Gross Profit", "EBITDA"]
-        if line_item not in valid_items:
-            self.skipped_count += 1
-            log_event("row_skipped", {
-                "row_number": row_number,
-                "reason": f"Invalid line_item: {line_item}. Valid items: {valid_items}"
-            })
-            return
-
-        period_info = parse_period(row["period_label"], row.get("period_type", "Monthly"))
+        period_info = parse_period(mapped["period_label"], mapped.get("period_type", "Monthly"))
 
         with self.conn.cursor() as cur:
             # Lookup or insert line_item_id
-            cur.execute("SELECT id FROM line_item_definitions WHERE name = %s", (line_item,))
+            cur.execute("SELECT id FROM line_item_definitions WHERE name = %s", (mapped["line_item"],))
             li = cur.fetchone()
             if not li:
                 self.error_count += 1
-                log_event("line_item_not_found", {"row_number": row_number, "line_item": line_item})
+                log_event("line_item_not_found", {"row_number": row_number, "line_item": mapped["line_item"]})
                 return
             line_item_id = li[0]
 
@@ -150,75 +157,50 @@ class XLSXIngester:
             else:
                 period_id = pr[0]
 
-            # Coerce source_page
-            raw_page = row.get("source_page")
-            try:
-                source_page = int(raw_page)
-            except (TypeError, ValueError):
-                source_page = 1
-
-            # Build data dict
-            data = {
-                "company_id": self.company_id,
-                "period_id": period_id,
-                "line_item_id": line_item_id,
-                "value_type": row.get("value_type", "Actual"),
-                "frequency": row.get("frequency", period_info["type"]),
-                "value": clean_numeric_value(row.get("value")),
-                "currency": row.get("currency", "USD"),
-                "source_file": os.path.basename(self.file_path),
-                "source_page": source_page,
-                "source_type": "Raw",
-                "notes": row.get("notes", "")
-            }
-
             # Compute stable hash (omit timestamp)
             row_hash = hash_datapoint(
-                data["company_id"], data["period_id"],
-                line_item, data["value_type"], data["frequency"], data["value"]
+                self.company_id, period_id,
+                mapped["line_item"], mapped.get("value_type"),
+                mapped.get("frequency"), clean_numeric_value(mapped.get("value"))
             )
 
             # Skip duplicates within this file
             if row_hash in self.current_file_hashes:
                 self.skipped_count += 1
-                log_event("duplicate_skipped", {
-                    "row_number": row_number,
-                    "hash": row_hash
-                })
+                log_event("duplicate_skipped", {"row_number": row_number, "hash": row_hash})
                 return
             self.current_file_hashes.add(row_hash)
 
-            # Skip existing in DB
+            # Skip if already in DB
             cur.execute("SELECT id FROM financial_metrics WHERE hash = %s", (row_hash,))
             if cur.fetchone():
                 self.skipped_count += 1
-                log_event("duplicate_skipped", {
-                    "row_number": row_number,
-                    "hash": row_hash
-                })
+                log_event("duplicate_skipped", {"row_number": row_number, "hash": row_hash})
                 return
 
             # Insert metric
             cur.execute(
                 """INSERT INTO financial_metrics (
-                    company_id, period_id, line_item_id, value_type, frequency,
-                    value, currency, source_file, source_page, source_type,
-                    notes, hash, created_at, updated_at
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                       company_id, period_id, line_item_id, value_type, frequency,
+                       value, currency, source_file, source_page, source_type,
+                       notes, hash, created_at, updated_at
+                   ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
                 (
-                    data["company_id"], data["period_id"], data["line_item_id"],
-                    data["value_type"], data["frequency"], data["value"],
-                    data["currency"], data["source_file"], data["source_page"],
-                    data["source_type"], data["notes"], row_hash,
-                    datetime.now(), datetime.now()
+                    self.company_id, period_id, line_item_id,
+                    mapped.get("value_type"), mapped.get("frequency"),
+                    clean_numeric_value(mapped.get("value")), mapped.get("currency"),
+                    os.path.basename(self.file_path),
+                    int(raw_row.get("source_page", 1)),
+                    "Raw", mapped.get("notes"),
+                    row_hash, datetime.now(), datetime.now()
                 )
             )
             self.ingested_count += 1
             log_event("metric_inserted", {
                 "row_number": row_number,
-                "line_item": line_item,
+                "line_item": mapped["line_item"],
                 "period_label": period_info["label"],
-                "value": data["value"]
+                "value": clean_numeric_value(mapped.get("value"))
             })
 
 
