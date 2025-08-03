@@ -65,7 +65,7 @@ def fetch_metrics_and_templates(conn, company_id):
     """
     full_sql = """
         SELECT fm.id,
-               li.name AS line_item,
+               li.name      AS line_item,
                fm.value,
                fm.budget_value,
                fm.prior_year_value,
@@ -109,7 +109,6 @@ def fetch_metrics_and_templates(conn, company_id):
                 }
                 for r in rows
             ]
-        # Fetch templates
         cur.execute("""
             SELECT metric, calculation_type, base_question,
                    trigger_threshold, trigger_operator, default_weight
@@ -159,21 +158,27 @@ def insert_questions(conn, questions):
     """
     with conn.cursor() as cur:
         for q in questions:
-            cur.execute("""
-                INSERT INTO live_questions (
-                    question_text, answer_text, metric_id,
-                    calculation_type, default_weight,
-                    created_at, updated_at
-                ) VALUES (%s,%s,%s,%s,%s,%s,%s)
-            """, (
-                q['question_text'], q['answer_text'], q['metric_id'],
-                q['calculation_type'], q['default_weight'],
-                q['created_at'], q['updated_at']
-            ))
-            log_event("question_created", {
-                'metric_id': q['metric_id'],
-                'calculation_type': q['calculation_type']
-            })
+
+            try:
+                cur.execute("""
+                    INSERT INTO live_questions (
+                        question_text, answer, metric_id,
+                        calculation_type, default_weight,
+                        created_at, updated_at
+                    ) VALUES (%s,%s,%s,%s,%s,%s,%s)
+                """, (
+                    q['question_text'], q['answer_text'], q['metric_id'],
+                    q['calculation_type'], q['default_weight'],
+                    q['created_at'], q['updated_at']
+                ))
+                log_event("question_created", {
+                    'metric_id': q['metric_id'],
+                    'calculation_type': q['calculation_type']
+                })
+            except psycopg2.Error as e:
+                log_event("question_insertion_skipped", {
+                    'error': str(e), 'question': q['question_text']
+                })
 
 def main(company_id):
     """

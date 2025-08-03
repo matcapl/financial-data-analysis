@@ -131,11 +131,15 @@ module.exports = async (req, res) => {
         processingSteps.push('✓ Metrics calculated');
         console.log('✓ Metric calculations completed');
         
-        // Step 3: Generate Questions
+        // Step 3: Generate Questions (failures skipped)
         console.log('Starting question generation...');
-        await runPythonScript('questions_engine.py', [company_id.toString()]);
-        processingSteps.push('✓ Questions generated');
-        console.log('✓ Question generation completed');
+        try {
+          await runPythonScript('questions_engine.py', [company_id.toString()]);
+          processingSteps.push('✓ Questions generated');
+        } catch (qErr) {
+          console.warn('Question generation skipped due to error:', qErr.message);
+          processingSteps.push('⚠ Questions generation failed (skipped)');
+        }
         
         // Step 4: Upload to Vercel Blob (if available)
         if (process.env.VERCEL_BLOB_TOKEN) {
