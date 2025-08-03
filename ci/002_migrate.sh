@@ -75,8 +75,8 @@ run_migrations() {
     
     # Define migration order
     local migrations=(
-        "financial_schema.sql"
-        "question_templates.sql"
+        "001_financial_schema.sql"
+        "002_question_templates.sql"
     )
     
     for migration_file in "${migrations[@]}"; do

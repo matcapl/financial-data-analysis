@@ -11,7 +11,7 @@ The system operates through these key steps:
 3. **Question Generation**: The `questions_engine.py` script creates questions from the metrics to drive deeper analysis.
 4. **Report Generation**: The `report_generator.py` script compiles metrics and questions into PDF reports, stored and served via Vercel Blob.
 
-Data is managed in a PostgreSQL database with tables for companies, periods, financial metrics, derived metrics, questions, and reports, as defined in `financial_schema.sql` and `question_templates.sql`.
+Data is managed in a PostgreSQL database with tables for companies, periods, financial metrics, derived metrics, questions, and reports, as defined in `001_financial_schema.sql` and `002_question_templates.sql`.
 
 <!-- Running make db after cloning guarantees that every new developer has the schema and role in place before touching the UI. -->
 
@@ -56,10 +56,10 @@ python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 pip install --upgrade pip setuptools wheel
 
-# 3. If you already have poetry installed globally: Ensure poetry uses this active venv rather than creating its own
+# 3.1 IF you already HAVE poetry installed globally: Ensure poetry uses this active venv rather than creating its own
 poetry config virtualenvs.create false --local
-
-# 4. If you do not have poetry installed: Install the Poetry CLI into this venv 
+# OR 
+# 3.2. IF you DO NOT have poetry installed: Install the Poetry CLI into this venv 
 pip install poetry
 
 # 5. Install project dependencies as defined in pyproject.toml
@@ -79,18 +79,18 @@ cd ..
 4. **Apply database schema**:
    ```bash
    # Use the connection string from Neon dashboard
-   psql "postgresql://username:password@ep-xxx.neon.tech:5432/database?sslmode=require" -f schema/financial_schema.sql
-   psql "postgresql://username:password@ep-xxx.neon.tech:5432/database?sslmode=require" -f schema/question_templates.sql
+   psql "postgresql://username:password@ep-xxx.neon.tech:5432/database?sslmode=require" -f schema/001_financial_schema.sql
+   psql "postgresql://username:password@ep-xxx.neon.tech:5432/database?sslmode=require" -f schema/002_question_templates.sql
    ```
 
-question_templates.sql must be deployed with matching financial_schema.sql.
+question_templates.sql must be deployed with matching 001_financial_schema.sql.
 If changes to metric definitions occur in the schema, corresponding question templates updates should be part of the same PR and deployment.
 
-psql "$LOCAL_DATABASE_URL" -f schema/financial_schema.sql
-psql "$LOCAL_DATABASE_URL" -f schema/question_templates.sql
+psql "$LOCAL_DATABASE_URL" -f schema/001_financial_schema.sql
+psql "$LOCAL_DATABASE_URL" -f schema/002_question_templates.sql
 
-psql "$DATABASE_URL" -f schema/financial_schema.sql
-psql "$DATABASE_URL" -f schema/question_templates.sql
+psql "$DATABASE_URL" -f schema/001_financial_schema.sql
+psql "$DATABASE_URL" -f schema/002_question_templates.sql
 
 
 ## Step 3: Environment Configuration
