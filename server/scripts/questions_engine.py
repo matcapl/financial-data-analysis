@@ -22,19 +22,17 @@ def handle_threshold(metric, template):
     Compute percentage change between metric.value and comparison field based on template settings.
     """
     actual = Decimal(metric['value'])
-    # Determine comparison field name based on calculation_type
     comp_field = {
         'Variance vs Budget': 'budget_value',
         'MoM Growth': 'prior_period_value',
         'QoQ Growth': 'prior_period_value',
         'YoY Growth': 'prior_period_value'
     }.get(template['calculation_type'])
-    comp = Decimal(metric.get(comp_field, 0)) if comp_field else Decimal(0)
-    if comp == 0:
+    comp_val = metric.get(comp_field)
+    if comp_val is None or Decimal(comp_val) == 0:
         return None, None
-
+    comp = Decimal(comp_val)
     change = (actual - comp) / comp * Decimal(100)
-    # Evaluate trigger condition
     op = template['trigger_operator']
     thresh = Decimal(template['trigger_threshold'])
     conds = {
@@ -46,8 +44,7 @@ def handle_threshold(metric, template):
     }
     if not conds.get(op, False):
         return None, None
-
-    question = template['base_question'].replace('{change}', f"{change:.1f}%")
+    question = template['base_question'].replace('{change}', f"{change:.1f}")
     answer = f"{change:.1f}%"
     return question, answer
 
@@ -64,28 +61,54 @@ HANDLERS = {
 def fetch_metrics_and_templates(conn, company_id):
     """
     Retrieve metrics and question templates from the database.
+    Attempts full schema then falls back if optional columns are missing.
+    """
+    full_sql = """
+        SELECT fm.id,
+               li.name AS line_item,
+               fm.value,
+               fm.budget_value,
+               fm.prior_year_value,
+               fm.prior_period_value
+        FROM financial_metrics fm
+        JOIN line_item_definitions li ON fm.line_item_id = li.id
+        WHERE fm.company_id = %s
+    """
+    minimal_sql = """
+        SELECT fm.id,
+               li.name AS line_item,
+               fm.value
+        FROM financial_metrics fm
+        JOIN line_item_definitions li ON fm.line_item_id = li.id
+        WHERE fm.company_id = %s
     """
     with conn.cursor() as cur:
-        # Fetch metrics with potential comparison fields
-        cur.execute("""
-            SELECT fm.id, li.name AS line_item, fm.value,
-                   fm.budget_value, fm.prior_year_value, fm.prior_period_value
-            FROM financial_metrics fm
-            JOIN line_item_definitions li ON fm.line_item_id = li.id
-            WHERE fm.company_id = %s
-        """, (company_id,))
-        metrics = [
-            {
-                'id': r[0],
-                'line_item': r[1],
-                'value': r[2],
-                'budget_value': r[3],
-                'prior_year_value': r[4],
-                'prior_period_value': r[5]
-            }
-            for r in cur.fetchall()
-        ]
-
+        try:
+            cur.execute(full_sql, (company_id,))
+            rows = cur.fetchall()
+            metrics = [
+                {
+                    'id': r[0],
+                    'line_item': r[1],
+                    'value': r[2],
+                    'budget_value': r[3],
+                    'prior_year_value': r[4],
+                    'prior_period_value': r[5]
+                }
+                for r in rows
+            ]
+        except psycopg2.errors.UndefinedColumn:
+            conn.rollback()
+            cur.execute(minimal_sql, (company_id,))
+            rows = cur.fetchall()
+            metrics = [
+                {
+                    'id': r[0],
+                    'line_item': r[1],
+                    'value': r[2]
+                }
+                for r in rows
+            ]
         # Fetch templates
         cur.execute("""
             SELECT metric, calculation_type, base_question,
@@ -103,7 +126,6 @@ def fetch_metrics_and_templates(conn, company_id):
             }
             for r in cur.fetchall()
         ]
-
     return metrics, templates
 
 def generate_questions(metrics, templates):
@@ -112,16 +134,15 @@ def generate_questions(metrics, templates):
     """
     for metric in metrics:
         for tmpl in templates:
-            # Filter templates by metric or catch-all 'ALL'
             if tmpl['metric'] != metric['line_item'] and tmpl['metric'] != 'ALL':
                 continue
             handler = HANDLERS.get(tmpl['calculation_type'])
             if not handler:
                 continue
-            q_and_a = handler(metric, tmpl)
-            if not q_and_a or not q_and_a[0]:
+            result = handler(metric, tmpl)
+            if not result or not result[0]:
                 continue
-            question, answer = q_and_a
+            question, answer = result
             yield {
                 'question_text': question,
                 'answer_text': answer,
@@ -169,6 +190,7 @@ def main(company_id):
             'questions_created': len(questions),
             'company_id': company_id
         })
+        print(f"Questions generation completed: {{'questions_created': {len(questions)}, 'total_templates': {len(templates)}, 'total_metrics': {len(metrics)}}}")
     except Exception as e:
         conn.rollback()
         log_event("questions_generation_failed", {'error': str(e)})
