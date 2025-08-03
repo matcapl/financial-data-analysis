@@ -20,7 +20,6 @@ class XLSXIngester:
         self.ingested_count = 0
         self.skipped_count = 0
         self.error_count = 0
-        # Track hashes within this file only
         self.current_file_hashes = set()
 
     def __enter__(self):
@@ -103,10 +102,9 @@ class XLSXIngester:
         for k, v in defaults.items():
             raw_row.setdefault(k, v)
 
-        # Attempt mapping
+        # Attempt mapping, fallback if None
         mapped = map_and_filter_row(raw_row)
         if mapped is None:
-            # Fallback: ingest raw data with note flag
             mapped = {
                 "line_item": raw_row.get("line_item"),
                 "period_label": raw_row.get("period_label"),
@@ -118,7 +116,7 @@ class XLSXIngester:
                 "notes": f"unmapped_row:{row_number}"
             }
 
-        # Coerce required fields
+        # Require line_item and period_label
         if not mapped.get("line_item") or not mapped.get("period_label"):
             self.skipped_count += 1
             log_event("row_skipped", {
@@ -130,7 +128,7 @@ class XLSXIngester:
         period_info = parse_period(mapped["period_label"], mapped.get("period_type", "Monthly"))
 
         with self.conn.cursor() as cur:
-            # Lookup or insert line_item_id
+            # line_item_id lookup
             cur.execute("SELECT id FROM line_item_definitions WHERE name = %s", (mapped["line_item"],))
             li = cur.fetchone()
             if not li:
@@ -139,7 +137,7 @@ class XLSXIngester:
                 return
             line_item_id = li[0]
 
-            # Lookup or insert period_id
+            # period_id lookup/insert
             cur.execute(
                 "SELECT id FROM periods WHERE period_type = %s AND period_label = %s",
                 (period_info["type"], period_info["label"])
@@ -157,21 +155,21 @@ class XLSXIngester:
             else:
                 period_id = pr[0]
 
-            # Compute stable hash (omit timestamp)
+            # Compute stable hash
             row_hash = hash_datapoint(
                 self.company_id, period_id,
                 mapped["line_item"], mapped.get("value_type"),
                 mapped.get("frequency"), clean_numeric_value(mapped.get("value"))
             )
 
-            # Skip duplicates within this file
+            # Skip duplicates in-file
             if row_hash in self.current_file_hashes:
                 self.skipped_count += 1
                 log_event("duplicate_skipped", {"row_number": row_number, "hash": row_hash})
                 return
             self.current_file_hashes.add(row_hash)
 
-            # Skip if already in DB
+            # Skip duplicates in DB
             cur.execute("SELECT id FROM financial_metrics WHERE hash = %s", (row_hash,))
             if cur.fetchone():
                 self.skipped_count += 1
@@ -187,8 +185,8 @@ class XLSXIngester:
                    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
                 (
                     self.company_id, period_id, line_item_id,
-                    mapped.get("value_type"), mapped.get("frequency"),
-                    clean_numeric_value(mapped.get("value")), mapped.get("currency"),
+                    mapped["value_type"], mapped["frequency"],
+                    clean_numeric_value(mapped.get("value")), mapped["currency"],
                     os.path.basename(self.file_path),
                     int(raw_row.get("source_page", 1)),
                     "Raw", mapped.get("notes"),
