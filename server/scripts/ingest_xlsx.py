@@ -5,11 +5,16 @@ from datetime import datetime
 import psycopg2
 import sys
 import os
+
 from utils import (
-    hash_datapoint, log_event, get_db_connection,
-    clean_numeric_value, parse_period
+    hash_datapoint,
+    log_event,
+    get_db_connection,
+    clean_numeric_value,
+    parse_period
 )
 from field_mapper import map_and_filter_row
+
 
 class XLSXIngester:
     def __init__(self, file_path: str, company_id: int = 1):
@@ -50,7 +55,7 @@ class XLSXIngester:
             else:
                 raise Exception(f"Unsupported file type: {ext}")
 
-            # Normalize headers: map variants to canonical names
+            # Normalize headers
             raw_cols = [c.strip() for c in df.columns]
             synonyms = {
                 "company_id":      ["company_id","companyid","company","co_id"],
@@ -115,7 +120,7 @@ class XLSXIngester:
             raise
 
     def _process_row(self, raw_row: dict, row_number: int):
-        # Defaults and ensure canonical keys exist
+        # Apply defaults
         defaults = {
             "statement_type": None,
             "category": None,
@@ -126,7 +131,7 @@ class XLSXIngester:
         for k, v in defaults.items():
             raw_row.setdefault(k, v)
 
-        # Normalize via field_mapper, fallback if None
+        # Normalize via field_mapper
         mapped = map_and_filter_row(raw_row) or {
             "line_item": raw_row.get("line_item"),
             "period_label": raw_row.get("period_label"),
@@ -142,27 +147,28 @@ class XLSXIngester:
         print("DEBUG: ROW NUM", row_number, "RAW", raw_row)
         print("DEBUG: MAPPED", mapped)
 
-        # Required fields
+        # Validate required fields
         if not mapped.get("line_item") or not mapped.get("period_label"):
             raise Exception(f"Missing required fields in row {row_number}: "
-                            f"line_item={mapped.get('line_item')} period_label={mapped.get('period_label')}")
+                            f"line_item={mapped.get('line_item')} "
+                            f"period_label={mapped.get('period_label')}")
 
         # Parse period
         period = parse_period(mapped["period_label"], mapped.get("period_type", "Monthly"))
 
+        # Single cursor for all DB operations
         with self.conn.cursor() as cur:
-            # line_item_id lookup
+            # 1. Lookup line_item_id
             cur.execute("SELECT id FROM line_item_definitions WHERE name=%s", (mapped["line_item"],))
             li = cur.fetchone()
             print(f"DEBUG: Looking for line_item '{mapped['line_item']}', found: {li}")
             if not li:
-                print("DEBUG: Available line items in DB:")
                 cur.execute("SELECT name FROM line_item_definitions")
-                print([row[0] for row in cur.fetchall()])
-                raise Exception(f"Line item not found in definitions: {mapped['line_item']}")
+                available = [r[0] for r in cur.fetchall()]
+                raise Exception(f"Line item not found: {mapped['line_item']}. Available: {available}")
             line_item_id = li[0]
 
-            # period_id lookup/insert
+            # 2. Lookup or insert period_id
             cur.execute(
                 "SELECT id FROM periods WHERE period_type=%s AND period_label=%s",
                 (period["type"], period["label"])
@@ -172,58 +178,75 @@ class XLSXIngester:
                 period_id = pr[0]
             else:
                 cur.execute(
-                    "INSERT INTO periods (period_type,period_label,start_date,end_date,created_at,updated_at) "
+                    "INSERT INTO periods "
+                    "(period_type,period_label,start_date,end_date,created_at,updated_at) "
                     "VALUES (%s,%s,%s,%s,%s,%s) RETURNING id",
-                    (period["type"], period["label"], period["start_date"], period["end_date"],
+                    (period["type"], period["label"],
+                     period["start_date"], period["end_date"],
                      datetime.now(), datetime.now())
                 )
                 period_id = cur.fetchone()[0]
 
-            # Compute hash (includes value_type)
+            # 3. Compute hash
             row_hash = hash_datapoint(
-                self.company_id, period_id, mapped["line_item"],
-                mapped["value_type"], mapped["frequency"],
+                self.company_id, period_id,
+                mapped["line_item"], mapped["value_type"],
+                mapped["frequency"],
                 clean_numeric_value(mapped["value"])
             )
+            print(f"DEBUG: Computed hash for row {row_number}: {row_hash}")
 
-            # Skip in-file duplicates
+            # 4. In-file duplicate check
             if row_hash in self.current_file_hashes:
                 self.skipped_count += 1
-                log_event("duplicate_skipped", {"row_number": row_number, "hash": row_hash})
+                log_event("duplicate_skipped_infile", {
+                    "row_number": row_number, "hash": row_hash
+                })
                 return
-            self.current_file_hashes.add(row_hash)
 
-            # Skip existing in DB
+            # 5. DB duplicate check
             cur.execute("SELECT id FROM financial_metrics WHERE hash=%s", (row_hash,))
-            if cur.fetchone():
+            existing = cur.fetchone()
+            if existing:
                 self.skipped_count += 1
-                log_event("duplicate_skipped", {"row_number": row_number, "hash": row_hash})
+                log_event("duplicate_skipped_db", {
+                    "row_number": row_number,
+                    "hash": row_hash,
+                    "existing_id": existing[0]
+                })
                 return
 
-        # Insert metric
-        print(f"DEBUG: About to insert metric for row {row_number}, hash={row_hash}")
-        cur.execute(
-            """INSERT INTO financial_metrics (
-            company_id, period_id, line_item_id, value_type, frequency,
-            value, currency, source_file, source_page, source_type,
-            notes, hash, created_at, updated_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+            # 6. Insert metric
+            print(f"DEBUG: About to insert metric for row {row_number}, hash={row_hash}")
+            cur.execute(
+                """INSERT INTO financial_metrics (
+                    company_id, period_id, line_item_id, value_type, frequency,
+                    value, currency, source_file, source_page, source_type,
+                    notes, hash, created_at, updated_at
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
                 (
                     self.company_id, period_id, line_item_id,
                     mapped["value_type"], mapped["frequency"],
                     clean_numeric_value(mapped["value"]), mapped["currency"],
-                    os.path.basename(self.file_path), int(raw_row.get("source_page", 1)),
+                    os.path.basename(self.file_path),
+                    int(raw_row.get("source_page", 1)),
                     "Raw", mapped.get("notes"), row_hash,
                     datetime.now(), datetime.now()
                 )
-        )
-        self.ingested_count += 1
-        log_event("metric_inserted", {
-            "row_number": row_number,
-            "line_item": mapped["line_item"],
-            "period_label": period["label"],
-            "value_type": mapped["value_type"],
-            "value": clean_numeric_value(mapped["value"])
-        })
+            )
+
+            # 7. Track success
+            self.current_file_hashes.add(row_hash)
+            self.ingested_count += 1
+            log_event("metric_inserted", {
+                "row_number": row_number,
+                "line_item": mapped["line_item"],
+                "period_label": period["label"],
+                "value_type": mapped["value_type"],
+                "value": clean_numeric_value(mapped["value"]),
+                "hash": row_hash
+            })
+            print(f"DEBUG: Successfully inserted row {row_number}")
 
 
 if __name__ == "__main__":

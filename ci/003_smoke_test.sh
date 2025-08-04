@@ -11,10 +11,15 @@ set -euo pipefail
 # Mayb use automated check below to test, if unknown
 
 # If the schema_migrations table doesn’t exist, run migrations
-if ! psql "$DATABASE_URL" -tAc "SELECT 1 FROM information_schema.tables WHERE table_name='schema_migrations'" | grep -q 1; then
-  echo "Schema not initialized—running migrations"
-  ci/002_migrate.sh
-fi
+# if ! psql "$DATABASE_URL" -tAc "SELECT 1 FROM information_schema.tables WHERE table_name='schema_migrations'" | grep -q 1; then
+#   echo "Schema not initialized—running migrations"
+#   ci/002_migrate.sh
+# fi
+
+#Ensure clean slate, otherwise
+# ci/000_drop_tables.sh
+# ci/001_reset_local_db.sh
+# ci/002_migrate.sh
 
 # Load .env file if present
 if [[ -f .env ]]; then
@@ -49,8 +54,11 @@ for DB_NAME in "LOCAL" "EXTERNAL"; do
 
   # Create the smoke CSV with a unique notes field
   cat > data/smoke.csv <<EOF
-company_id,company_name,line_item,period_label,period_type,value,source_file,source_page,notes
-1,Wilson Group,Revenue,Feb 2025,Monthly,2390873,smoke.csv,1,smoke_test_$SUFFIX
+company_id,company_name,line_item,period_label,period_type,value,value_type,source_file,source_page,notes
+1,Wilson Group,Revenue,Feb 2025,Monthly,2390873,Actual,smoke.csv,1,smoke_test_$SUFFIX
+1,Wilson Group,Revenue,Feb 2025,Monthly,2000000,Budget,smoke.csv,1,smoke_test_$SUFFIX
+1,Wilson Group,EBITDA,Feb 2025,Monthly,239087,Actual,smoke.csv,1,smoke_test_$SUFFIX
+1,Wilson Group,EBITDA,Feb 2025,Monthly,300000,Budget,smoke.csv,1,smoke_test_$SUFFIX
 EOF
 
   psql "$DATABASE_URL" <<SQL
