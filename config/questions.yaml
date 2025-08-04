@@ -1,0 +1,90 @@
+# config/questions.yaml
+# Question templates build on observations, sorted by importance and materiality.
+# Use placeholders for dynamic insertion of metric names and values.
+
+# Rendering helpers referenced in templates:
+#  • percent(a,b)       -> round((a - b)/b*100, 2)
+#  • format_abs(x)      -> formatted ± value with separators
+#  • round(val, places) -> numeric rounding
+#  • Conditional logic   -> inline ternary for above/below
+
+# Question selection logic in engine:
+# 1. Compute all observations.
+# 2. Filter those where |value| >= materiality threshold.
+# 3. Join with questions by observation_id.
+# 4. Sort by importance desc, then magnitude desc.
+# 5. Render templates with context variables.
+
+# ID ranges 30001–39999 reserved for questions
+
+questions:
+  - id: 30001
+    observation_id: 20001    # growth_mom
+    importance: 3
+    template: >
+      The {{ metric }} grew by {{ percent(current, prior_month) }}% month-over-month.
+      What underlying factors drove this growth?
+
+  - id: 30002
+    observation_id: 20002    # growth_qoq
+    importance: 2
+    template: >
+      {{ metric }} changed by {{ percent(current, prior_quarter) }}% quarter-over-quarter.
+      Which operational changes contributed to this movement?
+
+  - id: 30003
+    observation_id: 20003    # growth_yoy
+    importance: 4
+    template: >
+      Year-over-year {{ metric }} increased by {{ percent(current, prior_year) }}%.
+      How does this performance align with strategic goals?
+
+  - id: 30004
+    observation_id: 20004    # variance_vs_budget
+    importance: 5
+    template: >
+      {{ metric }} is {{ percent(current, budget) }}% {{ if current > budget then 'above' else 'below' }} budget.
+      What explains this deviation from plan?
+
+  - id: 30005
+    observation_id: 20005    # variance_vs_prior
+    importance: 2
+    template: >
+      {{ metric }} is {{ percent(current, prior) }}% {{ if current > prior then 'above' else 'below' }} the prior period.
+      Are there one-off events or trends affecting this?
+
+  - id: 30006
+    observation_id: 20006    # ytd_performance
+    importance: 3
+    template: >
+      Year-to-date {{ metric }} performance is {{ percent(ytd_current, ytd_prior) }}% {{ if ytd_current > ytd_prior then 'ahead' else 'behind' }} last year.
+      What key drivers impacted YTD results?
+
+  - id: 30007
+    observation_id: 20007    # absolute_change
+    importance: 1
+    template: >
+      The absolute change in {{ metric }} from the prior period is {{ format_abs(current - prior) }}.
+      Is this magnitude significant in the broader context?
+
+  - id: 30008
+    observation_id: 20008    # moving_average_3m
+    importance: 1
+    template: >
+      The 3-month moving average of {{ metric }} is {{ round(moving_average,2) }}.
+      Does this trend differ from the immediate period change?
+
+  - id: 30009
+    observation_id: 20009    # volatility_3m
+    importance: 1
+    template: >
+      The 3-month volatility of {{ metric }} is {{ round(volatility,2) }}.
+      What factors contribute to this variability?
+
+  - id: 30010
+    observation_id: 20010    # pe_ratio
+    importance: 2
+    template: >
+      The P/E ratio for {{ metric }} is {{ round(pe_ratio,2) }}.
+      How does this compare to industry benchmarks?
+

@@ -1,0 +1,363 @@
+# config/fields.yaml
+# CENTRAL SOURCE OF TRUTH FOR ALL FIELDS & LINE ITEMS
+
+# FIELDS AT TOP (ID NUMBERS 10,001 to 10,999) 
+
+# LINE ITEMS at BOTTOM (11,001 to 11,999)
+
+# HOW TO UPDATE THIS FILE:
+# 1. To add a NEW FIELD:
+#    • Under “fields:”, append a new entry with:
+#        – A unique id (next in 10001–10999 range)
+#        – sql_type, full synonyms list, description
+#    • Do not change other ids or sections.
+# 2. To add a SYNONYM to an existing field:
+#    • Under that field’s “synonyms:” list, append the new header text.
+# 3. To add a LINE ITEM:
+#    • Under “line_items:”, append a new object with:
+#        – A unique id (next in 11001–11999 range)
+#        – name, aliases list, description
+# 4. ALWAYS preserve indentation and quoting style.
+# 5. After editing, run `scripts/validate_yaml.py` to confirm validity.
+
+# - Edit or add fields under "fields" to update ingestion schema.
+# - "line_items" seeds line_item_definitions table and adds known business metrics.
+# - Synonyms allow successful mapping from any varied real-world header.
+# Add every variant or typo for column headers under "synonyms" for robust mapping.
+
+
+# Reactive augmentation: As you onboard new sources, log unmapped headers and add them to fields.yaml’s synonyms.
+
+# Taxonomy-driven hints: Use taxonomy.yaml rules to auto-suggest matches for common patterns (dates, IDs, amounts).
+
+# Documentation & examples: In-file comments guide developers on adding new entries and ID ranges ensure no collisions.
+
+# Optionally, you can build a small UI or script that scans incoming headers and highlights missing synonyms for easy enrichment.
+
+fields:
+  company_id:
+    id: 10001
+    sql_type: TEXT
+    synonyms:
+      - company_id
+      - companyid
+      - company
+      - co_id
+      - coid
+      - entity_id
+      - org_id
+      - orgid
+    description: Unique company identifier
+
+  company_name:
+    id: 10002
+    sql_type: TEXT
+    synonyms:
+      - company_name
+      - companyname
+      - name
+      - co_name
+      - org_name
+      - organization
+      - firm
+    description: Name of the reporting company
+
+  line_item:
+    id: 10003
+    sql_type: TEXT
+    synonyms:
+      - line_item
+      - lineitem
+      - line item
+      - Line-Item
+      - metric
+      - item
+      - account
+      - acct
+      - account_name
+      - data_item
+      - financial_item
+      - description
+      - description_text
+      - lineDescription
+      - metric_name
+    description: Financial metric or line item name
+
+  period_label:
+    id: 10004
+    sql_type: TEXT
+    synonyms:
+      - period_label
+      - periodlabel
+      - period
+      - date
+      - report_date
+      - reportdate
+      - as_of
+      - fiscal_period
+      - time
+      - time_period
+      - month
+      - quarter
+      - year
+      - reporting_period
+      - rpt_period
+    description: Human-readable period identifier
+
+  period_type:
+    id: 10005
+    sql_type: TEXT
+    synonyms:
+      - period_type
+      - periodtype
+      - frequency
+      - freq
+      - type
+      - granularity
+      - rpt_type
+      - rpt_frequency
+    description: Period granularity (Monthly, Quarterly, Yearly)
+
+  start_date:
+    id: 10006
+    sql_type: DATE
+    synonyms:
+      - start_date
+      - from_date
+      - period_start
+      - begin_date
+      - start
+      - effective_date
+      - eff_date
+    description: Period start date (YYYY-MM-DD)
+
+  end_date:
+    id: 10007
+    sql_type: DATE
+    synonyms:
+      - end_date
+      - to_date
+      - period_end
+      - finish_date
+      - end
+      - expiry_date
+    description: Period end date (YYYY-MM-DD)
+
+  value:
+    id: 10008
+    sql_type: NUMERIC
+    synonyms:
+      - value
+      - amount
+      - val
+      - figure
+      - reported_value
+      - reportedValue
+      - actual_value
+      - budget_value
+      - total
+      - numeric_value
+      - amt
+    description: Numeric value of the metric
+
+  value_type:
+    id: 10009
+    sql_type: TEXT
+    synonyms:
+      - value_type
+      - valuetype
+      - scenario
+      - scenario_type
+      - basis
+      - basis_type
+      - plan
+      - plan_type
+      - actual
+      - budget
+      - forecast
+      - projected
+      - prior
+      - variance
+    description: Nature of the value (Actual, Budget, Forecast, etc.)
+
+  frequency:
+    id: 10010
+    sql_type: TEXT
+    synonyms:
+      - frequency
+      - freq
+      - reporting_cycle
+      - rpt_cycle
+    description: Reporting frequency (Monthly, Quarterly, etc.)
+
+  currency:
+    id: 10011
+    sql_type: TEXT
+    synonyms:
+      - currency
+      - curr
+      - ccy
+      - iso_currency
+      - iso_currency_code
+      - currency_code
+      - fx
+    description: Currency code (USD, EUR, etc.)
+
+  source_file:
+    id: 10012
+    sql_type: TEXT
+    synonyms:
+      - source_file
+      - file
+      - filename
+      - file_name
+      - datafile
+      - filePath
+    description: Origin filename
+
+  source_page:
+    id: 10013
+    sql_type: INT
+    synonyms:
+      - source_page
+      - page
+      - pageno
+      - page_number
+      - page_num
+    description: Page number within source
+
+  source_type:
+    id: 10014
+    sql_type: TEXT
+    synonyms:
+      - source_type
+      - input_type
+      - ingestion_type
+    description: Type of source content (Raw, Aggregated)
+
+  notes:
+    id: 10015
+    sql_type: TEXT
+    synonyms:
+      - notes
+      - note
+      - comments
+      - description
+      - remark
+      - explanation
+      - footnote
+    description: Free-form notes or comments
+
+  statement_type:
+    id: 10016
+    sql_type: TEXT
+    synonyms:
+      - statement_type
+      - statement
+      - report_type
+      - financial_statement
+      - stmt_type
+      - stmt
+    description: Financial statement type
+
+  category:
+    id: 10017
+    sql_type: TEXT
+    synonyms:
+      - category
+      - group
+      - class
+      - bucket
+      - category_name
+    description: Business category/grouping
+
+
+
+  # Additional fields can be appended here following the same pattern.
+  # When adding a new field:
+  #  1. Assign the next available ID in the 10001–19999 range.
+  #  2. Specify sql_type, full synonyms list, and description.
+
+line_items:
+  - id: 11001
+    name: Revenue
+    aliases:
+      - sales
+      - income
+      - turnover
+      - total_revenue
+      - rev
+    description: Total revenue from operations
+
+  - id: 11002
+    name: Gross Profit
+    aliases:
+      - gross_profit
+      - grossincome
+      - gross income
+    description: Revenue minus cost of goods sold
+
+  - id: 11003
+    name: EBITDA
+    aliases:
+      - earnings_before_interest
+      - earnings_before_taxes
+      - earnings_before_interest_taxes
+      - operating_profit
+    description: Earnings before interest, taxes, depreciation, amortization
+
+  - id: 11004
+    name: Operating Income
+    aliases:
+      - operating_profit
+      - income_from_operations
+    description: Income from operations
+
+  - id: 11005
+    name: Net Income
+    aliases:
+      - net_profit
+      - profit
+      - earnings
+      - net
+    description: Profit after all expenses
+
+  - id: 11006
+    name: Cash Flow
+    aliases:
+      - cashflow
+      - net_cash_flow
+      - cf
+    description: Net cash inflow/outflow
+
+  - id: 11007
+    name: EPS
+    aliases:
+      - earnings_per_share
+      - eps_basic
+      - eps_diluted
+    description: Earnings per share
+
+  - id: 11008
+    name: Total Assets
+    aliases:
+      - assets
+      - assets_total
+    description: Total assets
+
+  - id: 11009
+    name: Total Liabilities
+    aliases:
+      - liabilities
+      - liabilities_total
+      - liab
+    description: Total liabilities
+
+  - id: 11010
+    name: Equity
+    aliases:
+      - shareholders_equity
+      - equity_total
+      - se
+    description: Shareholders' equity
+

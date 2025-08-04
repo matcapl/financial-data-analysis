@@ -1,0 +1,97 @@
+# config/observations.yaml
+# Defines the universe of observations your engine can make.
+# Each observation type has:
+#  • id: unique identifier
+#  • name: internal code
+#  • description: what it measures
+#  • formula: textual or code reference describing calculation
+#  • params: any parameters (e.g., lookback periods, reference types)
+#  • materiality: default threshold for “material” significance
+
+# Use these definitions in your engine to generate observations dynamically,
+# ranking them by |value| > materiality threshold and by magnitude.
+
+# ID ranges 20001–29999 reserved for observations
+
+observations:
+  - id: 20001
+    name: growth_mom
+    description: Month-over-Month growth rate
+    formula: "(current - prior_month) / prior_month"
+    params:
+      lookback: 1
+    materiality: 0.05
+
+  - id: 20002
+    name: growth_qoq
+    description: Quarter-over-Quarter growth rate
+    formula: "(current - prior_quarter) / prior_quarter"
+    params:
+      lookback: 3
+    materiality: 0.10
+
+  - id: 20003
+    name: growth_yoy
+    description: Year-over-Year growth rate
+    formula: "(current - prior_year) / prior_year"
+    params:
+      lookback: 12
+    materiality: 0.15
+
+  - id: 20004
+    name: variance_vs_budget
+    description: Variance versus budget for the same period
+    formula: "(current - budget) / budget"
+    params:
+      reference: budget
+    materiality: 0.05
+
+  - id: 20005
+    name: variance_vs_prior
+    description: Variance versus prior period (same granularity)
+    formula: "(current - prior) / prior"
+    params:
+      reference: prior
+    materiality: 0.05
+
+  - id: 20006
+    name: ytd_performance
+    description: Year-to-Date performance versus prior year-to-date
+    formula: "(ytd_current - ytd_prior) / ytd_prior"
+    params:
+      lookback: start_of_year
+    materiality: 0.10
+
+  - id: 20007
+    name: absolute_change
+    description: Absolute change from prior period
+    formula: "current - prior"
+    params:
+      lookback: 1
+    materiality: null
+
+  - id: 20008
+    name: moving_average_3m
+    description: 3-month moving average
+    formula: "average(values[-3:])"
+    params:
+      window: 3
+    materiality: null
+
+  - id: 20009
+    name: volatility_3m
+    description: 3-month volatility (standard deviation)
+    formula: "stdev(values[-3:])"
+    params:
+      window: 3
+    materiality: null
+
+  - id: 20010
+    name: pe_ratio
+    description: Price-to-Earnings ratio (if price and earnings available)
+    formula: "price / earnings"
+    params:
+      reference: price & earnings
+    materiality: null
+
+  # Extend as needed up to ID 29999

@@ -1,0 +1,104 @@
+# config/taxonomy.yaml
+# Generic header‐pattern rules to augment per‐field synonyms.
+# Each entry defines:
+#  • name: internal taxonomy key
+#  • patterns: list of regex patterns (case‐insensitive) matching headers
+#  • description: what this taxonomy covers
+
+# In your mapper startup code:
+#   1. Load config/fields.yaml → base synonyms per field.
+#   2. Load config/taxonomy.yaml → compile regexes.
+#   3. For each raw header not in base synonyms:
+#        a. Try matching each taxonomy pattern → if match, map to canonical via a taxonomy‐to‐field lookup.
+#        b. Otherwise, log as unmapped for manual review.
+#
+# You can feed unmapped headers back to an AI or human review process to enrich fields.yaml.
+
+
+taxonomies:
+  - name: id_headers
+    patterns:
+      - "^company[_ ]?id$"
+      - "^entity[_ ]?id$"
+      - ".*_?id$"
+    description: Any header ending in “id” (company_id, org id, etc.)
+
+  - name: name_headers
+    patterns:
+      - "^company[_ ]?name$"
+      - "^org(ani[sz]ation)?[_ ]?name$"
+      - "^name$"
+    description: Company or organization name fields
+
+  - name: date_headers
+    patterns:
+      - "^(start|end)?[_ ]?date$"
+      - "^period[_ ]?label$"
+      - "^report[_ ]?date$"
+      - "^(fiscal|rpt)[_ ]?(period|date)$"
+    description: Columns indicating dates or periods
+
+  - name: period_type_headers
+    patterns:
+      - "^(period|frequency|freq)[_ ]?type$"
+      - "^(granularity|cycle)$"
+      - "^(period|rpt)[_ ]?type$"
+    description: Granularity descriptors
+
+  - name: value_headers
+    patterns:
+      - "^(value|amount|amt|figure)s?$"
+      - "^(reported|actual|budget|forecast)[_ ]?value$"
+      - "^(val|num|numeric)(_?value)?$"
+    description: Numeric value fields
+
+  - name: scenario_headers
+    patterns:
+      - "^(value|scenario)[_ ]?type$"
+      - "^(plan|basis|variance)$"
+      - "^(actual|budget|prior|projected)$"
+    description: Value‐type or scenario descriptors
+
+  - name: currency_headers
+    patterns:
+      - "^(currency|curr|ccy|fx)(_code)?$"
+      - "iso[_ ]?currency[_ ]?code"
+    description: Currency fields
+
+  - name: file_headers
+    patterns:
+      - "^(source|data)?[_ ]?file(name)?$"
+      - "^file(path)?$"
+    description: Source filename columns
+
+  - name: page_headers
+    patterns:
+      - "^source[_ ]?page$"
+      - "^page(nu(mber)?)?$"
+      - "^(sheet|tab)[_ ]?id$"
+    description: Document page indicators
+
+  - name: notes_headers
+    patterns:
+      - "^(note|comment|remark|footnote)s?$"
+      - "^(description|explanation)$"
+    description: Free‐form text columns
+
+  - name: statement_type_headers
+    patterns:
+      - "^(statement|report)[_ ]?type$"
+      - "financial[_ ]?statement"
+      - "^stmt(_?type)?$"
+    description: Statement type fields
+
+  - name: category_headers
+    patterns:
+      - "^(category|group|class|bucket)(s)?$"
+      - "category[_ ]?name"
+    description: Business category fields
+
+  - name: financial_item_headers
+    patterns:
+      - "^(line[_ ]?item|metric|account|acct)$"
+      - "^(description|desc(ri?p(ti(on)?)?)?)$"
+    description: Line‐item or metric names
