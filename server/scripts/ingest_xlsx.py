@@ -11,7 +11,6 @@ from utils import (
 )
 from field_mapper import map_and_filter_row
 
-
 class XLSXIngester:
     def __init__(self, file_path: str, company_id: int = 1):
         self.file_path = file_path
@@ -37,44 +36,69 @@ class XLSXIngester:
         })
 
         try:
-            file_ext = os.path.splitext(self.file_path)[1].lower()
-            if file_ext == '.xlsx':
+            ext = os.path.splitext(self.file_path)[1].lower()
+            if ext == ".xlsx":
                 df = pd.read_excel(self.file_path)
                 log_event("file_read_success", {"type": "xlsx", "file_path": self.file_path})
-            elif file_ext == '.csv':
+            elif ext == ".csv":
                 try:
-                    df = pd.read_csv(self.file_path, encoding='utf-8')
-                    log_event("file_read_success", {"type": "csv", "encoding": "utf-8", "file_path": self.file_path})
+                    df = pd.read_csv(self.file_path, encoding="utf-8")
+                    log_event("file_read_success", {"type": "csv-utf8", "file_path": self.file_path})
                 except UnicodeDecodeError:
-                    df = pd.read_csv(self.file_path, encoding='latin-1')
-                    log_event("file_read_success", {"type": "csv", "encoding": "latin-1", "file_path": self.file_path})
+                    df = pd.read_csv(self.file_path, encoding="latin-1")
+                    log_event("file_read_success", {"type": "csv-latin1", "file_path": self.file_path})
             else:
-                raise Exception(f"Unsupported file type: {file_ext}. Only .xlsx and .csv supported.")
+                raise Exception(f"Unsupported file type: {ext}")
 
-            df.columns = [col.lower().strip() for col in df.columns]
+            # Normalize headers: map variants to canonical names
+            raw_cols = [c.strip() for c in df.columns]
+            synonyms = {
+                "company_id":      ["company_id","companyid","company","co_id"],
+                "company_name":    ["company_name","companyname","company","co_name","name"],
+                "line_item":       ["line_item","lineitem","item","metric","line item","financial_item"],
+                "period_label":    ["period_label","periodlabel","period","date","fiscal_period"],
+                "period_type":     ["period_type","periodtype","frequency","freq","type"],
+                "value":           ["value","amount","val","figure"],
+                "value_type":      ["value_type","valuetype","type","actual","budget","prior"],
+                "frequency":       ["frequency","freq","period_type","periodtype"],
+                "currency":        ["currency","curr","ccy"],
+                "source_file":     ["source_file","file","filename","source"],
+                "source_page":     ["source_page","page","pageno","page_number"],
+                "notes":           ["notes","note","comments","description"]
+            }
+            canon_map = {}
+            for col in raw_cols:
+                lower = col.lower()
+                for canon, variants in synonyms.items():
+                    if lower in variants:
+                        canon_map[col] = canon
+                        break
+                else:
+                    canon_map[col] = lower
+            df = df.rename(columns=canon_map)
+
             log_event("file_processing_started", {
                 "rows_found": len(df),
                 "columns_found": list(df.columns),
                 "file_path": self.file_path
             })
 
-            for index, row in df.iterrows():
+            for idx, row in df.iterrows():
                 raw = row.to_dict()
                 try:
-                    self._process_row(raw, index + 1)
-                except Exception as row_error:
+                    self._process_row(raw, idx + 1)
+                except Exception as e:
                     self.error_count += 1
                     log_event("row_processing_error", {
-                        "row_number": index + 1,
-                        "error": str(row_error),
+                        "row_number": idx + 1,
+                        "error": str(e),
                         "row_data": raw
                     })
-                    continue
 
             self.conn.commit()
             summary = {
                 "file_path": self.file_path,
-                "file_type": file_ext,
+                "file_type": ext,
                 "total_rows_processed": len(df),
                 "ingested_count": self.ingested_count,
                 "skipped_count": self.skipped_count,
@@ -91,115 +115,115 @@ class XLSXIngester:
             raise
 
     def _process_row(self, raw_row: dict, row_number: int):
-        # Fill missing optional fields with defaults
+        # Defaults and ensure canonical keys exist
         defaults = {
             "statement_type": None,
             "category": None,
-            "value_type": "Actual",
-            "frequency": raw_row.get("period_type", "Monthly"),
-            "currency": raw_row.get("currency", "USD")
+            "value_type": raw_row.get("value_type") or "Actual",
+            "frequency": raw_row.get("frequency") or raw_row.get("period_type") or "Monthly",
+            "currency": raw_row.get("currency") or "USD"
         }
         for k, v in defaults.items():
             raw_row.setdefault(k, v)
 
-        # Attempt mapping, fallback if None
-        mapped = map_and_filter_row(raw_row)
-        if mapped is None:
-            mapped = {
-                "line_item": raw_row.get("line_item"),
-                "period_label": raw_row.get("period_label"),
-                "period_type": raw_row.get("period_type", "Monthly"),
-                "value_type": raw_row.get("value_type"),
-                "frequency": raw_row.get("frequency"),
-                "value": raw_row.get("value"),
-                "currency": raw_row.get("currency"),
-                "notes": f"unmapped_row:{row_number}"
-            }
+        # Normalize via field_mapper, fallback if None
+        mapped = map_and_filter_row(raw_row) or {
+            "line_item": raw_row.get("line_item"),
+            "period_label": raw_row.get("period_label"),
+            "period_type": raw_row.get("period_type"),
+            "value_type": raw_row.get("value_type"),
+            "frequency": raw_row.get("frequency"),
+            "value": raw_row.get("value"),
+            "currency": raw_row.get("currency"),
+            "notes": f"unmapped_row:{row_number}"
+        }
 
-        # Require line_item and period_label
+        # Debug
+        print("DEBUG: ROW NUM", row_number, "RAW", raw_row)
+        print("DEBUG: MAPPED", mapped)
+
+        # Required fields
         if not mapped.get("line_item") or not mapped.get("period_label"):
-            self.skipped_count += 1
-            log_event("row_skipped", {
-                "row_number": row_number,
-                "reason": "Missing line_item or period_label"
-            })
-            return
+            raise Exception(f"Missing required fields in row {row_number}: "
+                            f"line_item={mapped.get('line_item')} period_label={mapped.get('period_label')}")
 
-        period_info = parse_period(mapped["period_label"], mapped.get("period_type", "Monthly"))
+        # Parse period
+        period = parse_period(mapped["period_label"], mapped.get("period_type", "Monthly"))
 
         with self.conn.cursor() as cur:
             # line_item_id lookup
-            cur.execute("SELECT id FROM line_item_definitions WHERE name = %s", (mapped["line_item"],))
+            cur.execute("SELECT id FROM line_item_definitions WHERE name=%s", (mapped["line_item"],))
             li = cur.fetchone()
+            print(f"DEBUG: Looking for line_item '{mapped['line_item']}', found: {li}")
             if not li:
-                self.error_count += 1
-                log_event("line_item_not_found", {"row_number": row_number, "line_item": mapped["line_item"]})
-                return
+                print("DEBUG: Available line items in DB:")
+                cur.execute("SELECT name FROM line_item_definitions")
+                print([row[0] for row in cur.fetchall()])
+                raise Exception(f"Line item not found in definitions: {mapped['line_item']}")
             line_item_id = li[0]
 
             # period_id lookup/insert
             cur.execute(
-                "SELECT id FROM periods WHERE period_type = %s AND period_label = %s",
-                (period_info["type"], period_info["label"])
+                "SELECT id FROM periods WHERE period_type=%s AND period_label=%s",
+                (period["type"], period["label"])
             )
             pr = cur.fetchone()
-            if not pr:
+            if pr:
+                period_id = pr[0]
+            else:
                 cur.execute(
-                    "INSERT INTO periods (period_type, period_label, start_date, end_date, created_at, updated_at) "
-                    "VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
-                    (period_info["type"], period_info["label"],
-                     period_info["start_date"], period_info["end_date"],
+                    "INSERT INTO periods (period_type,period_label,start_date,end_date,created_at,updated_at) "
+                    "VALUES (%s,%s,%s,%s,%s,%s) RETURNING id",
+                    (period["type"], period["label"], period["start_date"], period["end_date"],
                      datetime.now(), datetime.now())
                 )
                 period_id = cur.fetchone()[0]
-            else:
-                period_id = pr[0]
 
-            # Compute stable hash
+            # Compute hash (includes value_type)
             row_hash = hash_datapoint(
-                self.company_id, period_id,
-                mapped["line_item"], mapped.get("value_type"),
-                mapped.get("frequency"), clean_numeric_value(mapped.get("value"))
+                self.company_id, period_id, mapped["line_item"],
+                mapped["value_type"], mapped["frequency"],
+                clean_numeric_value(mapped["value"])
             )
 
-            # Skip duplicates in-file
+            # Skip in-file duplicates
             if row_hash in self.current_file_hashes:
                 self.skipped_count += 1
                 log_event("duplicate_skipped", {"row_number": row_number, "hash": row_hash})
                 return
             self.current_file_hashes.add(row_hash)
 
-            # Skip duplicates in DB
-            cur.execute("SELECT id FROM financial_metrics WHERE hash = %s", (row_hash,))
+            # Skip existing in DB
+            cur.execute("SELECT id FROM financial_metrics WHERE hash=%s", (row_hash,))
             if cur.fetchone():
                 self.skipped_count += 1
                 log_event("duplicate_skipped", {"row_number": row_number, "hash": row_hash})
                 return
 
-            # Insert metric
-            cur.execute(
-                """INSERT INTO financial_metrics (
-                       company_id, period_id, line_item_id, value_type, frequency,
-                       value, currency, source_file, source_page, source_type,
-                       notes, hash, created_at, updated_at
-                   ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+        # Insert metric
+        print(f"DEBUG: About to insert metric for row {row_number}, hash={row_hash}")
+        cur.execute(
+            """INSERT INTO financial_metrics (
+            company_id, period_id, line_item_id, value_type, frequency,
+            value, currency, source_file, source_page, source_type,
+            notes, hash, created_at, updated_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
                 (
                     self.company_id, period_id, line_item_id,
                     mapped["value_type"], mapped["frequency"],
-                    clean_numeric_value(mapped.get("value")), mapped["currency"],
-                    os.path.basename(self.file_path),
-                    int(raw_row.get("source_page", 1)),
-                    "Raw", mapped.get("notes"),
-                    row_hash, datetime.now(), datetime.now()
+                    clean_numeric_value(mapped["value"]), mapped["currency"],
+                    os.path.basename(self.file_path), int(raw_row.get("source_page", 1)),
+                    "Raw", mapped.get("notes"), row_hash,
+                    datetime.now(), datetime.now()
                 )
-            )
-            self.ingested_count += 1
-            log_event("metric_inserted", {
-                "row_number": row_number,
-                "line_item": mapped["line_item"],
-                "period_label": period_info["label"],
-                "value": clean_numeric_value(mapped.get("value"))
-            })
+        )
+        self.ingested_count += 1
+        log_event("metric_inserted", {
+            "row_number": row_number,
+            "line_item": mapped["line_item"],
+            "period_label": period["label"],
+            "value_type": mapped["value_type"],
+            "value": clean_numeric_value(mapped["value"])
+        })
 
 
 if __name__ == "__main__":

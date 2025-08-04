@@ -452,6 +452,21 @@ psql (Postgres client)
 curl
 grep
 Assuming those are in your PATH and your .env is configured, you can run the entire smoke test in one go 
+
+--
+# Development: Reset and migrate
+ci/001_reset_local_db.sh
+ci/002_migrate.sh
+
+
+# CI: Just migrate (idempotent)
+ci/002_migrate.sh
+
+# Smoke test (unchanged)
+ci/003_smoke_test.sh
+
+--
+
 --
 
 Medium-term (company identification):
@@ -469,19 +484,8 @@ Implement fuzzy matching:
 Use pg_trgm extension for similarity scoring
 Alert: "This data is 85% similar to [Existing Company]. Same entity?"
 Focus for now: Get your smoke test passing by seeding the companies table in both databases. Company disambiguation can be layered on once the core pipeline is solid.
-
 --
-# Development: Reset and migrate
-./ci/reset_local_db.sh
-./ci/migrate.sh
 
-# CI: Just migrate (idempotent)
-./ci/migrate.sh
-
-# Smoke test (unchanged)
-./ci/smoke_test.sh
-
---
 
 # Expert Code Review and QA Test Plan for Financial Data Analysis System
 
@@ -529,12 +533,208 @@ The following 20 tests progress from high-level smoke tests through detailed uni
 
 Each test uses existing files under `data/` (e.g., `financial_data_template.csv`, `smoke.csv`) and the provided database schemas. This ensures thorough coverage from high-level pipeline verification to granular unit tests of individual scripts and API endpoints.
 
-[1] https://github.com/matcapl/financial-data-analysis
-[2] https://github.com/matcapl/financial-data-analysis
-[3] https://github.com/matcapl/financial-data-analysis/tree/main/server
-[4] https://github.com/matcapl/financial-data-analysis/tree/main/server/api
-[5] https://github.com/matcapl/financial-data-analysis/tree/main/server/scripts
-[6] https://github.com/matcapl/financial-data-analysis/tree/main/schema
-[7] https://github.com/matcapl/financial-data-analysis/tree/main/data
-[8] https://github.com/matcapl/financial-data-analysis/tree/main/client
-[9] https://github.com/matcapl/financial-data-analysis/tree/main/ci
+
+--
+
+Here's the **hybrid approach structure** with all the potential **breakage points** clearly identified:
+
+## File Structure
+
+```
+financial-data-analysis/
+├── schema/
+│   ├── 001_financial_schema.sql          # Creates tables + canonical line items
+│   ├── 002_question_templates.sql        # Question templates
+│   └── migrations/                        # Future migrations
+├── config/
+│   ├── column_headers.yaml               # Header synonyms for ingestion
+│   ├── line_item_aliases.yaml            # Metric name variants  
+│   └── derived_metrics.yaml              # Calculated metrics (optional)
+├── server/scripts/
+│   ├── ingest_xlsx.py                    # Reads config YAMLs
+│   ├── field_mapper.py                   # Uses YAML mappings
+│   └── questions_engine.py               # References DB line items
+└── ci/
+    └── 003_smoke_test.sh                 # Creates test data
+```
+
+## Current "Revenue" Definitions (Potential Break Points)
+
+### 1. **Schema Seed** (`schema/001_financial_schema.sql`)
+```sql
+-- BREAK POINT #1: Missing canonical names
+INSERT INTO line_item_definitions (name) VALUES 
+  ('Revenue'),           -- ⚠️ Must match exactly what ingestion expects
+  ('Gross Profit'),      -- ⚠️ Case-sensitive
+  ('EBITDA');            -- ⚠️ Typos break everything
+```
+
+### 2. **Smoke Test** (`ci/003_smoke_test.sh`)
+```bash
+# BREAK POINT #2: CSV data doesn't match canonical names
+cat > data/smoke.csv <<EOF
+line_item,period_label,value,value_type
+Revenue,Feb 2025,2390873,Actual     # ⚠️ Must match DB exactly
+EOF
+```
+
+### 3. **Ingestion Mapping** (`config/line_item_aliases.yaml`)
+```yaml
+# BREAK POINT #3: Missing aliases cause skips
+line_items:
+  Revenue:
+    - revenue           # ⚠️ Case matters after normalization
+    - sales
+    - total_revenue
+  EBITDA:
+    - ebitda
+    - earnings_before_interest
+```
+
+### 4. **Header Mapping** (`config/column_headers.yaml`)
+```yaml
+# BREAK POINT #4: Unknown headers get lowercased but not mapped
+canonical_headers:
+  line_item:
+    - line_item
+    - lineitem
+    - metric
+    - line item        # ⚠️ Spaces, case variations
+  period_label:
+    - period_label
+    - period
+    - date
+```
+
+### 5. **Ingestion Logic** (`server/scripts/ingest_xlsx.py`)
+```python
+# BREAK POINT #5: Config loading failures
+try:
+    with open("config/line_item_aliases.yaml") as f:
+        aliases = yaml.safe_load(f)
+except FileNotFoundError:
+    # ⚠️ Silent failure or hard crash?
+    aliases = {}
+
+# BREAK POINT #6: Lookup failures
+cur.execute("SELECT id FROM line_item_definitions WHERE name=%s", (canonical_name,))
+if not cur.fetchone():
+    # ⚠️ Row gets skipped silently
+    return
+```
+
+## Critical Break Points
+
+### **Break Point #1: Schema/Code Sync**
+- **Risk**: SQL seed has "Revenue" but code expects "REVENUE" 
+- **Fix**: Use consistent casing everywhere, add constraints
+
+### **Break Point #2: Config File Loading**
+- **Risk**: YAML file missing, malformed, or not in expected location
+- **Fix**: Add validation, default fallbacks, clear error messages
+
+### **Break Point #3: Multi-Source Truth**
+- **Risk**: SQL has "Revenue", YAML has "Sales", CSV has "Total Sales"
+- **Fix**: Single canonical source, everything else maps to it
+
+### **Break Point #4: Case Sensitivity**
+- **Risk**: Database is case-sensitive, CSV headers vary wildly
+- **Fix**: Normalize everything to lowercase, then map
+
+### **Break Point #5: Missing Dependencies**
+- **Risk**: Ingestion loads config but DB tables don't exist yet
+- **Fix**: Clear migration ordering, dependency validation
+
+### **Break Point #6: Silent Failures**
+- **Risk**: Rows get skipped without clear error messages
+- **Fix**: Explicit validation, detailed logging
+
+## Recommended Approach with Safety
+
+### 1. **Single Source of Truth** (`schema/001_financial_schema.sql`)
+```sql
+-- Canonical definitions (lowercase for consistency)
+INSERT INTO line_item_definitions (name, aliases) VALUES 
+  ('revenue', '["sales","total_revenue","turnover"]'),
+  ('gross_profit', '["gross_margin","gm"]'),
+  ('ebitda', '["earnings_before_interest"]');
+```
+
+### 2. **Config Validation** (`server/scripts/config_loader.py`)
+```python
+def load_and_validate_config():
+    """Load config with comprehensive validation"""
+    try:
+        # Load all configs
+        configs = {}
+        for file in ['column_headers.yaml', 'line_item_aliases.yaml']:
+            with open(f"config/{file}") as f:
+                configs[file] = yaml.safe_load(f)
+        
+        # Validate against database
+        with get_db_connection() as conn:
+            db_items = set(row[0] for row in 
+                          conn.execute("SELECT name FROM line_item_definitions"))
+            yaml_items = set(configs['line_item_aliases.yaml'].keys())
+            
+            missing = yaml_items - db_items
+            if missing:
+                raise ValueError(f"YAML references missing DB items: {missing}")
+        
+        return configs
+    except Exception as e:
+        log_event("config_validation_failed", {"error": str(e)})
+        raise
+```
+
+### 3. **Defensive Ingestion** (`server/scripts/ingest_xlsx.py`)
+```python
+def _process_row(self, raw_row, row_number):
+    # Load config once at startup, not per row
+    if not hasattr(self, '_config'):
+        self._config = load_and_validate_config()
+    
+    # Map headers defensively
+    canonical_row = {}
+    for raw_key, value in raw_row.items():
+        canonical_key = self._map_header(raw_key.lower().strip())
+        if canonical_key:
+            canonical_row[canonical_key] = value
+    
+    # Validate required fields early
+    required = ['line_item', 'period_label', 'value']
+    missing = [field for field in required if not canonical_row.get(field)]
+    if missing:
+        raise ValueError(f"Row {row_number} missing required fields: {missing}")
+    
+    # Map line item with detailed error
+    canonical_line_item = self._map_line_item(canonical_row['line_item'])
+    if not canonical_line_item:
+        raise ValueError(f"Row {row_number} unknown line item: {canonical_row['line_item']}")
+```
+
+## Testing the Break Points
+
+Add this validation script:
+```python
+# scripts/validate_config.py
+def validate_all_configs():
+    """Test all potential break points"""
+    issues = []
+    
+    # Check DB vs YAML consistency
+    # Check file existence and YAML validity  
+    # Check smoke test data vs canonical names
+    # Check header mapping completeness
+    
+    if issues:
+        print("❌ Configuration issues found:")
+        for issue in issues:
+            print(f"  - {issue}")
+        return False
+    
+    print("✅ All configurations valid")
+    return True
+```
+
+Run this before any deployment to catch mismatches early.
