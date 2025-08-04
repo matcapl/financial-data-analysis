@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+: "${DATABASE_URL:?DATABASE_URL must be set in .env or environment}"
+
+echo "Dropping all tables..."
+psql "$DATABASE_URL" <<'SQL'
+DO $$
+DECLARE
+    tbl RECORD;
+BEGIN
+    FOR tbl IN
+        SELECT table_schema, table_name
+        FROM information_schema.tables
+        WHERE table_schema = 'public'
+          AND table_type = 'BASE TABLE'
+    LOOP
+        EXECUTE format('DROP TABLE IF EXISTS %I.%I CASCADE',
+                       tbl.table_schema, tbl.table_name);
+    END LOOP;
+END$$;
+SQL
+
+echo "All tables dropped."
