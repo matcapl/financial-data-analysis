@@ -1,0 +1,228 @@
+# config/tables.yaml
+tables:
+  - name: companies
+    columns:
+      - name: id
+        type: SERIAL
+        constraints:
+          - PRIMARY KEY
+      - name: name
+        type: TEXT
+        not_null: true
+      - name: industry
+        type: TEXT
+      - name: created_at
+        type: TIMESTAMP
+        default: NOW()
+        not_null: true
+      - name: updated_at
+        type: TIMESTAMP
+        default: NOW()
+        not_null: true
+    unique_constraints:
+      - [name]
+    seed:
+      - |
+        INSERT INTO companies (id, name, industry)
+        VALUES (1, 'Wilson Group', 'Technology')
+        ON CONFLICT (name) DO UPDATE
+          SET industry = EXCLUDED.industry,
+              updated_at = NOW();
+      - |
+        SELECT setval(
+          pg_get_serial_sequence('companies','id'),
+          GREATEST(1, (SELECT COALESCE(MAX(id), 0) FROM companies))
+        );
+
+  - name: periods
+    columns:
+      - name: id
+        type: SERIAL
+        constraints:
+          - PRIMARY KEY
+      - name: period_type
+        type: TEXT
+        not_null: true
+      - name: period_label
+        type: TEXT
+        not_null: true
+      - name: start_date
+        type: DATE
+      - name: end_date
+        type: DATE
+      - name: created_at
+        type: TIMESTAMP
+        default: NOW()
+        not_null: true
+      - name: updated_at
+        type: TIMESTAMP
+        default: NOW()
+        not_null: true
+
+  - name: derived_metrics
+    columns:
+      - name: id
+        type: SERIAL
+        constraints:
+          - PRIMARY KEY
+      - name: base_metric_id
+        type: INT
+        not_null: true
+      - name: calculation_type
+        type: TEXT
+      - name: frequency
+        type: TEXT
+      - name: company_id
+        type: INT
+        not_null: true
+      - name: period_id
+        type: INT
+        not_null: true
+      - name: calculated_value
+        type: NUMERIC
+      - name: unit
+        type: TEXT
+      - name: source_ids
+        type: TEXT
+      - name: calculation_note
+        type: TEXT
+      - name: corroboration_status
+        type: TEXT
+      - name: created_at
+        type: TIMESTAMP
+        default: NOW()
+        not_null: true
+      - name: updated_at
+        type: TIMESTAMP
+        default: NOW()
+        not_null: true
+    indexes:
+      - [base_metric_id]
+      - [company_id, period_id]
+
+  - name: question_templates
+    columns:
+      - name: id
+        type: SERIAL
+        constraints:
+          - PRIMARY KEY
+      - name: metric
+        type: TEXT
+        not_null: true
+      - name: calculation_type
+        type: TEXT
+        not_null: true
+      - name: base_question
+        type: TEXT
+        not_null: true
+      - name: trigger_threshold
+        type: NUMERIC
+        not_null: true
+      - name: trigger_operator
+        type: TEXT
+        checks:
+          - "trigger_operator IN ('>','<','>=','<=','=')"
+        not_null: true
+      - name: default_weight
+        type: NUMERIC(5,2)
+        not_null: true
+      - name: created_at
+        type: TIMESTAMP
+        default: NOW()
+        not_null: true
+      - name: updated_at
+        type: TIMESTAMP
+        default: NOW()
+        not_null: true
+
+  - name: live_questions
+    columns:
+      - name: id
+        type: SERIAL
+        constraints:
+          - PRIMARY KEY
+      - name: derived_metric_id
+        type: INT
+        not_null: true
+      - name: template_id
+        type: INT
+        not_null: true
+      - name: question_text
+        type: TEXT
+      - name: category
+        type: TEXT
+      - name: composite_score
+        type: NUMERIC
+      - name: scorecard
+        type: TEXT
+      - name: status
+        type: TEXT
+      - name: owner
+        type: TEXT
+      - name: deadline
+        type: DATE
+      - name: created_at
+        type: TIMESTAMP
+        default: NOW()
+        not_null: true
+      - name: updated_at
+        type: TIMESTAMP
+        default: NOW()
+        not_null: true
+    indexes:
+      - [status]
+      - [composite_score]
+
+  - name: question_logs
+    columns:
+      - name: id
+        type: SERIAL
+        constraints:
+          - PRIMARY KEY
+      - name: live_question_id
+        type: INT
+        not_null: true
+      - name: change_type
+        type: TEXT
+      - name: changed_by
+        type: TEXT
+      - name: old_value
+        type: TEXT
+      - name: new_value
+        type: TEXT
+      - name: change_note
+        type: TEXT
+      - name: changed_on
+        type: TIMESTAMP
+        default: NOW()
+        not_null: true
+
+  - name: generated_reports
+    columns:
+      - name: id
+        type: SERIAL
+        constraints:
+          - PRIMARY KEY
+      - name: generated_on
+        type: TIMESTAMP
+        default: NOW()
+        not_null: true
+      - name: filter_type
+        type: TEXT
+      - name: parameters
+        type: JSONB
+      - name: output_summary
+        type: TEXT
+      - name: report_file_path
+        type: TEXT
+      - name: company_id
+        type: INT
+        not_null: true
+      - name: created_at
+        type: TIMESTAMP
+        default: NOW()
+        not_null: true
+      - name: updated_at
+        type: TIMESTAMP
+        default: NOW()
+        not_null: true

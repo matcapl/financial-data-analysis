@@ -37,7 +37,7 @@
 fields:
   company_id:
     id: 10001
-    sql_type: TEXT
+    sql_type: INT
     synonyms:
       - company_id
       - companyid
@@ -47,7 +47,8 @@ fields:
       - entity_id
       - org_id
       - orgid
-    description: Unique company identifier
+      - ticker
+    description: Unique company identifier for each reporting entity
 
   company_name:
     id: 10002
@@ -306,58 +307,58 @@ line_items:
       - operating_profit
     description: Earnings before interest, taxes, depreciation, amortization
 
-  - id: 11004
-    name: Operating Income
-    aliases:
-      - operating_profit
-      - income_from_operations
-    description: Income from operations
+  # - id: 11004
+  #   name: Operating Income
+  #   aliases:
+  #     - operating_profit
+  #     - income_from_operations
+  #   description: Income from operations
 
-  - id: 11005
-    name: Net Income
-    aliases:
-      - net_profit
-      - profit
-      - earnings
-      - net
-    description: Profit after all expenses
+  # - id: 11005
+  #   name: Net Income
+  #   aliases:
+  #     - net_profit
+  #     - profit
+  #     - earnings
+  #     - net
+  #   description: Profit after all expenses
 
-  - id: 11006
-    name: Cash Flow
-    aliases:
-      - cashflow
-      - net_cash_flow
-      - cf
-    description: Net cash inflow/outflow
+  # - id: 11006
+  #   name: Cash Flow
+  #   aliases:
+  #     - cashflow
+  #     - net_cash_flow
+  #     - cf
+  #   description: Net cash inflow/outflow
 
-  - id: 11007
-    name: EPS
-    aliases:
-      - earnings_per_share
-      - eps_basic
-      - eps_diluted
-    description: Earnings per share
+  # - id: 11007
+  #   name: EPS
+  #   aliases:
+  #     - earnings_per_share
+  #     - eps_basic
+  #     - eps_diluted
+  #   description: Earnings per share
 
-  - id: 11008
-    name: Total Assets
-    aliases:
-      - assets
-      - assets_total
-    description: Total assets
+  # - id: 11008
+  #   name: Total Assets
+  #   aliases:
+  #     - assets
+  #     - assets_total
+  #   description: Total assets
 
-  - id: 11009
-    name: Total Liabilities
-    aliases:
-      - liabilities
-      - liabilities_total
-      - liab
-    description: Total liabilities
+  # - id: 11009
+  #   name: Total Liabilities
+  #   aliases:
+  #     - liabilities
+  #     - liabilities_total
+  #     - liab
+  #   description: Total liabilities
 
-  - id: 11010
-    name: Equity
-    aliases:
-      - shareholders_equity
-      - equity_total
-      - se
-    description: Shareholders' equity
+  # - id: 11010
+  #   name: Equity
+  #   aliases:
+  #     - shareholders_equity
+  #     - equity_total
+  #     - se
+  #   description: Shareholders' equity
 
