@@ -1,14 +1,13 @@
-# scripts/validate_yaml.py
 #!/usr/bin/env python3
 """
 Validate config/fields.yaml, config/observations.yaml, and config/questions.yaml
-against predefined schemas using Pydantic.
+against predefined schemas using Pydantic V2.
 """
 
 import sys
 import yaml
 from pathlib import Path
-from pydantic import BaseModel, validator, ValidationError
+from pydantic import BaseModel, field_validator, model_validator, ValidationError
 from typing import List, Dict, Optional, Any, Union
 
 # ------------ Pydantic Models ------------
@@ -19,7 +18,8 @@ class FieldConfig(BaseModel):
     synonyms: List[str]
     description: str
 
-    @validator('sql_type')
+    @field_validator('sql_type')
+    @classmethod
     def check_sql_type(cls, v):
         allowed = {'TEXT', 'NUMERIC', 'DATE', 'INT'}
         if v not in allowed:
@@ -51,7 +51,8 @@ class QuestionTemplate(BaseModel):
     importance: int
     template: str
 
-    @validator('importance')
+    @field_validator('importance')
+    @classmethod
     def check_importance(cls, v):
         if not (1 <= v <= 5):
             raise ValueError("importance must be between 1 and 5")
@@ -82,7 +83,7 @@ def validate():
     # Validate fields.yaml
     fdata = load_yaml(base / 'fields.yaml')
     try:
-        FieldsYaml.parse_obj(fdata)
+        FieldsYaml.model_validate(fdata)
         print("fields.yaml OK")
     except ValidationError as e:
         print("fields.yaml validation errors:", e, file=sys.stderr)
@@ -91,7 +92,7 @@ def validate():
     # Validate observations.yaml
     odata = load_yaml(base / 'observations.yaml')
     try:
-        ObservationsYaml.parse_obj(odata)
+        ObservationsYaml.model_validate(odata)
         print("observations.yaml OK")
     except ValidationError as e:
         print("observations.yaml validation errors:", e, file=sys.stderr)
@@ -100,7 +101,7 @@ def validate():
     # Validate questions.yaml
     qdata = load_yaml(base / 'questions.yaml')
     try:
-        QuestionsYaml.parse_obj(qdata)
+        QuestionsYaml.model_validate(qdata)
         print("questions.yaml OK")
     except ValidationError as e:
         print("questions.yaml validation errors:", e, file=sys.stderr)
