@@ -44,21 +44,14 @@ CREATE TABLE IF NOT EXISTS companies (
   id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
   industry TEXT,
-  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+  created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+  updated_at TIMESTAMP DEFAULT NOW() NOT NULL
 );
 
 ALTER TABLE companies ADD CONSTRAINT companies_name_key UNIQUE (name);
 INSERT INTO companies (id, name, industry)
-VALUES (1, 'Wilson Group', 'Technology')
-ON CONFLICT (name) DO UPDATE
-  SET industry = EXCLUDED.industry,
-      updated_at = NOW();
-
-SELECT setval(
-  pg_get_serial_sequence('companies','id'),
-  GREATEST(1, (SELECT COALESCE(MAX(id), 0) FROM companies))
-);
+VALUES (99, 'Example Company', 'Example Industry')
+ON CONFLICT (name) DO NOTHING;
 
 -- Table: periods
 CREATE TABLE IF NOT EXISTS periods (
@@ -67,8 +60,32 @@ CREATE TABLE IF NOT EXISTS periods (
   period_label TEXT NOT NULL,
   start_date DATE,
   end_date DATE,
-  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+  created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+  updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+);
+
+ALTER TABLE periods ADD CONSTRAINT periods_period_label_period_type_key UNIQUE (period_label, period_type);
+-- Table: line_item_definitions
+CREATE TABLE IF NOT EXISTS line_item_definitions (
+  id INT PRIMARY KEY,
+  name TEXT NOT NULL,
+  aliases TEXT[],
+  description TEXT
+);
+
+ALTER TABLE line_item_definitions ADD CONSTRAINT line_item_definitions_name_key UNIQUE (name);
+-- Table: financial_metrics
+CREATE TABLE IF NOT EXISTS financial_metrics (
+  company_id INT NOT NULL,
+  line_item TEXT NOT NULL,
+  period_label TEXT NOT NULL,
+  value NUMERIC,
+  value_type TEXT,
+  frequency TEXT,
+  currency TEXT,
+  source_file TEXT,
+  source_page INT,
+  notes TEXT
 );
 
 -- Table: derived_metrics
@@ -76,72 +93,56 @@ CREATE TABLE IF NOT EXISTS derived_metrics (
   id SERIAL PRIMARY KEY,
   base_metric_id INT NOT NULL,
   calculation_type TEXT,
-  frequency TEXT,
   company_id INT NOT NULL,
-  period_id INT NOT NULL,
+  period_label TEXT NOT NULL,
   calculated_value NUMERIC,
   unit TEXT,
   source_ids TEXT,
   calculation_note TEXT,
   corroboration_status TEXT,
-  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+  created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+  updated_at TIMESTAMP DEFAULT NOW() NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_derived_metrics_base_metric_id ON derived_metrics(base_metric_id);
-CREATE INDEX IF NOT EXISTS idx_derived_metrics_company_id_period_id ON derived_metrics(company_id, period_id);
+ALTER TABLE derived_metrics ADD CONSTRAINT derived_metrics_base_metric_id_company_id_period_label_calculation_type_key UNIQUE (base_metric_id, company_id, period_label, calculation_type);
 -- Table: question_templates
 CREATE TABLE IF NOT EXISTS question_templates (
   id SERIAL PRIMARY KEY,
-  metric TEXT NOT NULL,
-  calculation_type TEXT NOT NULL,
-  base_question TEXT NOT NULL,
-  trigger_threshold NUMERIC NOT NULL,
-  trigger_operator TEXT NOT NULL CHECK (trigger_operator IN ('>','<','>=','<=','=')),
-  default_weight NUMERIC(5,2) NOT NULL,
-  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+  line_item TEXT,
+  template TEXT
+);
+
+-- Table: questions
+CREATE TABLE IF NOT EXISTS questions (
+  id SERIAL PRIMARY KEY,
+  company_id INT,
+  period_label TEXT,
+  line_item TEXT,
+  question_template_id INT,
+  generated_at TIMESTAMP DEFAULT NOW()
 );
 
 -- Table: live_questions
 CREATE TABLE IF NOT EXISTS live_questions (
   id SERIAL PRIMARY KEY,
-  derived_metric_id INT NOT NULL,
-  template_id INT NOT NULL,
-  question_text TEXT,
-  category TEXT,
-  composite_score NUMERIC,
-  scorecard TEXT,
+  derived_metric_id INT,
   status TEXT,
-  owner TEXT,
-  deadline DATE,
-  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_live_questions_status ON live_questions(status);
-CREATE INDEX IF NOT EXISTS idx_live_questions_composite_score ON live_questions(composite_score);
 -- Table: question_logs
 CREATE TABLE IF NOT EXISTS question_logs (
   id SERIAL PRIMARY KEY,
-  live_question_id INT NOT NULL,
-  change_type TEXT,
-  changed_by TEXT,
-  old_value TEXT,
-  new_value TEXT,
-  change_note TEXT,
-  changed_on TIMESTAMP NOT NULL DEFAULT NOW()
+  live_question_id INT,
+  changed_on TIMESTAMP DEFAULT NOW()
 );
 
 -- Table: generated_reports
 CREATE TABLE IF NOT EXISTS generated_reports (
   id SERIAL PRIMARY KEY,
-  generated_on TIMESTAMP NOT NULL DEFAULT NOW(),
+  generated_on TIMESTAMP DEFAULT NOW(),
+  company_id INT,
   filter_type TEXT,
-  parameters JSONB,
-  output_summary TEXT,
-  report_file_path TEXT,
-  company_id INT NOT NULL,
-  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+  report_file_path TEXT
 );

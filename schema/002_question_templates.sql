@@ -17,11 +17,11 @@ INSERT INTO question_templates (id, observation_id, importance, template) VALUES
 '),
   (30003, 20003, 4, 'Year-over-year {{ metric }} increased by {{ percent(current, prior_year) }}%. How does this performance align with strategic goals?
 '),
-  (30004, 20004, 5, '{{ metric }} is {{ percent(current, budget) }}% {{ if current > budget then ''above'' else ''below'' }} budget. What explains this deviation from plan?
+  (30004, 20004, 5, '{{ metric }} is {{ percent(current, budget) }}% {{ ''above'' if current > budget else ''below'' }} budget. What explains this deviation from plan?
 '),
-  (30005, 20005, 2, '{{ metric }} is {{ percent(current, prior) }}% {{ if current > prior then ''above'' else ''below'' }} the prior period. Are there one-off events or trends affecting this?
+  (30005, 20005, 2, '{{ metric }} is {{ percent(current, prior) }}% {{ ''above'' if current > prior else ''below'' }} the prior period. Are there one-off events or trends affecting this?
 '),
-  (30006, 20006, 3, 'Year-to-date {{ metric }} performance is {{ percent(ytd_current, ytd_prior) }}% {{ if ytd_current > ytd_prior then ''ahead'' else ''behind'' }} last year. What key drivers impacted YTD results?
+  (30006, 20006, 3, 'Year-to-date {{ metric }} performance is {{ percent(ytd_current, ytd_prior) }}% {{ ''ahead'' if ytd_current > ytd_prior else ''behind'' }} last year. What key drivers impacted YTD results?
 '),
   (30007, 20007, 1, 'The absolute change in {{ metric }} from the prior period is {{ format_abs(current - prior) }}. Is this magnitude significant in the broader context?
 '),
