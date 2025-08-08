@@ -62,10 +62,10 @@ poetry config virtualenvs.create false --local
 # 3.2. IF you DO NOT have poetry installed: Install the Poetry CLI into this venv 
 pip install poetry
 
-# 5. Install project dependencies as defined in pyproject.toml
+# 4. Install project dependencies as defined in pyproject.toml
 poetry install
 
-# Install Node.js dependencies
+# 5. Install Node.js dependencies
 cd server
 npm install
 cd ..
@@ -196,6 +196,14 @@ curl -X POST http://localhost:4000/api/generate-report \
      -H "Content-Type: application/json" \
      -d '{"company_id":1}'
 ```
+
+docker logs --tail 50 finance-server_ci
+docker logs --tail 250 finance-server_ci
+
+if docker is complaining finance-server_ci is still running, must remove or rename teh existing one first:
+
+docker rm -f finance-server_ci
+
 
 ## Step 5: Deploy to Railway (Optional - for Production)
 
@@ -738,3 +746,23 @@ def validate_all_configs():
 ```
 
 Run this before any deployment to catch mismatches early.
+
+--
+
+| Step | Component                                | Purpose                                                             | Tested By                                  | Databases       | Order | Coverage Completeness (%) |
+|------|------------------------------------------|---------------------------------------------------------------------|---------------------------------------------|-----------------|-------|---------------------------|
+| 1    | Environment Configuration                | Load `.env`, set `DATABASE_URL` for local & Neon                    | All CI scripts (via `--env-file .env`)      | Local, Neon     | 1     | 100%                      |
+| 2    | Drop All Tables                          | Remove every existing table & data                                  | `000_drop_tables.sh`                        | Local, Neon     | 2     | 100%                      |
+| 3    | Base Schema Reset                        | Apply `001_financial_schema.sql` & `002_question_templates.sql`     | `001_reset_db.sh`                           | Local, Neon     | 3     | 100%                      |
+| 4    | Migration Tracking & Incremental Updates | Track & apply future migrations                                     | `002_migrate.sh`                            | Local, Neon     | 4     | 100%                      |
+| 5    | CSV Ingestion                            | Parse CSV, map fields, dedupe, insert metrics                       | `003_smoke_csv.sh`                          | Local, Neon     | 5     | 100%                      |
+| 6    | XLSX Ingestion                           | Parse XLSX, map fields, dedupe, insert metrics                      | `004_integration_xlsx.sh`                   | Local, Neon     | 6     |  75%*                     |
+| 7    | Metric Calculation                       | Compute MoM/QoQ/YoY/YTD/variance metrics                            | Indirect via `/api/upload` in steps 5–6     | Local, Neon     | 5–6   |  80%†                     |
+| 8    | Question Generation                      | Generate threshold-based analytical questions                       | Indirect via `/api/upload` in steps 5–6     | Local, Neon     | 5–6   |  80%†                     |
+| 9    | Report Generation & Blob Upload          | Bundle into PDF, upload to Blob                                     | Not covered by CI                           | Local, Neon     | N/A   |   0%                      |
+| 10   | Full-Sample End-to-End Report            | Loop through all sample files and report rows added (informational) | `005_full_sample_report.sh`                 | Local, Neon     | 7     |  90%                      |
+
+* XLSX ingestion currently skips rows on mapping fallback errors—requires enhancement in `field_mapper.py`.  
+† Metric/question functionality exercised by ingestion tests but lacks direct value/assertion checks beyond counts.
+
+--

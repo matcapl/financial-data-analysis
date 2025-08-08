@@ -1,39 +1,3 @@
-# config/fields.yaml
-# CENTRAL SOURCE OF TRUTH FOR ALL FIELDS & LINE ITEMS
-
-# FIELDS AT TOP (ID NUMBERS 10,001 to 10,999) 
-
-# LINE ITEMS at BOTTOM (11,001 to 11,999)
-
-# HOW TO UPDATE THIS FILE:
-# 1. To add a NEW FIELD:
-#    • Under “fields:”, append a new entry with:
-#        – A unique id (next in 10001–10999 range)
-#        – sql_type, full synonyms list, description
-#    • Do not change other ids or sections.
-# 2. To add a SYNONYM to an existing field:
-#    • Under that field’s “synonyms:” list, append the new header text.
-# 3. To add a LINE ITEM:
-#    • Under “line_items:”, append a new object with:
-#        – A unique id (next in 11001–11999 range)
-#        – name, aliases list, description
-# 4. ALWAYS preserve indentation and quoting style.
-# 5. After editing, run `scripts/validate_yaml.py` to confirm validity.
-
-# - Edit or add fields under "fields" to update ingestion schema.
-# - "line_items" seeds line_item_definitions table and adds known business metrics.
-# - Synonyms allow successful mapping from any varied real-world header.
-# Add every variant or typo for column headers under "synonyms" for robust mapping.
-
-
-# Reactive augmentation: As you onboard new sources, log unmapped headers and add them to fields.yaml’s synonyms.
-
-# Taxonomy-driven hints: Use taxonomy.yaml rules to auto-suggest matches for common patterns (dates, IDs, amounts).
-
-# Documentation & examples: In-file comments guide developers on adding new entries and ID ranges ensure no collisions.
-
-# Optionally, you can build a small UI or script that scans incoming headers and highlights missing synonyms for easy enrichment.
-
 fields:
   company_id:
     id: 10001
@@ -276,7 +240,7 @@ fields:
 
   # Additional fields can be appended here following the same pattern.
   # When adding a new field:
-  #  1. Assign the next available ID in the 10001–19999 range.
+  #  1. Assign the next available ID in the 10001–10999 range.
   #  2. Specify sql_type, full synonyms list, and description.
 
 line_items:

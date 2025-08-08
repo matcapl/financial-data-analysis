@@ -14,14 +14,13 @@
 #
 # You can feed unmapped headers back to an AI or human review process to enrich fields.yaml.
 
-
 taxonomies:
   - name: id_headers
     patterns:
       - "^company[_ ]?id$"
       - "^entity[_ ]?id$"
       - ".*_?id$"
-    description: Any header ending in “id” (company_id, org id, etc.)
+    description: Any header ending in “id”
 
   - name: name_headers
     patterns:
@@ -42,7 +41,6 @@ taxonomies:
     patterns:
       - "^(period|frequency|freq)[_ ]?type$"
       - "^(granularity|cycle)$"
-      - "^(period|rpt)[_ ]?type$"
     description: Granularity descriptors
 
   - name: value_headers
@@ -56,14 +54,13 @@ taxonomies:
     patterns:
       - "^(value|scenario)[_ ]?type$"
       - "^(plan|basis|variance)$"
-      - "^(actual|budget|prior|projected)$"
-    description: Value‐type or scenario descriptors
+    description: Scenario or plan descriptors
 
   - name: currency_headers
     patterns:
       - "^(currency|curr|ccy|fx)(_code)?$"
       - "iso[_ ]?currency[_ ]?code"
-    description: Currency fields
+    description: Currency code fields
 
   - name: file_headers
     patterns:
@@ -76,20 +73,20 @@ taxonomies:
       - "^source[_ ]?page$"
       - "^page(nu(mber)?)?$"
       - "^(sheet|tab)[_ ]?id$"
-    description: Document page indicators
+    description: Document page or sheet identifiers
 
   - name: notes_headers
     patterns:
       - "^(note|comment|remark|footnote)s?$"
       - "^(description|explanation)$"
-    description: Free‐form text columns
+    description: Free-form text columns
 
   - name: statement_type_headers
     patterns:
       - "^(statement|report)[_ ]?type$"
-      - "financial[_ ]?statement"
+      - "^financial[_ ]?statement"
       - "^stmt(_?type)?$"
-    description: Statement type fields
+    description: Financial statement type fields
 
   - name: category_headers
     patterns:
@@ -101,4 +98,4 @@ taxonomies:
     patterns:
       - "^(line[_ ]?item|metric|account|acct)$"
       - "^(description|desc(ri?p(ti(on)?)?)?)$"
-    description: Line‐item or metric names
+    description: Line-item or metric names

@@ -1,5 +1,7 @@
 # config/tables.yaml
+
 tables:
+  # 1. Reference data
   - name: companies
     columns:
       - name: id
@@ -8,31 +10,27 @@ tables:
           - PRIMARY KEY
       - name: name
         type: TEXT
-        not_null: true
+        constraints:
+          - NOT NULL
       - name: industry
         type: TEXT
       - name: created_at
         type: TIMESTAMP
         default: NOW()
-        not_null: true
+        constraints:
+          - NOT NULL
       - name: updated_at
         type: TIMESTAMP
         default: NOW()
-        not_null: true
+        constraints:
+          - NOT NULL
     unique_constraints:
       - [name]
     seed:
       - |
         INSERT INTO companies (id, name, industry)
-        VALUES (1, 'Wilson Group', 'Technology')
-        ON CONFLICT (name) DO UPDATE
-          SET industry = EXCLUDED.industry,
-              updated_at = NOW();
-      - |
-        SELECT setval(
-          pg_get_serial_sequence('companies','id'),
-          GREATEST(1, (SELECT COALESCE(MAX(id), 0) FROM companies))
-        );
+        VALUES (99, 'Example Company', 'Example Industry')
+        ON CONFLICT (name) DO NOTHING;
 
   - name: periods
     columns:
@@ -42,10 +40,12 @@ tables:
           - PRIMARY KEY
       - name: period_type
         type: TEXT
-        not_null: true
+        constraints:
+          - NOT NULL
       - name: period_label
         type: TEXT
-        not_null: true
+        constraints:
+          - NOT NULL
       - name: start_date
         type: DATE
       - name: end_date
@@ -53,12 +53,69 @@ tables:
       - name: created_at
         type: TIMESTAMP
         default: NOW()
-        not_null: true
+        constraints:
+          - NOT NULL
       - name: updated_at
         type: TIMESTAMP
         default: NOW()
-        not_null: true
+        constraints:
+          - NOT NULL
+    unique_constraints:
+      - [period_label, period_type]
 
+  # 2. Ingestion tables
+  - name: line_item_definitions
+    columns:
+      - name: id
+        type: INT
+        constraints:
+          - PRIMARY KEY
+      - name: name
+        type: TEXT
+        constraints:
+          - NOT NULL
+      - name: aliases
+        type: TEXT[]
+      - name: description
+        type: TEXT
+    unique_constraints:
+      - [name]
+
+  - name: financial_metrics
+    columns:
+      - name: company_id
+        type: INT
+        constraints:
+          - NOT NULL
+      - name: line_item
+        type: TEXT
+        constraints:
+          - NOT NULL
+      - name: period_label
+        type: TEXT
+        constraints:
+          - NOT NULL
+      - name: value
+        type: NUMERIC
+      - name: value_type
+        type: TEXT
+      - name: frequency
+        type: TEXT
+      - name: currency
+        type: TEXT
+      - name: source_file
+        type: TEXT
+      - name: source_page
+        type: INT
+      - name: notes
+        type: TEXT
+    primary_key:
+      - company_id
+      - line_item
+      - period_label
+      - value
+
+  # 3. Derived metrics
   - name: derived_metrics
     columns:
       - name: id
@@ -67,17 +124,18 @@ tables:
           - PRIMARY KEY
       - name: base_metric_id
         type: INT
-        not_null: true
+        constraints:
+          - NOT NULL
       - name: calculation_type
-        type: TEXT
-      - name: frequency
         type: TEXT
       - name: company_id
         type: INT
-        not_null: true
-      - name: period_id
-        type: INT
-        not_null: true
+        constraints:
+          - NOT NULL
+      - name: period_label
+        type: TEXT
+        constraints:
+          - NOT NULL
       - name: calculated_value
         type: NUMERIC
       - name: unit
@@ -91,50 +149,47 @@ tables:
       - name: created_at
         type: TIMESTAMP
         default: NOW()
-        not_null: true
+        constraints:
+          - NOT NULL
       - name: updated_at
         type: TIMESTAMP
         default: NOW()
-        not_null: true
-    indexes:
-      - [base_metric_id]
-      - [company_id, period_id]
+        constraints:
+          - NOT NULL
+    unique_constraints:
+      - [base_metric_id, company_id, period_label, calculation_type]
 
+  # 4. Question engine tables
   - name: question_templates
     columns:
       - name: id
         type: SERIAL
         constraints:
           - PRIMARY KEY
-      - name: metric
+      - name: line_item
         type: TEXT
-        not_null: true
-      - name: calculation_type
+      - name: template
         type: TEXT
-        not_null: true
-      - name: base_question
-        type: TEXT
-        not_null: true
-      - name: trigger_threshold
-        type: NUMERIC
-        not_null: true
-      - name: trigger_operator
-        type: TEXT
-        checks:
-          - "trigger_operator IN ('>','<','>=','<=','=')"
-        not_null: true
-      - name: default_weight
-        type: NUMERIC(5,2)
-        not_null: true
-      - name: created_at
-        type: TIMESTAMP
-        default: NOW()
-        not_null: true
-      - name: updated_at
-        type: TIMESTAMP
-        default: NOW()
-        not_null: true
 
+  - name: questions
+    columns:
+      - name: id
+        type: SERIAL
+        constraints:
+          - PRIMARY KEY
+      - name: company_id
+        type: INT
+      - name: period_label
+        type: TEXT
+      - name: line_item
+        type: TEXT
+      - name: question_template_id
+        type: INT
+      - name: generated_at
+        type: TIMESTAMP
+        default: NOW()
+
+  # 5. Optional reporting tables
   - name: live_questions
     columns:
       - name: id
@@ -143,35 +198,14 @@ tables:
           - PRIMARY KEY
       - name: derived_metric_id
         type: INT
-        not_null: true
-      - name: template_id
-        type: INT
-        not_null: true
-      - name: question_text
-        type: TEXT
-      - name: category
-        type: TEXT
-      - name: composite_score
-        type: NUMERIC
-      - name: scorecard
-        type: TEXT
       - name: status
         type: TEXT
-      - name: owner
-        type: TEXT
-      - name: deadline
-        type: DATE
       - name: created_at
         type: TIMESTAMP
         default: NOW()
-        not_null: true
       - name: updated_at
         type: TIMESTAMP
         default: NOW()
-        not_null: true
-    indexes:
-      - [status]
-      - [composite_score]
 
   - name: question_logs
     columns:
@@ -181,21 +215,9 @@ tables:
           - PRIMARY KEY
       - name: live_question_id
         type: INT
-        not_null: true
-      - name: change_type
-        type: TEXT
-      - name: changed_by
-        type: TEXT
-      - name: old_value
-        type: TEXT
-      - name: new_value
-        type: TEXT
-      - name: change_note
-        type: TEXT
       - name: changed_on
         type: TIMESTAMP
         default: NOW()
-        not_null: true
 
   - name: generated_reports
     columns:
@@ -206,23 +228,9 @@ tables:
       - name: generated_on
         type: TIMESTAMP
         default: NOW()
-        not_null: true
+      - name: company_id
+        type: INT
       - name: filter_type
-        type: TEXT
-      - name: parameters
-        type: JSONB
-      - name: output_summary
         type: TEXT
       - name: report_file_path
         type: TEXT
-      - name: company_id
-        type: INT
-        not_null: true
-      - name: created_at
-        type: TIMESTAMP
-        default: NOW()
-        not_null: true
-      - name: updated_at
-        type: TIMESTAMP
-        default: NOW()
-        not_null: true

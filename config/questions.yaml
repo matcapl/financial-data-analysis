@@ -43,21 +43,21 @@ questions:
     observation_id: 20004    # variance_vs_budget
     importance: 5
     template: >
-      {{ metric }} is {{ percent(current, budget) }}% {{ if current > budget then 'above' else 'below' }} budget.
+      {{ metric }} is {{ percent(current, budget) }}% {{ 'above' if current > budget else 'below' }} budget.
       What explains this deviation from plan?
 
   - id: 30005
     observation_id: 20005    # variance_vs_prior
     importance: 2
     template: >
-      {{ metric }} is {{ percent(current, prior) }}% {{ if current > prior then 'above' else 'below' }} the prior period.
+      {{ metric }} is {{ percent(current, prior) }}% {{ 'above' if current > prior else 'below' }} the prior period.
       Are there one-off events or trends affecting this?
 
   - id: 30006
     observation_id: 20006    # ytd_performance
     importance: 3
     template: >
-      Year-to-date {{ metric }} performance is {{ percent(ytd_current, ytd_prior) }}% {{ if ytd_current > ytd_prior then 'ahead' else 'behind' }} last year.
+      Year-to-date {{ metric }} performance is {{ percent(ytd_current, ytd_prior) }}% {{ 'ahead' if ytd_current > ytd_prior else 'behind' }} last year.
       What key drivers impacted YTD results?
 
   - id: 30007
@@ -87,4 +87,3 @@ questions:
     template: >
       The P/E ratio for {{ metric }} is {{ round(pe_ratio,2) }}.
       How does this compare to industry benchmarks?
-

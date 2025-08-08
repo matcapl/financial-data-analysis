@@ -93,5 +93,3 @@ observations:
     params:
       reference: price & earnings
     materiality: null
-
-  # Extend as needed up to ID 29999
