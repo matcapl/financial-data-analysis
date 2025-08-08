@@ -12,7 +12,7 @@ fields:
       - org_id
       - orgid
       - ticker
-    description: Unique company identifier for each reporting entity
+    description: Unique company integer identifier for each entity
 
   company_name:
     id: 10002
@@ -25,7 +25,7 @@ fields:
       - org_name
       - organization
       - firm
-    description: Name of the reporting company
+    description: Name of the reporting company (used for lookup/join)
 
   line_item:
     id: 10003
@@ -33,20 +33,19 @@ fields:
     synonyms:
       - line_item
       - lineitem
-      - line item
-      - Line-Item
-      - metric
       - item
-      - account
-      - acct
-      - account_name
-      - data_item
+      - metric
+      - line item
       - financial_item
-      - description
-      - description_text
-      - lineDescription
-      - metric_name
-    description: Financial metric or line item name
+    description: Financial metric or line item name (to be mapped to id via line_item_definitions)
+
+  line_item_id:
+    id: 10020
+    sql_type: INT
+    synonyms:
+      - line_item_id
+      - lineitemid
+    description: Foreign key reference to line_item_definitions
 
   period_label:
     id: 10004
@@ -57,7 +56,6 @@ fields:
       - period
       - date
       - report_date
-      - reportdate
       - as_of
       - fiscal_period
       - time
@@ -67,7 +65,7 @@ fields:
       - year
       - reporting_period
       - rpt_period
-    description: Human-readable period identifier
+    description: Human-readable period label (used for parsing and joining to periods table)
 
   period_type:
     id: 10005
@@ -81,7 +79,15 @@ fields:
       - granularity
       - rpt_type
       - rpt_frequency
-    description: Period granularity (Monthly, Quarterly, Yearly)
+    description: Describes period granularity: 'Monthly', 'Quarterly', 'Yearly'
+
+  period_id:
+    id: 10021
+    sql_type: INT
+    synonyms:
+      - period_id
+      - periodid
+    description: Foreign key reference to periods table
 
   start_date:
     id: 10006
@@ -89,12 +95,9 @@ fields:
     synonyms:
       - start_date
       - from_date
-      - period_start
       - begin_date
-      - start
       - effective_date
-      - eff_date
-    description: Period start date (YYYY-MM-DD)
+    description: Start date for period (YYYY-MM-DD)
 
   end_date:
     id: 10007
@@ -102,11 +105,9 @@ fields:
     synonyms:
       - end_date
       - to_date
-      - period_end
       - finish_date
-      - end
       - expiry_date
-    description: Period end date (YYYY-MM-DD)
+    description: End date for period (YYYY-MM-DD)
 
   value:
     id: 10008
@@ -117,13 +118,12 @@ fields:
       - val
       - figure
       - reported_value
-      - reportedValue
       - actual_value
       - budget_value
       - total
       - numeric_value
       - amt
-    description: Numeric value of the metric
+    description: Numeric value for metric
 
   value_type:
     id: 10009
@@ -134,16 +134,14 @@ fields:
       - scenario
       - scenario_type
       - basis
-      - basis_type
       - plan
-      - plan_type
       - actual
       - budget
       - forecast
       - projected
       - prior
       - variance
-    description: Nature of the value (Actual, Budget, Forecast, etc.)
+    description: Nature of value (Actual, Budget, Forecast, etc.)
 
   frequency:
     id: 10010
@@ -153,7 +151,7 @@ fields:
       - freq
       - reporting_cycle
       - rpt_cycle
-    description: Reporting frequency (Monthly, Quarterly, etc.)
+    description: Reporting frequency
 
   currency:
     id: 10011
@@ -163,7 +161,6 @@ fields:
       - curr
       - ccy
       - iso_currency
-      - iso_currency_code
       - currency_code
       - fx
     description: Currency code (USD, EUR, etc.)
@@ -175,10 +172,9 @@ fields:
       - source_file
       - file
       - filename
-      - file_name
       - datafile
-      - filePath
-    description: Origin filename
+      - file_path
+    description: Filename where data originates
 
   source_page:
     id: 10013
@@ -186,17 +182,16 @@ fields:
     synonyms:
       - source_page
       - page
-      - pageno
       - page_number
+      - pageno
       - page_num
-    description: Page number within source
+    description: Page number within source file
 
   source_type:
     id: 10014
     sql_type: TEXT
     synonyms:
       - source_type
-      - input_type
       - ingestion_type
     description: Type of source content (Raw, Aggregated)
 
@@ -211,38 +206,30 @@ fields:
       - remark
       - explanation
       - footnote
-    description: Free-form notes or comments
+    description: Free-form notes, comments, annotations
 
-  statement_type:
+  hash:
     id: 10016
     sql_type: TEXT
     synonyms:
-      - statement_type
-      - statement
-      - report_type
-      - financial_statement
-      - stmt_type
-      - stmt
-    description: Financial statement type
+      - hash
+    description: Optional: hashed metric identity for deduplication
 
-  category:
+  created_at:
     id: 10017
-    sql_type: TEXT
+    sql_type: TIMESTAMP
     synonyms:
-      - category
-      - group
-      - class
-      - bucket
-      - category_name
-    description: Business category/grouping
+      - created_at
+    description: Timestamp data was created
 
+  updated_at:
+    id: 10018
+    sql_type: TIMESTAMP
+    synonyms:
+      - updated_at
+    description: Timestamp data was last updated
 
-
-  # Additional fields can be appended here following the same pattern.
-  # When adding a new field:
-  #  1. Assign the next available ID in the 10001–10999 range.
-  #  2. Specify sql_type, full synonyms list, and description.
-
+# --- Canonical line items mapping for ingestion ---
 line_items:
   - id: 11001
     name: Revenue
@@ -271,58 +258,4 @@ line_items:
       - operating_profit
     description: Earnings before interest, taxes, depreciation, amortization
 
-  # - id: 11004
-  #   name: Operating Income
-  #   aliases:
-  #     - operating_profit
-  #     - income_from_operations
-  #   description: Income from operations
-
-  # - id: 11005
-  #   name: Net Income
-  #   aliases:
-  #     - net_profit
-  #     - profit
-  #     - earnings
-  #     - net
-  #   description: Profit after all expenses
-
-  # - id: 11006
-  #   name: Cash Flow
-  #   aliases:
-  #     - cashflow
-  #     - net_cash_flow
-  #     - cf
-  #   description: Net cash inflow/outflow
-
-  # - id: 11007
-  #   name: EPS
-  #   aliases:
-  #     - earnings_per_share
-  #     - eps_basic
-  #     - eps_diluted
-  #   description: Earnings per share
-
-  # - id: 11008
-  #   name: Total Assets
-  #   aliases:
-  #     - assets
-  #     - assets_total
-  #   description: Total assets
-
-  # - id: 11009
-  #   name: Total Liabilities
-  #   aliases:
-  #     - liabilities
-  #     - liabilities_total
-  #     - liab
-  #   description: Total liabilities
-
-  # - id: 11010
-  #   name: Equity
-  #   aliases:
-  #     - shareholders_equity
-  #     - equity_total
-  #     - se
-  #   description: Shareholders' equity
-
+# Add more canonical line items as required.

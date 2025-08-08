@@ -1,29 +1,24 @@
 # config/tables.yaml
 
 tables:
-  # 1. Reference data
   - name: companies
     columns:
       - name: id
         type: SERIAL
-        constraints:
-          - PRIMARY KEY
+        constraints: [PRIMARY KEY]
       - name: name
         type: TEXT
-        constraints:
-          - NOT NULL
+        constraints: [NOT NULL]
       - name: industry
         type: TEXT
       - name: created_at
         type: TIMESTAMP
         default: NOW()
-        constraints:
-          - NOT NULL
+        constraints: [NOT NULL]
       - name: updated_at
         type: TIMESTAMP
         default: NOW()
-        constraints:
-          - NOT NULL
+        constraints: [NOT NULL]
     unique_constraints:
       - [name]
     seed:
@@ -36,16 +31,13 @@ tables:
     columns:
       - name: id
         type: SERIAL
-        constraints:
-          - PRIMARY KEY
+        constraints: [PRIMARY KEY]
       - name: period_type
         type: TEXT
-        constraints:
-          - NOT NULL
+        constraints: [NOT NULL]
       - name: period_label
         type: TEXT
-        constraints:
-          - NOT NULL
+        constraints: [NOT NULL]
       - name: start_date
         type: DATE
       - name: end_date
@@ -53,48 +45,50 @@ tables:
       - name: created_at
         type: TIMESTAMP
         default: NOW()
-        constraints:
-          - NOT NULL
+        constraints: [NOT NULL]
       - name: updated_at
         type: TIMESTAMP
         default: NOW()
-        constraints:
-          - NOT NULL
+        constraints: [NOT NULL]
     unique_constraints:
       - [period_label, period_type]
 
-  # 2. Ingestion tables
   - name: line_item_definitions
     columns:
       - name: id
         type: INT
-        constraints:
-          - PRIMARY KEY
+        constraints: [PRIMARY KEY]
       - name: name
         type: TEXT
-        constraints:
-          - NOT NULL
+        constraints: [NOT NULL]
       - name: aliases
         type: TEXT[]
       - name: description
         type: TEXT
     unique_constraints:
       - [name]
+    seed:
+      - |
+        INSERT INTO line_item_definitions (id, name, aliases, description) VALUES
+          (11001, 'Revenue', '{sales,income,turnover,total_revenue,rev}'::TEXT[], 'Total revenue from operations'),
+          (11002, 'Gross Profit', '{gross_profit,grossincome,gross income}'::TEXT[], 'Revenue minus cost of goods sold'),
+          (11003, 'EBITDA', '{earnings_before_interest,earnings_before_taxes,earnings_before_interest_taxes,operating_profit}'::TEXT[], 'Earnings before interest, taxes, depreciation, amortization')
+        ON CONFLICT (id) DO NOTHING;
 
   - name: financial_metrics
     columns:
+      - name: id
+        type: SERIAL
+        constraints: [PRIMARY KEY]
       - name: company_id
         type: INT
-        constraints:
-          - NOT NULL
-      - name: line_item
-        type: TEXT
-        constraints:
-          - NOT NULL
-      - name: period_label
-        type: TEXT
-        constraints:
-          - NOT NULL
+        constraints: [NOT NULL]
+      - name: period_id
+        type: INT
+        constraints: [NOT NULL]
+      - name: line_item_id
+        type: INT
+        constraints: [NOT NULL]
       - name: value
         type: NUMERIC
       - name: value_type
@@ -107,35 +101,46 @@ tables:
         type: TEXT
       - name: source_page
         type: INT
+      - name: source_type
+        type: TEXT
       - name: notes
         type: TEXT
-    primary_key:
-      - company_id
-      - line_item
-      - period_label
-      - value
+      - name: hash
+        type: TEXT
+      - name: created_at
+        type: TIMESTAMP
+        default: NOW()
+        constraints: [NOT NULL]
+      - name: updated_at
+        type: TIMESTAMP
+        default: NOW()
+        constraints: [NOT NULL]
+    unique_constraints:
+      - [company_id, period_id, line_item_id]
+    foreign_keys:
+      - columns: [company_id]
+        references: companies(id)
+      - columns: [period_id]
+        references: periods(id)
+      - columns: [line_item_id]
+        references: line_item_definitions(id)
 
-  # 3. Derived metrics
   - name: derived_metrics
     columns:
       - name: id
         type: SERIAL
-        constraints:
-          - PRIMARY KEY
+        constraints: [PRIMARY KEY]
       - name: base_metric_id
         type: INT
-        constraints:
-          - NOT NULL
+        constraints: [NOT NULL]
       - name: calculation_type
         type: TEXT
       - name: company_id
         type: INT
-        constraints:
-          - NOT NULL
+        constraints: [NOT NULL]
       - name: period_label
         type: TEXT
-        constraints:
-          - NOT NULL
+        constraints: [NOT NULL]
       - name: calculated_value
         type: NUMERIC
       - name: unit
@@ -146,56 +151,68 @@ tables:
         type: TEXT
       - name: corroboration_status
         type: TEXT
+      - name: frequency
+        type: TEXT
       - name: created_at
         type: TIMESTAMP
         default: NOW()
-        constraints:
-          - NOT NULL
+        constraints: [NOT NULL]
       - name: updated_at
         type: TIMESTAMP
         default: NOW()
-        constraints:
-          - NOT NULL
+        constraints: [NOT NULL]
     unique_constraints:
       - [base_metric_id, company_id, period_label, calculation_type]
+    foreign_keys:
+      - columns: [base_metric_id]
+        references: financial_metrics(id)
+      - columns: [company_id]
+        references: companies(id)
 
-  # 4. Question engine tables
   - name: question_templates
     columns:
       - name: id
         type: SERIAL
-        constraints:
-          - PRIMARY KEY
-      - name: line_item
-        type: TEXT
+        constraints: [PRIMARY KEY]
+      - name: line_item_id
+        type: INT
       - name: template
         type: TEXT
+    foreign_keys:
+      - columns: [line_item_id]
+        references: line_item_definitions(id)
 
   - name: questions
     columns:
       - name: id
         type: SERIAL
-        constraints:
-          - PRIMARY KEY
+        constraints: [PRIMARY KEY]
       - name: company_id
         type: INT
-      - name: period_label
-        type: TEXT
-      - name: line_item
-        type: TEXT
+      - name: period_id
+        type: INT
+      - name: line_item_id
+        type: INT
       - name: question_template_id
         type: INT
       - name: generated_at
         type: TIMESTAMP
         default: NOW()
+    foreign_keys:
+      - columns: [company_id]
+        references: companies(id)
+      - columns: [period_id]
+        references: periods(id)
+      - columns: [line_item_id]
+        references: line_item_definitions(id)
+      - columns: [question_template_id]
+        references: question_templates(id)
 
-  # 5. Optional reporting tables
   - name: live_questions
     columns:
       - name: id
         type: SERIAL
-        constraints:
-          - PRIMARY KEY
+        constraints: [PRIMARY KEY]
       - name: derived_metric_id
         type: INT
       - name: status
@@ -206,25 +223,29 @@ tables:
       - name: updated_at
         type: TIMESTAMP
         default: NOW()
+    foreign_keys:
+      - columns: [derived_metric_id]
+        references: derived_metrics(id)
 
   - name: question_logs
     columns:
       - name: id
         type: SERIAL
-        constraints:
-          - PRIMARY KEY
+        constraints: [PRIMARY KEY]
       - name: live_question_id
         type: INT
       - name: changed_on
         type: TIMESTAMP
         default: NOW()
+    foreign_keys:
+      - columns: [live_question_id]
+        references: live_questions(id)
 
   - name: generated_reports
     columns:
       - name: id
         type: SERIAL
-        constraints:
-          - PRIMARY KEY
+        constraints: [PRIMARY KEY]
       - name: generated_on
         type: TIMESTAMP
         default: NOW()
@@ -234,3 +255,6 @@ tables:
         type: TEXT
       - name: report_file_path
         type: TEXT
+    foreign_keys:
+      - columns: [company_id]
+        references: companies(id)
