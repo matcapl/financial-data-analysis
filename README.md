@@ -127,6 +127,7 @@ docker ps -q --filter ancestor=finance-server | xargs -r docker stop
 # Then rebuild and run
 docker build -t finance-server -f server/Dockerfile .
 docker run --rm --env-file .env -p 4000:4000 --name finance-server finance-server &
+sleep 10
 
 # Test health endpoint
 curl http://localhost:4000/health
@@ -766,3 +767,304 @@ Run this before any deployment to catch mismatches early.
 † Metric/question functionality exercised by ingestion tests but lacks direct value/assertion checks beyond counts.
 
 --
+
+Perfect! Here's your **complete terminal command sequence** to validate, regenerate schemas, run CI, and debug any issues. Follow these steps in order and share the results at each stage:
+
+***
+
+# **Complete Terminal Instructions for CI Green**
+
+## **Step 1: Validate YAML Configuration**
+```bash
+# Validate all YAML files are properly formatted
+echo "=== STEP 1: YAML Validation ==="
+poetry run python scripts/validate_yaml.py
+```
+
+## **Step 2: Regenerate Schema Files**
+```bash
+# Generate fresh schema from your new tables.yaml
+echo "=== STEP 2: Schema Generation ==="
+poetry run python scripts/generate_schema.py
+poetry run python scripts/generate_questions.py
+
+# Check what was generated
+echo "Generated schema preview:"
+head -50 schema/001_financial_schema.sql
+echo "Generated questions preview:"
+head -20 schema/002_question_templates.sql
+```
+
+## **Step 3: Run CI Pipeline**
+```bash
+# Run CI pipeline step by step
+echo "=== STEP 3: CI Pipeline ==="
+
+# Step 3a: Drop all tables
+echo "--- CI Step 1: Drop Tables ---"
+ci/01_drop_tables.sh
+
+# Step 3b: Reset/create schema
+echo "--- CI Step 2: Reset Database ---"
+ci/02_reset_db.sh
+
+# Verify tables were created correctly
+echo "--- Database Verification ---"
+psql "$DATABASE_URL" -c "\dt"
+psql "$DATABASE_URL" -c "\d financial_metrics"
+psql "$DATABASE_URL" -c "\d line_item_definitions"
+psql "$DATABASE_URL" -c "SELECT COUNT(*) FROM line_item_definitions;"
+
+# Step 3c: Run smoke test
+echo "--- CI Step 3: Smoke Test ---"
+ci/03_smoke_csv.sh
+```
+
+## **Step 4: If Docker/Container Issues Occur**
+```bash
+# Container debugging commands (run these if smoke test fails)
+echo "=== STEP 4: Docker Debugging (if needed) ==="
+
+# Check if container is running
+docker ps
+
+# Check container logs (last 250 lines)
+docker logs --tail 250 finance-server_ci
+
+# Check container logs (last 50 lines with timestamps)
+docker logs --tail 50 -t finance-server_ci
+
+# If container is stuck/dead, force cleanup and retry
+docker stop finance-server_ci 2>/dev/null || true
+docker rm -f finance-server_ci 2>/dev/null || true
+
+# Rebuild and test manually
+docker build -t finance-server -f server/Dockerfile .
+docker run --rm --env-file .env -p 4000:4000 --name finance-server_ci finance-server &
+
+# Test health endpoint
+sleep 10
+curl -s http://localhost:4000/health
+
+# Stop test container
+docker stop finance-server_ci
+```
+
+## **Step 5: Database Debugging (if CI fails)**
+```bash
+# Database inspection commands
+echo "=== STEP 5: Database Debugging ==="
+
+# Check all tables exist
+psql "$DATABASE_URL" -c "\dt public.*"
+
+# Inspect financial_metrics structure
+psql "$DATABASE_URL" -c "\d+ financial_metrics"
+
+# Check line_item_definitions data
+psql "$DATABASE_URL" -c "SELECT id, name FROM line_item_definitions;"
+
+# Check if smoke test data exists
+psql "$DATABASE_URL" -c "
+SELECT 
+  fm.id,
+  c.name as company,
+  p.period_label,
+  li.name as line_item,
+  fm.value
+FROM financial_metrics fm
+JOIN companies c ON fm.company_id = c.id
+JOIN periods p ON fm.period_id = p.id  
+JOIN line_item_definitions li ON fm.line_item_id = li.id
+LIMIT 5;"
+```
+
+## **Step 6: Full Integration Test**
+```bash
+# Run remaining CI steps if smoke test passes
+echo "=== STEP 6: Full Integration ==="
+
+ci/04_integration_xlsx.sh
+ci/05_full_sample.sh
+
+# Final validation
+echo "=== Final Status ==="
+psql "$DATABASE_URL" -c "SELECT COUNT(*) as total_metrics FROM financial_metrics;"
+psql "$DATABASE_URL" -c "SELECT COUNT(*) as derived_metrics FROM derived_metrics;"
+```
+
+***
+
+# **Expected Results at Each Step**
+
+**Step 1:** Should print "fields.yaml OK", "observations.yaml OK", "questions.yaml OK"
+
+**Step 2:** Should generate schema files without errors and show table definitions
+
+**Step 3a:** Should print "01 | All tables dropped."
+
+**Step 3b:** Should print "02 | Schema reset complete." and show tables like `financial_metrics`, `companies`, etc.
+
+**Step 3c:** Should print "03 | Smoke CSV test passed: revenue=2,390,873.00"
+
+***
+
+**Run each step and share the output!** If any step fails, we'll debug using the container logs and database inspection commands. The key is to see exactly where the pipeline breaks and what error messages appear.
+
+[1] https://github.com/matcapl/financial-data-analysis/blob/main/scripts/validate_yaml.py
+
+Excellent, you're thinking as a true *product owner and architect*. Let’s cover what “best practice” means for **.env management**, **Docker usage in CI**, the **parts and layers of your repo**, and how to design an end-to-end CI pipeline that’s robust and aligned with each function. Here’s a strategic breakdown:
+
+***
+
+## 1. **Best Practice for `.env` Setup**
+
+- **Centralize `.env` in the project root.**
+  - Example `.env` file:
+    ```
+    DATABASE_URL=postgresql://username:password@host:5432/dbname?sslmode=require
+    API_SECRET=
+    VERCEL_BLOB_TOKEN=
+    ```
+
+- **Never commit secrets to version control.**
+  - Use `.env.example` (or `.env.sample`) as a template, containing:
+    ```
+    DATABASE_URL=
+    API_SECRET=
+    ```
+    This helps onboarding and cloud deployment.
+
+- **Scripts and services always auto-load `.env` if present** (as covered in previous answers).
+
+- **For Docker:**  
+  - Pass `.env` variables to Docker containers using `--env-file .env`  
+    Example Docker run:
+    ```bash
+    docker run --rm --env-file .env -p 4000:4000 --name finance-server finance-server
+    ```
+
+- **For CI stacks (GitHub Actions, etc):**
+  - They should securely inject secrets/environment via their own mechanism—never hardcoded into images.
+
+***
+
+## 2. **Docker + CI: What Should Be in Each Script?**
+
+- **Docker build** (the static image) is typically outside per-test CI scripts.
+  - You build once when the code or Dockerfile changes:
+    ```bash
+    docker build -t finance-server -f server/Dockerfile .
+    ```
+
+- **Run containers for integration/smoke tests** within each CI sequence.
+  - The scripts should check: is a test server running? If not, start one with `docker run ...`.
+  - **Shutdown/cleanup** (using `docker stop`, `docker rm`) should be handled at the end of each test to ensure predictable state and no port conflicts.
+
+- **CI/01:** Should NOT build docker image, but can check for running test containers and shut them down.
+- **CI/03 (smoke):** Should always bring up its own disposable server/container, run tests, then clean up.
+
+***
+
+## 3. **Repo Layers: Primary Functions and Structure**
+
+Here’s the layered architecture for your project:
+
+| Layer        | Directory      | Primary Function                       | Example Files         |
+|--------------|---------------|----------------------------------------|----------------------|
+| **Frontend** | `/client`     | React/JS client for user UI            | `src/`, `public/`    |
+| **Backend**  | `/server`     | Node.js API, Python pipeline orchestration | `server.js`, `api/`  |
+| **Python**   | `/server/scripts` | Data ingestion, metrics, analytics  | `ingest_xlsx.py`, `calc_metrics.py` |
+| **Schema**   | `/schema`     | Auto-generated SQL for DB              | `001_financial_schema.sql` |
+| **Config**   | `/config`     | YAML configs for schema and mapping    | `tables.yaml`, `fields.yaml` |
+| **CI**       | `/ci`         | Scripts for DB reset, smoke/integration tests | `01_`, `02_`, ...   |
+| **Data**     | `/data`       | Example and sample upload files        | `smoke.csv`, ...     |
+
+***
+
+## 4. **Front-End, Back-End, Middle/Glue, Data Tools**
+
+- **Front-End**
+  - React app for user interaction and display.
+  - Environment variables (like `REACT_APP_API_URL`) point at backend API.
+
+- **Back-End**
+  - NodeJS/Express server handles HTTP API, file upload, task orchestration.
+  - Invokes Python scripts for heavy-lifting (ingestion, metrics, analytics).
+
+- **Middle/Glue**
+  - Python scripts run in child-process or direct mode.
+  - PostgreSQL DB for persistent analytics/state.
+
+- **Data Tools**
+  - Schema generator scripts.
+  - Config validation tools.
+  - Smoke/integration test runner scripts.
+
+***
+
+## 5. **Tools and Technologies**
+
+- **NodeJS/Express** (APIs)
+- **React** (Front-end)
+- **Python (with pandas, psycopg2, etc.)** (Data processing and ingestion)
+- **PostgreSQL** (Database)
+- **Docker** (Dev/test infra)
+- **YAML-based config** (for schema, mappings)
+- **Shell (bash) scripts** for CI
+
+***
+
+## 6. **Best Practice End-to-End CI Pipeline**
+
+This is what a bulletproof CI pipeline should do:
+
+**A. Validate Config**
+- Run `scripts/validate_yaml.py` to ensure configs are never broken on commit.
+
+**B. Build and Validate Docker Image**
+- Build once, and only if code/dockerfile changes.
+
+**C. Database Clean-Up and Schema Apply**
+- Drop all tables.
+- Re-apply schema and seed data.
+
+**D. API Smoke Test**
+- Bring up a fresh backend/API container using `.env`.
+- Upload canonical “smoke” CSV and confirm metrics flow to DB.
+
+**E. Frontend/Backend Integration Test**
+- (Optional) Hit API endpoints from front-end using test data, confirm proper full-stack behavior.
+
+**F. Extended Integration Test**
+- Upload more complex files (XLSX, PDF), check full pipeline results.
+
+**G. Clean Up**
+- Stop and remove any test containers.
+
+**H. Report**
+- Print out summary results: which step failed, which passed, with links to logs if needed.
+
+***
+
+## **Summary Table: CI Steps**
+
+| Step | Function                | What It Tests                    | How to Run         |
+|------|-------------------------|----------------------------------|--------------------|
+| 0    | Config validation       | .yaml files                      | python validate_yaml.py |
+| 1    | Schema setup            | DB clean + schema reloaded       | ci/01_drop_tables.shci/02_reset_db.sh |
+| 2    | Backend/API             | API/server is up, healthy        | docker run ...     |
+| 3    | Smoke test              | File->metric ingest core pipeline| ci/03_smoke_csv.sh |
+| 4    | Integration             | Large and multi-file ingest      | ci/04..., ci/05... |
+| 5    | Frontend integration    | UI/API flow                      | (optional) Cypress, Playwright, Selenium, etc. |
+| 6    | Clean up                | Resource cleanup                 | docker stop/rm ... |
+| 7    | Reporting               | Human-readable results/logs      | echo/logs          |
+
+***
+
+**Final Thought:**  
+A good pipeline isn’t “adjunct”; it’s the living, breathing proof that every part of your repo, from config to UI to backend, works together.  
+Automate what a developer or test engineer would do by hand, every hour, every day.  
+Zero friction between config, code, infra, and tests—that’s strategic best practice CI.
+
+If you want example GitHub Actions workflows, Makefile, or anything else, just ask!

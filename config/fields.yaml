@@ -25,7 +25,7 @@ fields:
       - org_name
       - organization
       - firm
-    description: Name of the reporting company (used for lookup/join)
+    description: Name of the reporting company used for lookup and join
 
   line_item:
     id: 10003
@@ -37,7 +37,7 @@ fields:
       - metric
       - line item
       - financial_item
-    description: Financial metric or line item name (to be mapped to id via line_item_definitions)
+    description: Financial metric or line item name to be mapped to id via line_item_definitions
 
   line_item_id:
     id: 10020
@@ -65,7 +65,7 @@ fields:
       - year
       - reporting_period
       - rpt_period
-    description: Human-readable period label (used for parsing and joining to periods table)
+    description: Human-readable period label used for parsing and joining to periods table
 
   period_type:
     id: 10005
@@ -79,7 +79,7 @@ fields:
       - granularity
       - rpt_type
       - rpt_frequency
-    description: Describes period granularity: 'Monthly', 'Quarterly', 'Yearly'
+    description: Describes period granularity such as Monthly Quarterly or Yearly
 
   period_id:
     id: 10021
@@ -97,7 +97,7 @@ fields:
       - from_date
       - begin_date
       - effective_date
-    description: Start date for period (YYYY-MM-DD)
+    description: Start date for period in YYYY-MM-DD format
 
   end_date:
     id: 10007
@@ -107,7 +107,7 @@ fields:
       - to_date
       - finish_date
       - expiry_date
-    description: End date for period (YYYY-MM-DD)
+    description: End date for period in YYYY-MM-DD format
 
   value:
     id: 10008
@@ -141,7 +141,7 @@ fields:
       - projected
       - prior
       - variance
-    description: Nature of value (Actual, Budget, Forecast, etc.)
+    description: Nature of value such as Actual Budget Forecast etc
 
   frequency:
     id: 10010
@@ -163,7 +163,7 @@ fields:
       - iso_currency
       - currency_code
       - fx
-    description: Currency code (USD, EUR, etc.)
+    description: Currency code such as USD EUR etc
 
   source_file:
     id: 10012
@@ -193,7 +193,7 @@ fields:
     synonyms:
       - source_type
       - ingestion_type
-    description: Type of source content (Raw, Aggregated)
+    description: Type of source content Raw or Aggregated
 
   notes:
     id: 10015
@@ -206,30 +206,15 @@ fields:
       - remark
       - explanation
       - footnote
-    description: Free-form notes, comments, annotations
+    description: Free-form notes comments or annotations
 
   hash:
     id: 10016
     sql_type: TEXT
     synonyms:
       - hash
-    description: Optional: hashed metric identity for deduplication
+    description: Hashed metric identity for deduplication
 
-  created_at:
-    id: 10017
-    sql_type: TIMESTAMP
-    synonyms:
-      - created_at
-    description: Timestamp data was created
-
-  updated_at:
-    id: 10018
-    sql_type: TIMESTAMP
-    synonyms:
-      - updated_at
-    description: Timestamp data was last updated
-
-# --- Canonical line items mapping for ingestion ---
 line_items:
   - id: 11001
     name: Revenue
@@ -256,6 +241,4 @@ line_items:
       - earnings_before_taxes
       - earnings_before_interest_taxes
       - operating_profit
-    description: Earnings before interest, taxes, depreciation, amortization
-
-# Add more canonical line items as required.
+    description: Earnings before interest taxes depreciation amortization
