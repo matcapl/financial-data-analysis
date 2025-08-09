@@ -1068,3 +1068,41 @@ Automate what a developer or test engineer would do by hand, every hour, every d
 Zero friction between config, code, infra, and tests—that’s strategic best practice CI.
 
 If you want example GitHub Actions workflows, Makefile, or anything else, just ask!
+
+
+Stop any running containers on 4000 before CI:
+
+docker stop finance-server || true
+docker stop finance-server_ci || true
+docker rm finance-server || true
+docker rm finance-server_ci || true
+
+
+--
+
+## Running the Full CI/Validation Pipeline
+
+**1. Validate configs and generate SQL:**
+./ci/00_config_validation.sh
+
+**2. Drop all tables in the DB:**  
+ci/01_drop_tables.sh
+
+**3. Reset and apply the schema:**  
+ci/02_reset_db.sh
+
+**4. [CLEANUP] Make sure no server containers are running (avoid port conflicts):**  
+docker ps
+docker stop finance-server || true
+docker stop finance-server_ci || true
+docker rm finance-server || true
+docker rm finance-server_ci || true
+
+**5. Smoke test the pipeline:**  
+ci/03_smoke_csv.sh
+
+**6. Run extended integrations (optional, if set up):**  
+ci/04_integration_xlsx.sh
+ci/05_full_sample.sh
+
+

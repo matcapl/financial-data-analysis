@@ -1,15 +1,25 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-: "${DATABASE_URL:?DATABASE_URL must be set}"
-
 echo "03 | Running Smoke CSV test..."
+
+# Stop/remove any prior container with this name
+docker stop finance-server_ci 2>/dev/null || true
+docker rm finance-server_ci 2>/dev/null || true
+
+ENV_FILE="${ENV_FILE:-.env}"
+if [ -f "$ENV_FILE" ]; then
+  set -a
+  source "$ENV_FILE"
+  set +a
+fi
+: "${DATABASE_URL:?DATABASE_URL must be set}"
 
 # Prepare unique smoke.csv
 SUFFIX="$(date +%s)$((RANDOM%10000))"
 cat > data/smoke.csv <<EOF
 company_id,company_name,line_item,period_label,period_type,value,value_type,source_file,source_page,notes
-1,Wilson Group,Revenue,Feb 2025,Monthly,2390873,Actual,smoke.csv,1,smoke_test_$SUFFIX
+1,Example_Company_E,Revenue,Feb 2025,Monthly,2390873,Actual,smoke.csv,1,smoke_test_$SUFFIX
 EOF
 
 # Ensure the line-item exists
