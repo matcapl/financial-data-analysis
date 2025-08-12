@@ -1068,7 +1068,7 @@ Automate what a developer or test engineer would do by hand, every hour, every d
 Zero friction between config, code, infra, and tests—that’s strategic best practice CI.
 
 If you want example GitHub Actions workflows, Makefile, or anything else, just ask!
-
+--
 
 Stop any running containers on 4000 before CI:
 

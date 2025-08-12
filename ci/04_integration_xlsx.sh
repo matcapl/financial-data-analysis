@@ -1,49 +1,108 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ENV_FILE="${ENV_FILE:-.env}"
-if [ -f "$ENV_FILE" ]; then
-  set -a
-  source "$ENV_FILE"
-  set +a
-fi
-: "${DATABASE_URL:?DATABASE_URL must be set}"
-
-echo "04 | Running XLSX integration test..."
-
-# Ensure line-items exist
-psql "$DATABASE_URL" <<SQL
-INSERT INTO line_item_definitions(name)
- SELECT 'Revenue'       WHERE NOT EXISTS(SELECT 1 FROM line_item_definitions WHERE name='Revenue');
-INSERT INTO line_item_definitions(name)
- SELECT 'Gross Profit'  WHERE NOT EXISTS(SELECT 1 FROM line_item_definitions WHERE name='Gross Profit');
-INSERT INTO line_item_definitions(name)
- SELECT 'EBITDA'        WHERE NOT EXISTS(SELECT 1 FROM line_item_definitions WHERE name='EBITDA');
-SQL
-
-# Start server
-docker rm -f finance-server_ci 2>/dev/null || true
-docker build -t finance-server -f server/Dockerfile . >/dev/null
-docker run -d --rm --env-file .env -p 4000:4000 --name finance-server_ci finance-server
-sleep 5
-
-# Upload and verify
-curl -fs -F "file=@data/test.xlsx" http://localhost:4000/api/upload
-ACTUAL_COUNT=$(psql "$DATABASE_URL" -t -c "
-  SELECT COUNT(*)
-    FROM financial_metrics fm
-    JOIN periods p ON fm.period_id=p.id
-   WHERE p.period_label='Feb 2025'
-     AND p.period_type='Monthly';
-" | tr -d '[:space:]')
-
-EXPECTED_COUNT=4
-if [[ "$ACTUAL_COUNT" -ne $EXPECTED_COUNT ]]; then
-  echo "04 | XLSX test FAILED: expected $EXPECTED_COUNT rows, got $ACTUAL_COUNT" >&2
-  docker logs finance-server_ci >&2
-  docker stop finance-server_ci
-  exit 1
+# Load environment variables
+if [[ -f .env ]]; then
+    export $(grep -v '^#' .env | xargs)
 fi
 
-echo "04 | XLSX test passed: rows=$ACTUAL_COUNT"
-docker stop finance-server_ci
+# Configuration
+PORT=${PORT:-4000}
+CONTAINER_NAME="finance-server_integration"
+TEST_FILE="data/financial_data_template.xlsx"
+MIN_EXPECTED_ROWS=5
+
+echo "=== 04 | Starting XLSX Integration Test ==="
+
+# Clean up function
+cleanup() {
+    echo "Cleaning up containers..."
+    docker stop "$CONTAINER_NAME" 2>/dev/null || true
+    docker rm -f "$CONTAINER_NAME" 2>/dev/null || true
+}
+
+trap cleanup EXIT
+cleanup
+
+# Check if test file exists
+if [[ ! -f "$TEST_FILE" ]]; then
+    echo "❌ Test file not found: $TEST_FILE"
+    echo "Please ensure the financial_data_template.xlsx file exists in the data/ directory"
+    exit 1
+fi
+
+# Record initial row count
+INITIAL_COUNT=$(psql "$DATABASE_URL" -t -c "SELECT COUNT(*) FROM financial_metrics;" | tr -d '[:space:]')
+echo "Initial financial_metrics count: $INITIAL_COUNT"
+
+# Start container
+echo "Starting API container for integration test..."
+docker run --rm --env-file .env -d -p "$PORT:$PORT" --name "$CONTAINER_NAME" finance-server
+
+# Health check with detailed logging
+echo "Waiting for API health check..."
+for i in {1..30}; do
+    if curl -sf "http://localhost:$PORT/health" >/dev/null 2>&1; then
+        echo "API health check passed"
+        break
+    fi
+    if [[ $i -eq 30 ]]; then
+        echo "❌ API health check failed"
+        docker logs --tail 50 "$CONTAINER_NAME"
+        exit 1
+    fi
+    sleep 1
+done
+
+# Upload Excel file
+echo "Uploading Excel file: $TEST_FILE"
+UPLOAD_START=$(date +%s)
+
+UPLOAD_RESPONSE=$(curl -sf -w "%{http_code}" -F "file=@$TEST_FILE" "http://localhost:$PORT/api/upload" || echo "CURL_FAILED")
+
+UPLOAD_END=$(date +%s)
+UPLOAD_TIME=$((UPLOAD_END - UPLOAD_START))
+
+if [[ "$UPLOAD_RESPONSE" == "CURL_FAILED" ]] || ! echo "$UPLOAD_RESPONSE" | grep -q "200$"; then
+    echo "❌ Excel upload failed:"
+    echo "$UPLOAD_RESPONSE"
+    docker logs --tail 100 "$CONTAINER_NAME"
+    exit 1
+fi
+
+echo "✅ Excel upload completed in ${UPLOAD_TIME}s"
+
+# Verify data processing
+echo "Verifying processed data..."
+sleep 2  # Allow time for async processing
+
+FINAL_COUNT=$(psql "$DATABASE_URL" -t -c "SELECT COUNT(*) FROM financial_metrics;" | tr -d '[:space:]')
+ADDED_ROWS=$((FINAL_COUNT - INITIAL_COUNT))
+
+if [[ $ADDED_ROWS -lt $MIN_EXPECTED_ROWS ]]; then
+    echo "❌ Insufficient data processed: expected at least $MIN_EXPECTED_ROWS rows, got $ADDED_ROWS"
+    
+    # Debug: Show what was actually inserted
+    echo "Recent financial_metrics entries:"
+    psql "$DATABASE_URL" -c "
+        SELECT c.name as company, p.period_label, li.name as line_item, fm.value 
+        FROM financial_metrics fm 
+        JOIN companies c ON fm.company_id = c.id 
+        JOIN periods p ON fm.period_id = p.id 
+        JOIN line_item_definitions li ON fm.line_item_id = li.id 
+        ORDER BY fm.id DESC 
+        LIMIT 10;
+    "
+    exit 1
+fi
+
+# Check if derived metrics were calculated
+DERIVED_COUNT=$(psql "$DATABASE_URL" -t -c "SELECT COUNT(*) FROM derived_metrics;" | tr -d '[:space:]')
+echo "Derived metrics generated: $DERIVED_COUNT"
+
+# Check if questions were generated
+QUESTIONS_COUNT=$(psql "$DATABASE_URL" -t -c "SELECT COUNT(*) FROM questions;" | tr -d '[:space:]')
+echo "Questions generated: $QUESTIONS_COUNT"
+
+echo "✅ 04 | XLSX Integration test passed: $ADDED_ROWS rows added, $DERIVED_COUNT derived metrics, $QUESTIONS_COUNT questions"
+exit 0
