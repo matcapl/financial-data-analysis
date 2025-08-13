@@ -32,6 +32,9 @@ taxonomies:
   - name: date_headers
     patterns:
       - "^(start|end)?[_ ]?date$"
+      - "^[A-Za-z]{3,9}[ _]\\d{4}$"
+      - "^YTD[ _]\\d{4}$"
+      - "^Q[1-4][ _]\\d{4}$"
       - "^period[_ ]?label$"
       - "^report[_ ]?date$"
       - "^(fiscal|rpt)[_ ]?(period|date)$"
@@ -40,6 +43,9 @@ taxonomies:
   - name: period_type_headers
     patterns:
       - "^(period|frequency|freq)[_ ]?type$"
+      - "^monthly$"
+      - "^quarterly$"
+      - "^ytd$"
       - "^(granularity|cycle)$"
     description: Granularity descriptors
 
