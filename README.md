@@ -27,12 +27,27 @@ By aligning each part of the stack with the platform that best supports its runt
 
 ## Technologies
 
-- **Front-End**: React for the user interface (`client/` directory).
-- **Back-End**: Node.js (`server/server.js`) for API endpoints and processing.
-- **Scripts**: Python for data handling and report generation (`scripts/` directory).
-- **Database**: PostgreSQL for structured data storage (`schema/` directory).
-- **Deployment**: Vercel for hosting and scalability.
+- **Front-End**
+  - React app for user interaction and display (`client/` directory).
+  - Environment variables (like `REACT_APP_API_URL`) point at backend API.
 
+- **Back-End**
+  - NodeJS/Express server handles HTTP API, file upload, task orchestration (`server/server.js`).
+  - Invokes Python scripts for heavy-lifting (ingestion, metrics, analytics) (`server/scripts/` directory).
+
+- **Middle/Glue**
+  - Python scripts run in child-process or direct mode.
+  - PostgreSQL DB for persistent analytics/state.
+
+- **Data Tools**
+  - Schema generator scripts (`config/` + `scripts/` -> `schema/` directory).
+  - Config validation tools.
+  - Smoke/integration test runner scripts.
+
+- **Docker** (Dev/test infra)
+- **YAML-based config** (for schema, mappings)
+- **Shell (bash) scripts** for CI
+- **Deployment**: Vercel for hosting and scalability.
 
 
 # Complete Setup Guide: Financial Data Analysis System
@@ -293,35 +308,7 @@ docker logs $(docker ps -q --filter "ancestor=finance-server")
 lsof -ti:4000 | xargs kill -9
 ```
 
-## Minimal Working Setup
 
-For just testing the core functionality (without deployment), you only need:
-1. **Steps 1-4** above
-2. **NeonDB account** (free tier)
-3. **Docker Desktop**
-
-The Railway and Vercel deployments are optional for production hosting.
-
--
-
-This setup gives you a fully functional financial data analysis system running locally with cloud database persistence.
-
--
-
-Your current structure is already well-organized and follows standard conventions. The Docker /app directory is just a container mount point - it doesn't dictate your repo structure.
-Current Structure (Good):
-text
-financial-data-analysis/
-├── client/              # React frontend
-├── server/              # Node.js API + Python scripts
-│   ├── api/            # Express routes
-│   ├── scripts/        # Python processing scripts
-│   └── Dockerfile      # Container definition
-├── data/               # Sample data
-├── schema/             # Database schemas
-└── pyproject.toml      # Python dependencies
-
--
 
 - **CI (Continuous Integration):** An automated process that builds and tests your code on each commit, ensuring new changes don’t break existing functionality.  
 - **`set -euo pipefail`:**  
@@ -362,138 +349,6 @@ What’s distracting:
 - Multiple iterations on decimal‐stripping versus formatting—pick one format (`to_char(..., 'FM9G999G999D00')`) and standardize.  
 
 Focus on solidifying this one smoke test. Once it reliably passes against both your local and your Neon database, you’ll have confidence the core ingestion works. All other concerns—fully parsing board packs, generating nuanced questions—can proceed once the pipeline’s foundation is verified.
-
-**Step-by-Step Setup:**
-
-1. **Create the smoke CSV** at `data/smoke.csv`:
-   ```csv
-   line_item,period_label,period_type,value,source_file,source_page,notes
-   Revenue,Feb 2025,Monthly,2390873,smoke.csv,1,smoke test
-   ```
-
-2. **Create a CI script** at `ci/smoke_test.sh`:
-
-   ```bash
-   #!/usr/bin/env bash
-   set -euo pipefail
-
-   # Load DATABASE_URL from .env
-   export DATABASE_URL="$(grep '^DATABASE_URL=' .env | cut -d '=' -f2-)"
-
-   # Seed master line_item_definitions
-   psql "$DATABASE_URL" &2
-     docker logs finance-server_ci >&2
-     docker stop finance-server_ci
-     exit 1
-   fi
-
-   echo "Smoke test passed: revenue=$ACTUAL"
-
-   # Clean up
-   docker stop finance-server_ci
-   ```
-
-3. **Make it executable:**
-   ```bash
-   chmod +x ci/smoke_test.sh
-   ```
-
-4. **Run your smoke test locally:**
-   ```bash
-   ./ci/smoke_test.sh
-   ```
-
-If the script prints **“Smoke test passed”**, your ingestion and database pipeline works end-to-end. Any failure will stop immediately with error output and container logs for debugging.
-
-Here’s a one-liner that creates `smoke.csv` on-the-fly, seeds master data, builds & runs Docker, uploads the CSV, checks the result, and tears down—all without needing external files:
-
-```bash
-bash -c '
-set -euo pipefail
-
-# 1. Create smoke.csv
-cat > data/smoke.csv /dev/null
-docker run --rm --env-file .env -d -p 4000:4000 --name finance-server_ci finance-server
-
-# 5. Wait for health check
-for i in {1..10}; do
-  curl -s http://localhost:4000/health | grep -q '"status":"ok"' && break || sleep 1
-done
-
-# 6. Upload the generated smoke.csv
-curl -fs -F "file=@data/smoke.csv" http://localhost:4000/api/upload
-
-# 7. Verify insertion
-EXPECTED=2390873
-ACTUAL=$(psql "$DATABASE_URL" -t -c "
-  SELECT value FROM financial_metrics fm
-   JOIN line_item_definitions li ON fm.line_item_id=li.id
-   JOIN periods p ON fm.period_id=p.id
-   WHERE li.name='Revenue' AND p.period_label='Feb 2025';
-" | tr -d '[:space:]')
-
-if [[ \"$ACTUAL\" != \"$EXPECTED\" ]]; then
-  echo \"Smoke test failed: expected $EXPECTED, got $ACTUAL\" >&2
-  docker logs finance-server_ci >&2
-  docker stop finance-server_ci
-  exit 1
-fi
-
-echo \"Smoke test passed: revenue=$ACTUAL\"
-
-# 8. Clean up
-docker stop finance-server_ci
-'
-```
-
-Steps:
-1. Generates `data/smoke.csv` with the expected Revenue row.  
-2. Seeds `line_item_definitions`.  
-3. Builds and runs the Docker container.  
-4. Uploads the generated CSV.  
-5. Queries the DB for the revenue value and compares it to `2390873`.  
-6. Prints pass/fail and stops the container.
-
-You only need the standard CLI tools that you already have in your workflow—no new installs:
-bash (built in)
-Docker (for building & running the server)
-psql (Postgres client)
-curl
-grep
-Assuming those are in your PATH and your .env is configured, you can run the entire smoke test in one go 
-
---
-# Development: Reset and migrate
-ci/001_reset_local_db.sh
-ci/002_migrate.sh
-
-
-# CI: Just migrate (idempotent)
-ci/002_migrate.sh
-
-# Smoke test (unchanged)
-ci/003_smoke_test.sh
-
---
-
---
-
-Medium-term (company identification):
-Extend the companies table:
-sql
-ALTER TABLE companies ADD COLUMN 
-  company_house_number TEXT,
-  ticker_symbol TEXT,
-  aliases TEXT[];
-Add company selection to upload flow:
-After file upload, scan for company indicators (letterhead, company names)
-Present a dropdown: "Is this [Detected Company Name] or create new?"
-Pass company_id parameter to ingestion
-Implement fuzzy matching:
-Use pg_trgm extension for similarity scoring
-Alert: "This data is 85% similar to [Existing Company]. Same entity?"
-Focus for now: Get your smoke test passing by seeding the companies table in both databases. Company disambiguation can be layered on once the core pipeline is solid.
---
 
 
 # Expert Code Review and QA Test Plan for Financial Data Analysis System
@@ -746,29 +601,6 @@ def validate_all_configs():
     return True
 ```
 
-Run this before any deployment to catch mismatches early.
-
---
-
-| Step | Component                                | Purpose                                                             | Tested By                                  | Databases       | Order | Coverage Completeness (%) |
-|------|------------------------------------------|---------------------------------------------------------------------|---------------------------------------------|-----------------|-------|---------------------------|
-| 1    | Environment Configuration                | Load `.env`, set `DATABASE_URL` for local & Neon                    | All CI scripts (via `--env-file .env`)      | Local, Neon     | 1     | 100%                      |
-| 2    | Drop All Tables                          | Remove every existing table & data                                  | `000_drop_tables.sh`                        | Local, Neon     | 2     | 100%                      |
-| 3    | Base Schema Reset                        | Apply `001_financial_schema.sql` & `002_question_templates.sql`     | `001_reset_db.sh`                           | Local, Neon     | 3     | 100%                      |
-| 4    | Migration Tracking & Incremental Updates | Track & apply future migrations                                     | `002_migrate.sh`                            | Local, Neon     | 4     | 100%                      |
-| 5    | CSV Ingestion                            | Parse CSV, map fields, dedupe, insert metrics                       | `003_smoke_csv.sh`                          | Local, Neon     | 5     | 100%                      |
-| 6    | XLSX Ingestion                           | Parse XLSX, map fields, dedupe, insert metrics                      | `004_integration_xlsx.sh`                   | Local, Neon     | 6     |  75%*                     |
-| 7    | Metric Calculation                       | Compute MoM/QoQ/YoY/YTD/variance metrics                            | Indirect via `/api/upload` in steps 5–6     | Local, Neon     | 5–6   |  80%†                     |
-| 8    | Question Generation                      | Generate threshold-based analytical questions                       | Indirect via `/api/upload` in steps 5–6     | Local, Neon     | 5–6   |  80%†                     |
-| 9    | Report Generation & Blob Upload          | Bundle into PDF, upload to Blob                                     | Not covered by CI                           | Local, Neon     | N/A   |   0%                      |
-| 10   | Full-Sample End-to-End Report            | Loop through all sample files and report rows added (informational) | `005_full_sample_report.sh`                 | Local, Neon     | 7     |  90%                      |
-
-* XLSX ingestion currently skips rows on mapping fallback errors—requires enhancement in `field_mapper.py`.  
-† Metric/question functionality exercised by ingestion tests but lacks direct value/assertion checks beyond counts.
-
---
-
-Perfect! Here's your **complete terminal command sequence** to validate, regenerate schemas, run CI, and debug any issues. Follow these steps in order and share the results at each stage:
 
 ***
 
@@ -911,107 +743,6 @@ psql "$DATABASE_URL" -c "SELECT COUNT(*) as derived_metrics FROM derived_metrics
 
 **Run each step and share the output!** If any step fails, we'll debug using the container logs and database inspection commands. The key is to see exactly where the pipeline breaks and what error messages appear.
 
-[1] https://github.com/matcapl/financial-data-analysis/blob/main/scripts/validate_yaml.py
-
-Excellent, you're thinking as a true *product owner and architect*. Let’s cover what “best practice” means for **.env management**, **Docker usage in CI**, the **parts and layers of your repo**, and how to design an end-to-end CI pipeline that’s robust and aligned with each function. Here’s a strategic breakdown:
-
-***
-
-## 1. **Best Practice for `.env` Setup**
-
-- **Centralize `.env` in the project root.**
-  - Example `.env` file:
-    ```
-    DATABASE_URL=postgresql://username:password@host:5432/dbname?sslmode=require
-    API_SECRET=
-    VERCEL_BLOB_TOKEN=
-    ```
-
-- **Never commit secrets to version control.**
-  - Use `.env.example` (or `.env.sample`) as a template, containing:
-    ```
-    DATABASE_URL=
-    API_SECRET=
-    ```
-    This helps onboarding and cloud deployment.
-
-- **Scripts and services always auto-load `.env` if present** (as covered in previous answers).
-
-- **For Docker:**  
-  - Pass `.env` variables to Docker containers using `--env-file .env`  
-    Example Docker run:
-    ```bash
-    docker run --rm --env-file .env -p 4000:4000 --name finance-server finance-server
-    ```
-
-- **For CI stacks (GitHub Actions, etc):**
-  - They should securely inject secrets/environment via their own mechanism—never hardcoded into images.
-
-***
-
-## 2. **Docker + CI: What Should Be in Each Script?**
-
-- **Docker build** (the static image) is typically outside per-test CI scripts.
-  - You build once when the code or Dockerfile changes:
-    ```bash
-    docker build -t finance-server -f server/Dockerfile .
-    ```
-
-- **Run containers for integration/smoke tests** within each CI sequence.
-  - The scripts should check: is a test server running? If not, start one with `docker run ...`.
-  - **Shutdown/cleanup** (using `docker stop`, `docker rm`) should be handled at the end of each test to ensure predictable state and no port conflicts.
-
-- **CI/01:** Should NOT build docker image, but can check for running test containers and shut them down.
-- **CI/03 (smoke):** Should always bring up its own disposable server/container, run tests, then clean up.
-
-***
-
-## 3. **Repo Layers: Primary Functions and Structure**
-
-Here’s the layered architecture for your project:
-
-| Layer        | Directory      | Primary Function                       | Example Files         |
-|--------------|---------------|----------------------------------------|----------------------|
-| **Frontend** | `/client`     | React/JS client for user UI            | `src/`, `public/`    |
-| **Backend**  | `/server`     | Node.js API, Python pipeline orchestration | `server.js`, `api/`  |
-| **Python**   | `/server/scripts` | Data ingestion, metrics, analytics  | `ingest_xlsx.py`, `calc_metrics.py` |
-| **Schema**   | `/schema`     | Auto-generated SQL for DB              | `001_financial_schema.sql` |
-| **Config**   | `/config`     | YAML configs for schema and mapping    | `tables.yaml`, `fields.yaml` |
-| **CI**       | `/ci`         | Scripts for DB reset, smoke/integration tests | `01_`, `02_`, ...   |
-| **Data**     | `/data`       | Example and sample upload files        | `smoke.csv`, ...     |
-
-***
-
-## 4. **Front-End, Back-End, Middle/Glue, Data Tools**
-
-- **Front-End**
-  - React app for user interaction and display.
-  - Environment variables (like `REACT_APP_API_URL`) point at backend API.
-
-- **Back-End**
-  - NodeJS/Express server handles HTTP API, file upload, task orchestration.
-  - Invokes Python scripts for heavy-lifting (ingestion, metrics, analytics).
-
-- **Middle/Glue**
-  - Python scripts run in child-process or direct mode.
-  - PostgreSQL DB for persistent analytics/state.
-
-- **Data Tools**
-  - Schema generator scripts.
-  - Config validation tools.
-  - Smoke/integration test runner scripts.
-
-***
-
-## 5. **Tools and Technologies**
-
-- **NodeJS/Express** (APIs)
-- **React** (Front-end)
-- **Python (with pandas, psycopg2, etc.)** (Data processing and ingestion)
-- **PostgreSQL** (Database)
-- **Docker** (Dev/test infra)
-- **YAML-based config** (for schema, mappings)
-- **Shell (bash) scripts** for CI
 
 ***
 
@@ -1045,38 +776,6 @@ This is what a bulletproof CI pipeline should do:
 **H. Report**
 - Print out summary results: which step failed, which passed, with links to logs if needed.
 
-***
-
-## **Summary Table: CI Steps**
-
-| Step | Function                | What It Tests                    | How to Run         |
-|------|-------------------------|----------------------------------|--------------------|
-| 0    | Config validation       | .yaml files                      | python validate_yaml.py |
-| 1    | Schema setup            | DB clean + schema reloaded       | ci/01_drop_tables.shci/02_reset_db.sh |
-| 2    | Backend/API             | API/server is up, healthy        | docker run ...     |
-| 3    | Smoke test              | File->metric ingest core pipeline| ci/03_smoke_csv.sh |
-| 4    | Integration             | Large and multi-file ingest      | ci/04..., ci/05... |
-| 5    | Frontend integration    | UI/API flow                      | (optional) Cypress, Playwright, Selenium, etc. |
-| 6    | Clean up                | Resource cleanup                 | docker stop/rm ... |
-| 7    | Reporting               | Human-readable results/logs      | echo/logs          |
-
-***
-
-**Final Thought:**  
-A good pipeline isn’t “adjunct”; it’s the living, breathing proof that every part of your repo, from config to UI to backend, works together.  
-Automate what a developer or test engineer would do by hand, every hour, every day.  
-Zero friction between config, code, infra, and tests—that’s strategic best practice CI.
-
-If you want example GitHub Actions workflows, Makefile, or anything else, just ask!
---
-
-Stop any running containers on 4000 before CI:
-
-docker stop finance-server || true
-docker stop finance-server_ci || true
-docker rm finance-server || true
-docker rm finance-server_ci || true
-
 
 --
 
@@ -1104,5 +803,3 @@ ci/03_smoke_csv.sh
 **6. Run extended integrations (optional, if set up):**  
 ci/04_integration_xlsx.sh
 ci/05_full_sample.sh
-
-

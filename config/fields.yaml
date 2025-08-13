@@ -37,6 +37,7 @@ fields:
       - metric
       - line item
       - financial_item
+      - Metric Name
     description: Financial metric or line item name to be mapped to id via line_item_definitions
 
   line_item_id:
@@ -123,6 +124,9 @@ fields:
       - total
       - numeric_value
       - amt
+      - Amount
+      - Number
+      - Figure
     description: Numeric value for metric
 
   value_type:
