@@ -32,8 +32,11 @@ if [[ ! -f "$SMOKE_FILE" ]]; then
     echo "Creating smoke test CSV..."
     mkdir -p data
     cat > "$SMOKE_FILE" << 'EOF'
-line_item,period_label,period_type,value,source_file,source_page,notes
-Revenue,Feb 2025,Monthly,2390873,smoke.csv,1,smoke test
+company_id,company_name,line_item,period_label,period_type,value,value_type,source_file,source_page,notes
+10001,Example_Company_1,Revenue,Feb 2025,Monthly,2390873,Actual,smoke.csv,1,smoke test
+10001,Example_Company_1,Revenue,Feb 2025,Monthly,2000000,Budget,smoke.csv,1,smoke test
+10001,Example_Company_1,EBITDA,Feb 2025,Monthly,239087,Actual,smoke.csv,1,smoke test
+10001,Example_Company_1,EBITDA,Feb 2025,Monthly,300000,Budget,smoke.csv,1,smoke test
 EOF
 fi
 
@@ -61,11 +64,14 @@ done
 
 # Upload smoke test file
 echo "Uploading smoke test CSV..."
-UPLOAD_RESPONSE=$(curl -sf -F "file=@$SMOKE_FILE" "http://localhost:$PORT/api/upload")
+UPLOAD_RESPONSE=$(curl -sf -F "file=@$SMOKE_FILE" "http://localhost:$PORT/api/upload" 2>&1)
+echo "Upload response: $UPLOAD_RESPONSE"
 
 if ! echo "$UPLOAD_RESPONSE" | grep -q '"message":"File processed successfully"'; then
     echo "❌ Upload failed:"
-    echo "$UPLOAD_RESPONSE"
+    echo "$UPLOAD_RESPONSE" 
+    echo "Container logs:"
+    docker logs --tail 100 "$CONTAINER_NAME"
     exit 1
 fi
 
@@ -85,6 +91,10 @@ ACTUAL=$(psql "$DATABASE_URL" -t -c "
 
 if [[ "$ACTUAL" != "$EXPECTED_REVENUE" ]]; then
     echo "❌ Data verification failed: expected $EXPECTED_REVENUE, got $ACTUAL"
+    # Show debug info
+    echo "Database contents:"
+    psql "$DATABASE_URL" -c "SELECT COUNT(*) FROM financial_metrics;"
+    psql "$DATABASE_URL" -c "SELECT COUNT(*) FROM line_item_definitions;"
     exit 1
 fi
 

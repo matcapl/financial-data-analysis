@@ -4,12 +4,12 @@ FROM python:3.11-slim
 # Install system dependencies: Node.js 18.x, Tesseract OCR, Poppler-utils, curl, ca-certificates
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-      curl \
-      ca-certificates \
-      gnupg \
-      lsb-release \
-      tesseract-ocr \
-      poppler-utils && \
+        curl \
+        ca-certificates \
+        gnupg \
+        lsb-release \
+        tesseract-ocr \
+        poppler-utils && \
     curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
     apt-get install -y --no-install-recommends nodejs && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
@@ -32,6 +32,9 @@ RUN npm install --prefix ./server
 # Copy server code
 COPY server/api ./server/api
 COPY server/scripts ./server/scripts
+
+# ✅ ADD THIS LINE - Copy config directory
+COPY config ./config
 
 # Expose and start
 EXPOSE 4000

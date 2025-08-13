@@ -75,3 +75,6 @@ server/logs/
 server/reports/
 
 poetry.toml
+
+backups/
+AI/
