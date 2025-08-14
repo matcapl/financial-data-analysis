@@ -110,7 +110,7 @@ def fetch_metrics_and_templates(conn, company_id):
                 for r in rows
             ]
         cur.execute("""
-            SELECT metric, calculation_type, base_question,
+            SELECT metric_name AS metric, calculation_type, base_question,
                    trigger_threshold, trigger_operator, default_weight
             FROM question_templates
         """)
