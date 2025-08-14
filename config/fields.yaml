@@ -60,7 +60,7 @@ fields:
     description: Foreign key reference to line_item_definitions
     data_type: "NUMERIC"
     category: "metric"
-    required: true
+    required: false
 
   period_label:
     id: 10004
@@ -111,7 +111,7 @@ fields:
     description: Foreign key reference to periods table
     data_type: "NUMERIC"
     category: "period"
-    required: true
+    required: false
 
   start_date:
     id: 10006

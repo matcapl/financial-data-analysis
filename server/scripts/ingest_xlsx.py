@@ -11,10 +11,13 @@ from utils import (
     log_event,
     get_db_connection,
     clean_numeric_value,
-    parse_period
+    parse_period,
+    get_field_synonyms,
+    get_line_item_aliases,
+    load_yaml_config,
+    seed_line_item_definitions
 )
 from field_mapper import map_and_filter_row
-
 
 class XLSXIngester:
     def __init__(self, file_path: str, company_id: int = 1):
@@ -25,6 +28,7 @@ class XLSXIngester:
         self.skipped_count = 0
         self.error_count = 0
         self.current_file_hashes = set()
+        self.fields_config = load_yaml_config('config/fields.yaml')
 
     def __enter__(self):
         self.conn = get_db_connection()
@@ -55,32 +59,32 @@ class XLSXIngester:
             else:
                 raise Exception(f"Unsupported file type: {ext}")
 
-            # Normalize headers
+            # Normalize headers using YAML configs
             raw_cols = [c.strip() for c in df.columns]
-            synonyms = {
-                "company_id":      ["company_id","companyid","company","co_id"],
-                "company_name":    ["company_name","companyname","company","co_name","name"],
-                "line_item":       ["line_item","lineitem","item","metric","line item","financial_item"],
-                "period_label":    ["period_label","periodlabel","period","date","fiscal_period"],
-                "period_type":     ["period_type","periodtype","frequency","freq","type"],
-                "value":           ["value","amount","val","figure"],
-                "value_type":      ["value_type","valuetype","type","actual","budget","prior"],
-                "frequency":       ["frequency","freq","period_type","periodtype"],
-                "currency":        ["currency","curr","ccy"],
-                "source_file":     ["source_file","file","filename","source"],
-                "source_page":     ["source_page","page","pageno","page_number"],
-                "notes":           ["notes","note","comments","description"]
-            }
+            synonyms = get_field_synonyms()  # Load field synonyms from fields.yaml
+            aliases = get_line_item_aliases()  # Load line item aliases from fields.yaml
             canon_map = {}
             for col in raw_cols:
                 lower = col.lower()
+                # Check field synonyms first (e.g., period_label, value_type)
                 for canon, variants in synonyms.items():
-                    if lower in variants:
+                    if lower in [v.lower() for v in variants]:
                         canon_map[col] = canon
                         break
+                # Then check line item aliases (e.g., Revenue, Gross Profit)
                 else:
-                    canon_map[col] = lower
+                    canon_map[col] = aliases.get(lower, lower)
+            
+            # Validate required fields
+            required_fields = [k for k, v in self.fields_config['fields'].items() if v.get('required', False)]
+            missing = [f for f in required_fields if f not in canon_map.values()]
+            if missing:
+                raise ValueError(f"Missing required fields: {missing}")
+            
             df = df.rename(columns=canon_map)
+
+            # Seed line_item_definitions from YAML if needed
+            seed_line_item_definitions()
 
             log_event("file_processing_started", {
                 "rows_found": len(df),
@@ -125,7 +129,7 @@ class XLSXIngester:
             "statement_type": None,
             "category": None,
             "value_type": raw_row.get("value_type") or "Actual",
-            "frequency": raw_row.get("frequency") or raw_row.get("period_type") or "Monthly",
+            "frequency": raw_row.get("frequency") or raw_row.get("period_type") or self.fields_config.get('auto_create_periods', {}).get('default_type', "Monthly"),
             "currency": raw_row.get("currency") or "USD"
         }
         for k, v in defaults.items():
@@ -153,8 +157,9 @@ class XLSXIngester:
                             f"line_item={mapped.get('line_item')} "
                             f"period_label={mapped.get('period_label')}")
 
-        # Parse period
-        period = parse_period(mapped["period_label"], mapped.get("period_type", "Monthly"))
+        # Parse period using date formats from fields.yaml
+        period_type = mapped.get("period_type", self.fields_config.get('auto_create_periods', {}).get('default_type', "Monthly"))
+        period = parse_period(mapped["period_label"], period_type)
 
         # Single cursor for all DB operations
         with self.conn.cursor() as cur:
@@ -177,6 +182,8 @@ class XLSXIngester:
             if pr:
                 period_id = pr[0]
             else:
+                if not self.fields_config.get('auto_create_periods', {}).get('enabled', False):
+                    raise Exception(f"Period not found: {period['label']} and auto-creation disabled")
                 cur.execute(
                     "INSERT INTO periods "
                     "(period_type,period_label,start_date,end_date,created_at,updated_at) "
@@ -247,7 +254,6 @@ class XLSXIngester:
                 "hash": row_hash
             })
             print(f"DEBUG: Successfully inserted row {row_number}")
-
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:

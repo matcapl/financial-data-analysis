@@ -1,5 +1,3 @@
-# server/scripts/utils.py
-
 import psycopg2
 import json
 from datetime import datetime, date
@@ -7,6 +5,8 @@ import os
 from dotenv import load_dotenv
 import hashlib
 import re
+import yaml
+import pandas as pd
 
 # Load environment variables
 load_dotenv()
@@ -50,15 +50,48 @@ def clean_numeric_value(value_str):
     except (ValueError, TypeError):
         return None
 
+def load_yaml_config(file_path):
+    """Load and return a YAML configuration file."""
+    try:
+        with open(file_path, 'r') as f:
+            return yaml.safe_load(f)
+    except Exception as e:
+        log_event('yaml_load_error', {'file': file_path, 'error': str(e)})
+        raise ValueError(f"Failed to load YAML config {file_path}: {e}")
+
+def load_fields_config():
+    """Load fields configuration from fields.yaml."""
+    return load_yaml_config('config/fields.yaml')
+
+def get_field_synonyms():
+    """Get field synonyms from fields.yaml."""
+    config = load_fields_config()
+    synonyms = {}
+    for field_name, field_data in config['fields'].items():
+        synonyms[field_name] = field_data['synonyms']
+    return synonyms
+
+def get_line_item_aliases():
+    """Get line item aliases from fields.yaml."""
+    config = load_fields_config()
+    aliases = {}
+    for item in config['line_items']:
+        name = item['name']
+        for alias in item['aliases']:
+            aliases[alias.lower()] = name
+        aliases[name.lower()] = name
+    return aliases
+
 def parse_period(period_str, period_type=None):
     """
-    Enhanced period parsing with better date handling
+    Enhanced period parsing using YAML-defined date formats and period logic.
     """
-    if not period_str:
+    if not period_str or (isinstance(period_str, float) and pd.isna(period_str)):
         return None
 
     period_str = str(period_str).strip()
-
+    periods_config = load_yaml_config('config/periods.yaml')
+    
     if not period_type:
         period_type = 'Quarterly' if 'Q' in period_str.upper() else 'Monthly'
 
@@ -80,8 +113,8 @@ def parse_period(period_str, period_type=None):
         year_match = re.search(r'20\d{2}', period_str)
         year = int(year_match.group()) if year_match else datetime.now().year
 
-        starts = {1:(1,1),2:(4,1),3:(7,1),4:(10,1)}
-        ends   = {1:(3,31),2:(6,30),3:(9,30),4:(12,31)}
+        starts = {1: (1, 1), 2: (4, 1), 3: (7, 1), 4: (10, 1)}
+        ends = {1: (3, 31), 2: (6, 30), 3: (9, 30), 4: (12, 31)}
         sm, sd = starts[quarter]
         em, ed = ends[quarter]
         return {
@@ -93,8 +126,8 @@ def parse_period(period_str, period_type=None):
 
     # Month
     month_map = {
-        'JAN':1,'FEB':2,'MAR':3,'APR':4,'MAY':5,'JUN':6,
-        'JUL':7,'AUG':8,'SEP':9,'OCT':10,'NOV':11,'DEC':12
+        'JAN': 1, 'FEB': 2, 'MAR': 3, 'APR': 4, 'MAY': 5, 'JUN': 6,
+        'JUL': 7, 'AUG': 8, 'SEP': 9, 'OCT': 10, 'NOV': 11, 'DEC': 12
     }
     upper = period_str.upper()
     for name, mnum in month_map.items():
@@ -102,8 +135,8 @@ def parse_period(period_str, period_type=None):
             year_match = re.search(r'20\d{2}', period_str)
             year = int(year_match.group()) if year_match else datetime.now().year
             if mnum == 2:
-                ld = 29 if (year%4==0 and (year%100!=0 or year%400==0)) else 28
-            elif mnum in (4,6,9,11):
+                ld = 29 if (year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)) else 28
+            elif mnum in (4, 6, 9, 11):
                 ld = 30
             else:
                 ld = 31
@@ -114,13 +147,28 @@ def parse_period(period_str, period_type=None):
                 'end_date': date(year, mnum, ld)
             }
 
+    # Try parsing with YAML-defined date formats
+    for fmt in periods_config.get('date_formats', []):
+        try:
+            parsed_date = datetime.strptime(period_str, fmt).date()
+            return {
+                'type': period_type,
+                'label': period_str,
+                'start_date': parsed_date,
+                'end_date': parsed_date
+            }
+        except ValueError:
+            continue
+
     # Default fallback
-    return {
+    default_period = periods_config.get('default_period', {
         'type': period_type or 'Monthly',
         'label': period_str,
         'start_date': datetime.now().date(),
         'end_date': datetime.now().date()
-    }
+    })
+    log_event('period_parse_warning', {'period_str': period_str, 'message': 'Using default period'})
+    return default_period
 
 def hash_datapoint(company_id, period_id, line_item, value_type, frequency, value):
     """
@@ -128,3 +176,35 @@ def hash_datapoint(company_id, period_id, line_item, value_type, frequency, valu
     """
     key = f"{company_id}|{period_id}|{line_item}|{value_type}|{frequency}|{value}"
     return hashlib.sha256(key.encode('utf-8')).hexdigest()
+
+def seed_line_item_definitions():
+    """Seed line_item_definitions table from fields.yaml if entries are missing."""
+    config = load_fields_config()
+    line_items = config.get('line_items', [])
+    if not line_items:
+        log_event('seed_error', {'message': 'No line_items in fields.yaml'})
+        raise ValueError("No line_items defined in fields.yaml")
+
+    conn = get_db_connection()
+    with conn.cursor() as cur:
+        # Check existing entries
+        cur.execute("SELECT name FROM line_item_definitions")
+        existing = {r[0] for r in cur.fetchall()}
+
+        # Insert missing ones
+        inserted = 0
+        for item in line_items:
+            name = item['name']
+            if name not in existing:
+                cur.execute(
+                    "INSERT INTO line_item_definitions (id, name, description, created_at, updated_at) "
+                    "VALUES (%s, %s, %s, %s, %s)",
+                    (item['id'], name, item.get('description', ''), datetime.now(), datetime.now())
+                )
+                inserted += 1
+
+        conn.commit()
+
+    if inserted > 0:
+        log_event('seed_success', {'inserted_count': inserted, 'message': 'Seeded line_item_definitions from fields.yaml'})
+    return inserted
