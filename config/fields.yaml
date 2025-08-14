@@ -1,3 +1,5 @@
+# Merged config/fields.yaml - Preserves original structure/sql_type/line_items while adding enhancements
+
 fields:
   company_id:
     id: 10001
@@ -13,6 +15,9 @@ fields:
       - orgid
       - ticker
     description: Unique company integer identifier for each entity
+    data_type: "NUMERIC"  # Added from enhanced
+    category: "entity"    # Added for clarity
+    required: true        # Added from enhanced
 
   company_name:
     id: 10002
@@ -26,6 +31,9 @@ fields:
       - organization
       - firm
     description: Name of the reporting company used for lookup and join
+    data_type: "TEXT"     # Added
+    category: "entity"
+    required: true
 
   line_item:
     id: 10003
@@ -39,6 +47,9 @@ fields:
       - financial_item
       - Metric Name
     description: Financial metric or line item name to be mapped to id via line_item_definitions
+    data_type: "TEXT"
+    category: "metric"
+    required: true
 
   line_item_id:
     id: 10020
@@ -47,6 +58,9 @@ fields:
       - line_item_id
       - lineitemid
     description: Foreign key reference to line_item_definitions
+    data_type: "NUMERIC"
+    category: "metric"
+    required: true
 
   period_label:
     id: 10004
@@ -67,6 +81,9 @@ fields:
       - reporting_period
       - rpt_period
     description: Human-readable period label used for parsing and joining to periods table
+    data_type: "TEXT"
+    category: "period"
+    required: true
 
   period_type:
     id: 10005
@@ -81,6 +98,9 @@ fields:
       - rpt_type
       - rpt_frequency
     description: Describes period granularity such as Monthly Quarterly or Yearly
+    data_type: "TEXT"
+    category: "period"
+    required: false
 
   period_id:
     id: 10021
@@ -89,6 +109,9 @@ fields:
       - period_id
       - periodid
     description: Foreign key reference to periods table
+    data_type: "NUMERIC"
+    category: "period"
+    required: true
 
   start_date:
     id: 10006
@@ -99,6 +122,9 @@ fields:
       - begin_date
       - effective_date
     description: Start date for period in YYYY-MM-DD format
+    data_type: "DATE"
+    category: "period"
+    required: false
 
   end_date:
     id: 10007
@@ -109,6 +135,9 @@ fields:
       - finish_date
       - expiry_date
     description: End date for period in YYYY-MM-DD format
+    data_type: "DATE"
+    category: "period"
+    required: false
 
   value:
     id: 10008
@@ -128,6 +157,9 @@ fields:
       - Number
       - Figure
     description: Numeric value for metric
+    data_type: "NUMERIC"
+    category: "value"
+    required: true
 
   value_type:
     id: 10009
@@ -146,6 +178,9 @@ fields:
       - prior
       - variance
     description: Nature of value such as Actual Budget Forecast etc
+    data_type: "TEXT"
+    category: "value"
+    required: false
 
   frequency:
     id: 10010
@@ -156,6 +191,9 @@ fields:
       - reporting_cycle
       - rpt_cycle
     description: Reporting frequency
+    data_type: "TEXT"
+    category: "period"
+    required: false
 
   currency:
     id: 10011
@@ -168,6 +206,9 @@ fields:
       - currency_code
       - fx
     description: Currency code such as USD EUR etc
+    data_type: "TEXT"
+    category: "value"
+    required: false
 
   source_file:
     id: 10012
@@ -179,6 +220,9 @@ fields:
       - datafile
       - file_path
     description: Filename where data originates
+    data_type: "TEXT"
+    category: "source"
+    required: false
 
   source_page:
     id: 10013
@@ -190,6 +234,9 @@ fields:
       - pageno
       - page_num
     description: Page number within source file
+    data_type: "NUMERIC"
+    category: "source"
+    required: false
 
   source_type:
     id: 10014
@@ -198,6 +245,9 @@ fields:
       - source_type
       - ingestion_type
     description: Type of source content Raw or Aggregated
+    data_type: "TEXT"
+    category: "source"
+    required: false
 
   notes:
     id: 10015
@@ -211,6 +261,9 @@ fields:
       - explanation
       - footnote
     description: Free-form notes comments or annotations
+    data_type: "TEXT"
+    category: "metadata"
+    required: false
 
   hash:
     id: 10016
@@ -218,31 +271,68 @@ fields:
     synonyms:
       - hash
     description: Hashed metric identity for deduplication
+    data_type: "TEXT"
+    category: "metadata"
+    required: false
 
 line_items:
   - id: 11001
     name: Revenue
     aliases:
+      - revenue     # Expanded from enhanced
       - sales
       - income
       - turnover
+      - total revenue
       - total_revenue
-      - rev
+      - net sales
+      - top line
+      - sales revenue
+      - rev         # Preserved original
     description: Total revenue from operations
 
   - id: 11002
     name: Gross Profit
     aliases:
+      - gross profit
       - gross_profit
-      - grossincome
       - gross income
+      - gross margin
+      - gm
+      - gross earnings
+      - grossincome  # Preserved original
     description: Revenue minus cost of goods sold
 
   - id: 11003
     name: EBITDA
     aliases:
+      - ebitda
+      - earnings before interest
       - earnings_before_interest
+      - earnings before taxes
+      - operating profit
+      - earnings before interest taxes
+      - earnings_before_interest_taxes  # Preserved original
       - earnings_before_taxes
-      - earnings_before_interest_taxes
-      - operating_profit
     description: Earnings before interest taxes depreciation amortization
+
+# Added sections from enhanced - for improved ingestion without breaking SQL gen
+date_formats:
+  - "%Y-%m-%d"
+  - "%m/%d/%Y"
+  - "%d-%m-%Y" 
+  - "%Y/%m/%d"
+  - "%b %Y"        # Feb 2025
+  - "%B %Y"        # February 2025
+  - "Q%s %Y"       # Q1 2025
+
+period_types:
+  - "Monthly"
+  - "Quarterly" 
+  - "Yearly"
+  - "YTD"
+
+auto_create_periods:
+  enabled: true
+  default_type: "Monthly"
+  fiscal_year_end: "12-31"  # December 31st
