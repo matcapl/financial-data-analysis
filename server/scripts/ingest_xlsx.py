@@ -1,4 +1,4 @@
-# server/scripts/ingest_xlsx.py - Refactored to layered architecture orchestrator
+# server/scripts/ingest_xlsx.py - ORCHESTRATOR FIX for normalization return format
 import os
 import sys
 import yaml
@@ -15,7 +15,7 @@ class YAMLDrivenXLSXIngester:
     """
     Orchestrates the layered ingestion pipeline:
     Extract -> Map -> Normalize -> Persist
-    Now fully YAML-driven using existing config/fields.yaml
+    FIXED: Handles normalization error count properly
     """
     
     def __init__(self, file_path: str, company_id: int = 1):
@@ -45,7 +45,6 @@ class YAMLDrivenXLSXIngester:
                 config = yaml.safe_load(f)
                 
             # Convert the existing fields structure to synonym mapping
-            # Each field has 'synonyms' list that should map to the field name
             synonyms = {}
             for field_name, field_config in config['fields'].items():
                 field_synonyms = field_config.get('synonyms', [])
@@ -69,10 +68,7 @@ class YAMLDrivenXLSXIngester:
             }
             
     def _normalize_headers(self, raw_columns: list) -> dict:
-        """
-        Convert raw column headers to canonical names using YAML synonyms
-        Replaces the hard-coded synonyms from original ingest_xlsx.py
-        """
+        """Convert raw column headers to canonical names using YAML synonyms"""
         
         canon_map = {}
         
@@ -116,7 +112,12 @@ class YAMLDrivenXLSXIngester:
             if not raw_rows:
                 raise Exception("No data extracted from file")
                 
-            # Get column headers for normalization
+            log_event("extraction_sample", {
+                "first_row_keys": list(raw_rows[0].keys()) if raw_rows else [],
+                "first_row_sample": {k: v for k, v in list(raw_rows[0].items())[:5]} if raw_rows else {}
+            })
+                
+            # Apply header normalization using YAML
             if raw_rows:
                 raw_columns = list(raw_rows[0].keys())
                 header_mapping = self._normalize_headers(raw_columns)
@@ -134,7 +135,7 @@ class YAMLDrivenXLSXIngester:
             
             log_event("file_processing_started", {
                 "rows_found": len(raw_rows),
-                "columns_found": list(raw_rows[0].keys()) if raw_rows else [],
+                "columns_after_header_mapping": list(raw_rows[0].keys()) if raw_rows else [],
                 "file_path": self.file_path
             })
             
@@ -142,8 +143,11 @@ class YAMLDrivenXLSXIngester:
             mapped_rows = []
             mapping_errors = 0
             
-            for raw_row in raw_rows:
+            for i, raw_row in enumerate(raw_rows):
                 try:
+                    # Ensure row tracking
+                    raw_row['_row_number'] = i + 1
+                    
                     # Apply defaults (consistent with original ingest_xlsx.py)
                     defaults = {
                         "statement_type": None,
@@ -158,6 +162,8 @@ class YAMLDrivenXLSXIngester:
                     # Use existing field mapper
                     mapped_row = map_and_filter_row(raw_row)
                     if mapped_row:
+                        # Preserve row number through mapping
+                        mapped_row['_row_number'] = i + 1
                         mapped_rows.append(mapped_row)
                     else:
                         mapping_errors += 1
@@ -165,27 +171,47 @@ class YAMLDrivenXLSXIngester:
                 except Exception as e:
                     mapping_errors += 1
                     log_event("field_mapping_error", {
+                        "row_number": i + 1,
                         "error": str(e),
-                        "raw_row": raw_row
+                        "raw_row_sample": {k: v for k, v in raw_row.items() if k in ['line_item', 'period_label', 'value']}
                     })
                     
             self.results["mapped_count"] = len(mapped_rows)
             self.results["error_count"] += mapping_errors
             
-            # Layer 3: Normalize data for database insertion
-            normalized_rows = normalize_data(mapped_rows, self.file_path)
+            log_event("mapping_sample", {
+                "first_mapped_row": mapped_rows[0] if mapped_rows else {},
+                "mapped_count": len(mapped_rows)
+            })
+            
+            # Layer 3: Normalize data for database insertion - FIXED
+            normalized_rows, normalization_errors = normalize_data(mapped_rows, self.file_path)
             self.results["normalized_count"] = len(normalized_rows)
+            self.results["error_count"] += normalization_errors
+            
+            log_event("normalization_sample", {
+                "first_normalized_row": normalized_rows[0] if normalized_rows else {},
+                "normalized_count": len(normalized_rows),
+                "normalization_errors": normalization_errors
+            })
             
             # Layer 4: Persist to database
-            persistence_results = persist_data(normalized_rows, self.company_id)
-            
-            # Update final results
-            self.results.update({
-                "ingested_count": persistence_results["inserted"],
-                "skipped_count": persistence_results["skipped"],
-                "status": "completed"
-            })
-            self.results["error_count"] += persistence_results["errors"]
+            if normalized_rows:
+                persistence_results = persist_data(normalized_rows, self.company_id)
+                
+                # Update final results
+                self.results.update({
+                    "ingested_count": persistence_results["inserted"],
+                    "skipped_count": persistence_results["skipped"],
+                    "status": "completed"
+                })
+                self.results["error_count"] += persistence_results["errors"]
+            else:
+                log_event("no_data_to_persist", {
+                    "message": "No normalized rows to persist",
+                    "normalization_errors": normalization_errors
+                })
+                self.results["status"] = "completed_no_data"
             
             log_event("ingestion_completed", self.results)
             
@@ -208,7 +234,7 @@ class XLSXIngester(YAMLDrivenXLSXIngester):
         return self
         
     def __exit__(self, exc_type, exc_val, exc_tb):
-        pass  # No cleanup needed in layered architecture
+        pass
 
 
 if __name__ == "__main__":
@@ -230,10 +256,13 @@ if __name__ == "__main__":
         result = ingester.process_file()
         print(f"Layered ingestion result: {result}")
         
-        # Print summary
+        # Print detailed summary
         if result["status"] == "completed":
             print(f"✅ Success: {result['ingested_count']} rows ingested, "
                   f"{result['skipped_count']} skipped, {result['error_count']} errors")
+            print(f"📊 Pipeline flow: {result['extracted_count']} extracted → "
+                  f"{result['mapped_count']} mapped → {result['normalized_count']} normalized → "
+                  f"{result['ingested_count']} ingested")
         else:
             print(f"❌ Failed: {result.get('error', 'Unknown error')}")
             sys.exit(1)
