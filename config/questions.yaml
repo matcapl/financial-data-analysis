@@ -1,89 +1,195 @@
+# ==================================================================================================
 # config/questions.yaml
-# Question templates build on observations, sorted by importance and materiality.
-# Use placeholders for dynamic insertion of metric names and values.
+#
+# PURPOSE:
+#   Seed data for question_templates table, driving automated question generation.
+#   - Each entry must have: id, observation_id, importance, template.
+#   - Used by scripts/generate_questions.py to build schema/002_question_templates.sql.
+#
+#   Important: This file is validated by Pydantic in ci/00_config_validation.sh.
+#   Keep only these four fields per question entry for compatibility.
+#
+#   Rendering helpers (engine-side):
+#     • percent(a,b)       -> round((a - b)/b*100, 2)
+#     • format_abs(x)      -> formatted ± value with separators
+#     • round(val, places) -> numeric rounding
+#     • inline conditional logic: { 'above' if current>budget else 'below' }
+#
+#   Question selection logic (engine):
+#     1. Compute all observations (via observations.yaml).
+#     2. Filter those where |value| ≥ materiality threshold (from config/observations.yaml).
+#     3. Join with questions by observation_id.
+#     4. Sort by importance desc, then magnitude desc.
+#     5. Render templates with context variables.
 
-# Rendering helpers referenced in templates:
-#  • percent(a,b)       -> round((a - b)/b*100, 2)
-#  • format_abs(x)      -> formatted ± value with separators
-#  • round(val, places) -> numeric rounding
-#  • Conditional logic   -> inline ternary for above/below
+# ID ranges: 30001-39999 reserved for questions
+# ==================================================================================================
 
-# Question selection logic in engine:
-# 1. Compute all observations.
-# 2. Filter those where |value| >= materiality threshold.
-# 3. Join with questions by observation_id.
-# 4. Sort by importance desc, then magnitude desc.
-# 5. Render templates with context variables.
 
-# ID ranges 30001–39999 reserved for questions
+# config/questions.yaml  
+# Board-level question templates linked to financial observations
+# Version: 2.0 - Enhanced template engine with better linkage
+
+metadata:
+  version: "2.0"
+  description: "Question templates for board-level financial analysis"
+  default_question_weight: 1.0
+  timestamp: "2025-08-18"
+  author: "Financial Analytics Engine"
+
+  # Rendering helper functions available in templates:
+  # - percent(current, prior): Calculate percentage change
+  # - format_currency(value): Format as currency with appropriate symbols
+  # - format_abs(value): Format absolute values with +/- indicators  
+  # - round_smart(value, decimals): Smart rounding based on magnitude
+  # - conditional(condition, true_text, false_text): Conditional text rendering
+
+# Question Selection Logic:
+# 1. Calculate all observations from observations.yaml
+# 2. Filter observations where |value| >= materiality_threshold 
+# 3. Join observations with questions by observation_id
+# 4. Rank by importance (desc) then observation magnitude (desc)
+# 5. Render templates with observation context + metric data
+# 6. Return top N questions based on board meeting requirements
 
 questions:
   - id: 30001
-    observation_id: 20001    # growth_mom
-    importance: 3
-    template: >
-      The {{ metric }} grew by {{ percent(current, prior_month) }}% month-over-month.
-      What underlying factors drove this growth?
+    observation_id: 20001
+    category: growth
+    importance: 4
+    template: >-
+      {{ metric_name }} changed {{ percent(current_value, prior_month_value) }}% month-over-month
+      ({{ format_currency(current_value) }} vs {{ format_currency(prior_month_value) }}).
+      What operational factors drove this {{ conditional(current_value > prior_month_value, "growth", "decline") }}?
 
   - id: 30002
-    observation_id: 20002    # growth_qoq
-    importance: 2
-    template: >
-      {{ metric }} changed by {{ percent(current, prior_quarter) }}% quarter-over-quarter.
-      Which operational changes contributed to this movement?
+    observation_id: 20002
+    category: growth
+    importance: 3
+    template: >-
+      {{ metric_name }} showed {{ percent(current_value, prior_quarter_value) }}% growth quarter-over-quarter.
+      How does this align with our strategic objectives?
 
   - id: 30003
-    observation_id: 20003    # growth_yoy
-    importance: 4
-    template: >
-      Year-over-year {{ metric }} increased by {{ percent(current, prior_year) }}%.
-      How does this performance align with strategic goals?
+    observation_id: 20003
+    category: growth
+    importance: 5
+    template: >-
+      Year-over-year {{ metric_name }} {{ conditional(current_value > prior_year_value, "increased", "decreased") }}
+      by {{ percent(current_value, prior_year_value) }}% ({{ format_abs(current_value - prior_year_value) }}).
+      What strategic initiatives contributed to this performance?
 
   - id: 30004
-    observation_id: 20004    # variance_vs_budget
+    observation_id: 20004
+    category: variance
     importance: 5
-    template: >
-      {{ metric }} is {{ percent(current, budget) }}% {{ 'above' if current > budget else 'below' }} budget.
-      What explains this deviation from plan?
+    template: >-
+      {{ metric_name }} is {{ percent(current_value, budget_value) }}%
+      {{ conditional(current_value > budget_value, "above", "below") }} budget
+      ({{ format_currency(current_value) }} vs {{ format_currency(budget_value) }}).
+      What explains this variance?
 
   - id: 30005
-    observation_id: 20005    # variance_vs_prior
-    importance: 2
-    template: >
-      {{ metric }} is {{ percent(current, prior) }}% {{ 'above' if current > prior else 'below' }} the prior period.
-      Are there one-off events or trends affecting this?
+    observation_id: 20005
+    category: variance
+    importance: 4
+    template: >-
+      {{ metric_name }} came in {{ percent(current_value, forecast_value) }}%
+      {{ conditional(current_value > forecast_value, "higher", "lower") }} than forecast.
+      Should we adjust our forecasting methodology?
 
   - id: 30006
-    observation_id: 20006    # ytd_performance
-    importance: 3
-    template: >
-      Year-to-date {{ metric }} performance is {{ percent(ytd_current, ytd_prior) }}% {{ 'ahead' if ytd_current > ytd_prior else 'behind' }} last year.
-      What key drivers impacted YTD results?
+    observation_id: 20006
+    category: variance
+    importance: 4
+    template: >-
+      Year-to-date {{ metric_name }} is {{ percent(ytd_current, ytd_prior) }}%
+      {{ conditional(ytd_current > ytd_prior, "ahead of", "behind") }} last year.
+      Are we on track for annual targets?
 
   - id: 30007
-    observation_id: 20007    # absolute_change
-    importance: 1
-    template: >
-      The absolute change in {{ metric }} from the prior period is {{ format_abs(current - prior) }}.
-      Is this magnitude significant in the broader context?
+    observation_id: 20007
+    category: trend
+    importance: 3
+    template: >-
+      {{ metric_name }} shows a {{ conditional(trend_slope > 0, "positive", "negative") }} trend
+      over the past {{ trend_periods }} periods.
+      Is this trend sustainable?
 
   - id: 30008
-    observation_id: 20008    # moving_average_3m
-    importance: 1
-    template: >
-      The 3-month moving average of {{ metric }} is {{ round(moving_average,2) }}.
-      Does this trend differ from the immediate period change?
+    observation_id: 20008
+    category: trend
+    importance: 2
+    template: >-
+      {{ metric_name }} volatility is {{ round_smart(volatility * 100, 1) }}%.
+      What factors drive this variability?
 
   - id: 30009
-    observation_id: 20009    # volatility_3m
-    importance: 1
-    template: >
-      The 3-month volatility of {{ metric }} is {{ round(volatility,2) }}.
-      What factors contribute to this variability?
+    observation_id: 20009
+    category: trend
+    importance: 3
+    template: >-
+      {{ metric_name }} is {{ percent(current_value, seasonal_average) }}%
+      {{ conditional(current_value > seasonal_average, "above", "below") }} seasonal norm.
+      What changed seasonality?
 
   - id: 30010
-    observation_id: 20010    # pe_ratio
+    observation_id: 20010
+    category: absolute
     importance: 2
-    template: >
-      The P/E ratio for {{ metric }} is {{ round(pe_ratio,2) }}.
-      How does this compare to industry benchmarks?
+    template: >-
+      Absolute change in {{ metric_name }} was {{ format_currency(absolute_change) }}.
+      Is this magnitude significant?
+
+  - id: 30011
+    observation_id: 20011
+    category: absolute
+    importance: 3
+    template: >-
+      {{ metric_name }} is {{ round_smart(z_score, 1) }}
+      standard deviations {{ conditional(z_score > 0, "above", "below") }} its mean.
+      Is this an outlier?
+
+  - id: 30012
+    observation_id: 20012
+    category: ratio
+    importance: 3
+    template: >-
+      {{ ratio_name }} ratio is {{ round_smart(ratio_value, 2) }},
+      {{ conditional(ratio_trend > 0, "improving", "declining") }} from prior periods.
+      What changes drove this?
+
+  - id: 30013
+    observation_id: 20013
+    category: ratio
+    importance: 4
+    template: >-
+      {{ metric_name }} margin is {{ round_smart(margin_percentage * 100, 1) }}%,
+      {{ conditional(margin_change > 0, "up", "down") }} {{ round_smart(abs(margin_change) * 100, 1) }}%.
+      How does this compare to benchmarks?
+
+  - id: 30014
+    observation_id: 20014
+    category: predictive
+    importance: 2
+    template: >-
+      {{ forecast_horizon }}-period forecast accuracy was
+      {{ round_smart((1 - forecast_error) * 100, 1) }}%.
+      Should we refine our models?
+
+  - id: 30015
+    observation_id: 20015
+    category: predictive
+    importance: 3
+    template: >-
+      Annual run-rate projection for {{ metric_name }} is {{ format_currency(annual_run_rate) }}.
+      Does this support strategic goals?
+
+  - id: 30017
+    observation_id: 20004
+    category: variance
+    importance: 5
+    template: >-
+      🚨 CRITICAL: {{ metric_name }} variance of {{ percent(current_value, budget_value) }}%
+      impacts {{ format_currency(abs(current_value - budget_value)) }}.
+      What immediate actions are required?

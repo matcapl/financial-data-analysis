@@ -1,4 +1,21 @@
 # config/tables.yaml
+# --------------------------------------------------------------------------
+# PURPOSE:
+#   Top-level YAML file describing all core relational tables for the financial analytics pipeline.
+#   - Used by scripts/generate_schema.py to generate schema/001_financial_schema.sql
+#   - Central, transparent definition: all analytics, governance, and reporting tables live here.
+#
+#   Each table entry describes:
+#     - table name
+#     - ordered columns, types, constraints, defaults
+#     - unique constraints, foreign keys
+#     - seed data
+#     - indexes (for performance, analytics)
+#
+#   All business rules, keys, and analytics structure are YAML-defined.
+#
+#   Maintainers: Edit this file, NOT SQL/migrations, for all DB changes!
+# --------------------------------------------------------------------------
 
 tables:
   - name: companies
@@ -23,8 +40,8 @@ tables:
       - [name]
     seed:
       - |
-        INSERT INTO companies (id, name, industry)
-        VALUES (99, 'Example Company', 'Example Industry')
+        INSERT INTO companies (name, industry)
+        VALUES ('Example Company', 'Example Industry')
         ON CONFLICT (name) DO NOTHING;
 
   - name: periods
@@ -56,7 +73,7 @@ tables:
   - name: line_item_definitions
     columns:
       - name: id
-        type: INT
+        type: SERIAL
         constraints: [PRIMARY KEY]
       - name: name
         type: TEXT
@@ -69,11 +86,11 @@ tables:
       - [name]
     seed:
       - |
-        INSERT INTO line_item_definitions (id, name, aliases, description) VALUES
-          (11001, 'Revenue', '{sales,income,turnover,total_revenue,rev}'::TEXT[], 'Total revenue from operations'),
-          (11002, 'Gross Profit', '{gross_profit,grossincome,gross income}'::TEXT[], 'Revenue minus cost of goods sold'),
-          (11003, 'EBITDA', '{earnings_before_interest,earnings_before_taxes,earnings_before_interest_taxes,operating_profit}'::TEXT[], 'Earnings before interest, taxes, depreciation, amortization')
-        ON CONFLICT (id) DO NOTHING;
+        INSERT INTO line_item_definitions (name, aliases, description) VALUES
+          ('Revenue', '{sales,income,turnover,total_revenue,rev}'::TEXT[], 'Total revenue from operations'),
+          ('Gross Profit', '{gross_profit,grossincome,gross income}'::TEXT[], 'Revenue minus cost of goods sold'),
+          ('EBITDA', '{earnings_before_interest,earnings_before_taxes,earnings_before_interest_taxes,operating_profit}'::TEXT[], 'Earnings before interest, taxes, depreciation, amortization')
+        ON CONFLICT (name) DO NOTHING;
 
   - name: financial_metrics
     columns:
@@ -91,6 +108,7 @@ tables:
         constraints: [NOT NULL]
       - name: value
         type: NUMERIC
+        constraints: [CHECK (value >= 0)]
       - name: value_type
         type: TEXT
       - name: frequency
@@ -124,6 +142,10 @@ tables:
         references: periods(id)
       - columns: [line_item_id]
         references: line_item_definitions(id)
+    indexes:
+      - columns: [company_id, period_id]
+      - columns: [company_id]
+      - columns: [period_id]
 
   - name: derived_metrics
     columns:
@@ -138,15 +160,15 @@ tables:
       - name: company_id
         type: INT
         constraints: [NOT NULL]
-      - name: period_label
-        type: TEXT
+      - name: period_id
+        type: INT
         constraints: [NOT NULL]
       - name: calculated_value
         type: NUMERIC
       - name: unit
         type: TEXT
       - name: source_ids
-        type: TEXT
+        type: INT[]
       - name: calculation_note
         type: TEXT
       - name: corroboration_status
@@ -162,12 +184,17 @@ tables:
         default: NOW()
         constraints: [NOT NULL]
     unique_constraints:
-      - [base_metric_id, company_id, period_label, calculation_type]
+      - [base_metric_id, company_id, period_id, calculation_type]
     foreign_keys:
       - columns: [base_metric_id]
         references: financial_metrics(id)
       - columns: [company_id]
         references: companies(id)
+      - columns: [period_id]
+        references: periods(id)
+    indexes:
+      - columns: [company_id, period_id]
+      - columns: [base_metric_id]
 
   - name: question_templates
     columns:
@@ -258,3 +285,9 @@ tables:
     foreign_keys:
       - columns: [company_id]
         references: companies(id)
+
+# --------------------------------------------------------------------------
+# END OF FILE
+# - To extend: add your next table after the last one as shown above
+# - All changes here will flow through to the produced SQL during schema generation
+# --------------------------------------------------------------------------

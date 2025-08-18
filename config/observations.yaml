@@ -13,83 +13,190 @@
 
 # ID ranges 20001–29999 reserved for observations
 
+# config/observations.yaml
+# Defines the universe of observations your engine can make for board-level financial analytics.
+# All configuration logic, scoring rules, assumptions, and requirements appear in top-level metadata/processing sections.
+# Each observation must include an explicit `materiality` field (use `null` to default to the top-level threshold).
+
+metadata:
+  version: "2.0"
+  description: "Financial metrics observations for board-level question generation"
+  default_materiality_threshold: 0.05  # Default threshold if observation sets materiality: null
+  timestamp: "2025-08-18"
+  author: "Financial Analytics Engine"
+
+processing:
+  # Materiality thresholds by metric type
+  materiality_by_metric:
+    revenue: 0.03          # 3% threshold for revenue observations
+    gross_profit: 0.05     # 5% threshold for gross profit
+    ebitda: 0.08           # 8% threshold for EBITDA
+    default: 0.05          # 5% default threshold
+
+  # Scoring weights for observation importance
+  importance_weights:
+    growth_metrics: 1.0
+    variance_metrics: 0.9
+    trend_metrics: 0.7
+    absolute_metrics: 0.5
+    ratio_metrics: 0.8
+    predictive_metrics: 0.6
+
+  # Observation ranking criteria (for downstream question/alert selection)
+  ranking_criteria:
+    - magnitude_score       # How far above materiality threshold
+    - business_impact       # Revenue/profit impact assessment
+    - trend_significance    # Part of larger pattern
+    - stakeholder_relevance # Board vs operational relevance
+
+data_quality:
+  minimum_periods_required: 2    # Need at least 2 periods for comparison metrics
+  maximum_outlier_factor: 5.0    # Values >5x historical average flagged as outliers
+  confidence_thresholds:
+    high: 0.95
+    medium: 0.80
+    low: 0.60
+
 observations:
+  # Growth & Variance Observations
   - id: 20001
     name: growth_mom
-    description: Month-over-Month growth rate
-    formula: "(current - prior_month) / prior_month"
+    description: "Month-over-Month growth rate calculation"
+    formula: "(current_period - prior_month) / prior_month"
     params:
-      lookback: 1
-    materiality: 0.05
+      lookback_periods: 1
+      period_type: "monthly"
+      value_types: ["actual"]
+    materiality: null
 
   - id: 20002
     name: growth_qoq
-    description: Quarter-over-Quarter growth rate
-    formula: "(current - prior_quarter) / prior_quarter"
+    description: "Quarter-over-Quarter growth rate calculation"
+    formula: "(current_period - prior_quarter) / prior_quarter"
     params:
-      lookback: 3
-    materiality: 0.10
+      lookback_periods: 1
+      period_type: "quarterly"
+      value_types: ["actual"]
+    materiality: null
 
   - id: 20003
     name: growth_yoy
-    description: Year-over-Year growth rate
-    formula: "(current - prior_year) / prior_year"
+    description: "Year-over-Year growth rate calculation"
+    formula: "(current_period - prior_year) / prior_year"
     params:
-      lookback: 12
-    materiality: 0.15
+      lookback_periods: 1
+      period_type: "yearly"
+      value_types: ["actual"]
+    materiality: null
 
   - id: 20004
     name: variance_vs_budget
-    description: Variance versus budget for the same period
-    formula: "(current - budget) / budget"
+    description: "Variance against budget for same period"
+    formula: "(actual_value - budget_value) / budget_value"
     params:
-      reference: budget
-    materiality: 0.05
+      comparison_type: "budget"
+      value_types: ["actual", "budget"]
+    materiality: null
 
   - id: 20005
-    name: variance_vs_prior
-    description: Variance versus prior period (same granularity)
-    formula: "(current - prior) / prior"
+    name: variance_vs_forecast
+    description: "Variance against forecast for same period"
+    formula: "(actual_value - forecast_value) / forecast_value"
     params:
-      reference: prior
-    materiality: 0.05
+      comparison_type: "forecast"
+      value_types: ["actual", "forecast"]
+    materiality: null
 
   - id: 20006
     name: ytd_performance
-    description: Year-to-Date performance versus prior year-to-date
-    formula: "(ytd_current - ytd_prior) / ytd_prior"
+    description: "Year-to-Date performance vs prior year"
+    formula: "(ytd_current - ytd_prior_year) / ytd_prior_year"
     params:
-      lookback: start_of_year
-    materiality: 0.10
+      aggregation_type: "ytd"
+      comparison_period: "prior_year"
+    materiality: null
 
+  # Trend & Pattern Observations
   - id: 20007
-    name: absolute_change
-    description: Absolute change from prior period
-    formula: "current - prior"
+    name: trend_direction
+    description: "Multi-period trend direction analysis"
+    formula: "linear_regression_slope(values[-6:])"
     params:
-      lookback: 1
+      window_periods: 6
+      trend_sensitivity: 0.02
     materiality: null
 
   - id: 20008
-    name: moving_average_3m
-    description: 3-month moving average
-    formula: "average(values[-3:])"
+    name: volatility_measure
+    description: "Standard deviation of recent periods"
+    formula: "stdev(values[-6:])"
     params:
-      window: 3
+      window_periods: 6
+      volatility_threshold: 0.15
     materiality: null
 
   - id: 20009
-    name: volatility_3m
-    description: 3-month volatility (standard deviation)
-    formula: "stdev(values[-3:])"
+    name: seasonal_variance
+    description: "Deviation from seasonal pattern"
+    formula: "(current - seasonal_average) / seasonal_average"
     params:
-      window: 3
+      seasonal_periods: 12
+      seasonal_lookback: 3
     materiality: null
 
+  # Absolute Value Observations
   - id: 20010
-    name: pe_ratio
-    description: Price-to-Earnings ratio (if price and earnings available)
-    formula: "price / earnings"
+    name: absolute_change
+    description: "Absolute dollar/unit change from prior period"
+    formula: "current_period - prior_period"
     params:
-      reference: price & earnings
+      change_type: "absolute"
+      materiality_override: null     # Use global materiality by default
+    materiality: null
+
+  - id: 20011
+    name: magnitude_check
+    description: "Unusual magnitude relative to historical range"
+    formula: "(current - historical_mean) / historical_stdev"
+    params:
+      historical_periods: 12
+      outlier_threshold: 2.0
+    materiality: null
+
+  # Performance Ratio Observations
+  - id: 20012
+    name: efficiency_ratio
+    description: "Performance efficiency metrics"
+    formula: "dependent_metric / independent_metric"
+    params:
+      ratio_type: "efficiency"
+      valid_denominators: ["revenue", "assets", "employees"]
+    materiality: null
+
+  - id: 20013
+    name: margin_analysis
+    description: "Profit margin progression analysis"
+    formula: "profit_metric / revenue_metric"
+    params:
+      margin_type: ["gross", "operating", "net"]
+      benchmark_comparison: true
+    materiality: null
+
+  # Predictive Observations
+  - id: 20014
+    name: forecast_accuracy
+    description: "Accuracy of previous forecasts"
+    formula: "abs((forecast - actual) / actual)"
+    params:
+      forecast_horizon: [1, 3, 6, 12]
+      accuracy_threshold: 0.10
+    materiality: null
+
+  - id: 20015
+    name: run_rate_projection
+    description: "Current period run-rate implications"
+    formula: "current_period_value * (12 / periods_elapsed)"
+    params:
+      projection_type: "annual_run_rate"
+      confidence_level: 0.85
     materiality: null
