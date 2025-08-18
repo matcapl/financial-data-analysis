@@ -10,8 +10,8 @@ CREATE TABLE IF NOT EXISTS companies (
   UNIQUE (name)
 );
 
-INSERT INTO companies (id, name, industry)
-VALUES (99, 'Example Company', 'Example Industry')
+INSERT INTO companies (name, industry)
+VALUES ('Example Company', 'Example Industry')
 ON CONFLICT (name) DO NOTHING;
 
 -- Table: periods
@@ -29,18 +29,18 @@ CREATE TABLE IF NOT EXISTS periods (
 
 -- Table: line_item_definitions
 CREATE TABLE IF NOT EXISTS line_item_definitions (
-  id INT PRIMARY KEY,
+  id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
   aliases TEXT[],
   description TEXT,
   UNIQUE (name)
 );
 
-INSERT INTO line_item_definitions (id, name, aliases, description) VALUES
-  (11001, 'Revenue', '{sales,income,turnover,total_revenue,rev}'::TEXT[], 'Total revenue from operations'),
-  (11002, 'Gross Profit', '{gross_profit,grossincome,gross income}'::TEXT[], 'Revenue minus cost of goods sold'),
-  (11003, 'EBITDA', '{earnings_before_interest,earnings_before_taxes,earnings_before_interest_taxes,operating_profit}'::TEXT[], 'Earnings before interest, taxes, depreciation, amortization')
-ON CONFLICT (id) DO NOTHING;
+INSERT INTO line_item_definitions (name, aliases, description) VALUES
+  ('Revenue', '{sales,income,turnover,total_revenue,rev}'::TEXT[], 'Total revenue from operations'),
+  ('Gross Profit', '{gross_profit,grossincome,gross income}'::TEXT[], 'Revenue minus cost of goods sold'),
+  ('EBITDA', '{earnings_before_interest,earnings_before_taxes,earnings_before_interest_taxes,operating_profit}'::TEXT[], 'Earnings before interest, taxes, depreciation, amortization')
+ON CONFLICT (name) DO NOTHING;
 
 -- Table: financial_metrics
 CREATE TABLE IF NOT EXISTS financial_metrics (
@@ -72,18 +72,19 @@ CREATE TABLE IF NOT EXISTS derived_metrics (
   base_metric_id INT NOT NULL,
   calculation_type TEXT,
   company_id INT NOT NULL,
-  period_label TEXT NOT NULL,
+  period_id INT NOT NULL,
   calculated_value NUMERIC,
   unit TEXT,
-  source_ids TEXT,
+  source_ids INT[],
   calculation_note TEXT,
   corroboration_status TEXT,
   frequency TEXT,
   created_at TIMESTAMP DEFAULT NOW() NOT NULL,
   updated_at TIMESTAMP DEFAULT NOW() NOT NULL,
-  UNIQUE (base_metric_id, company_id, period_label, calculation_type),
+  UNIQUE (base_metric_id, company_id, period_id, calculation_type),
   FOREIGN KEY (base_metric_id) REFERENCES financial_metrics(id),
-  FOREIGN KEY (company_id) REFERENCES companies(id)
+  FOREIGN KEY (company_id) REFERENCES companies(id),
+  FOREIGN KEY (period_id) REFERENCES periods(id)
 );
 
 

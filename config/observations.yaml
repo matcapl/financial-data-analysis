@@ -14,189 +14,201 @@
 # ID ranges 20001–29999 reserved for observations
 
 # config/observations.yaml
-# Defines the universe of observations your engine can make for board-level financial analytics.
-# All configuration logic, scoring rules, assumptions, and requirements appear in top-level metadata/processing sections.
-# Each observation must include an explicit `materiality` field (use `null` to default to the top-level threshold).
+# =============================================================================
+# PURPOSE:
+# Defines the universe of financial observations that can trigger board-level 
+# questions. Each observation type represents a specific analytical calculation
+# that may warrant management attention when it exceeds materiality thresholds.
+#
+# USAGE:
+# - Used by questions_generator.py to compute observations on derived_metrics
+# - Linked to questions.yaml via observation_id foreign keys
+# - Materiality thresholds determine which observations trigger questions
+# - All business logic for scoring and ranking observations lives here
+#
+# MAINTAINERS: Edit this file for all observation logic changes!
+# =============================================================================
 
 metadata:
-  version: "2.0"
+  version: "2.1"
   description: "Financial metrics observations for board-level question generation"
-  default_materiality_threshold: 0.05  # Default threshold if observation sets materiality: null
-  timestamp: "2025-08-18"
+  default_materiality_threshold: 0.05  # 5% threshold for financial significance
+  timestamp: "2025-08-18T19:16:00Z"
   author: "Financial Analytics Engine"
 
-processing:
-  # Materiality thresholds by metric type
+  # Global processing configuration
+  processing_rules:
+    min_periods_required: 2            # Need at least 2 periods for comparison
+    outlier_detection_factor: 3.0      # Values >3x std dev flagged as outliers  
+    confidence_threshold: 0.80         # Minimum confidence for observation validity
+
+  # Materiality thresholds by metric type (override default_materiality_threshold)
   materiality_by_metric:
-    revenue: 0.03          # 3% threshold for revenue observations
-    gross_profit: 0.05     # 5% threshold for gross profit
-    ebitda: 0.08           # 8% threshold for EBITDA
-    default: 0.05          # 5% default threshold
+    revenue: 0.03                      # 3% threshold for revenue observations
+    gross_profit: 0.04                 # 4% threshold for gross profit  
+    ebitda: 0.06                       # 6% threshold for EBITDA
 
-  # Scoring weights for observation importance
+  # Scoring weights for observation importance ranking
   importance_weights:
-    growth_metrics: 1.0
-    variance_metrics: 0.9
-    trend_metrics: 0.7
-    absolute_metrics: 0.5
-    ratio_metrics: 0.8
-    predictive_metrics: 0.6
+    growth_metrics: 1.0                # Highest priority for growth analysis
+    variance_metrics: 0.9              # High priority for budget/forecast variance
+    trend_metrics: 0.7                 # Medium priority for trend analysis
+    absolute_metrics: 0.5              # Lower priority for absolute values
+    ratio_metrics: 0.8                 # High priority for efficiency ratios
 
-  # Observation ranking criteria (for downstream question/alert selection)
-  ranking_criteria:
-    - magnitude_score       # How far above materiality threshold
-    - business_impact       # Revenue/profit impact assessment
-    - trend_significance    # Part of larger pattern
-    - stakeholder_relevance # Board vs operational relevance
-
-data_quality:
-  minimum_periods_required: 2    # Need at least 2 periods for comparison metrics
-  maximum_outlier_factor: 5.0    # Values >5x historical average flagged as outliers
-  confidence_thresholds:
-    high: 0.95
-    medium: 0.80
-    low: 0.60
-
+# ID ranges: 20001-29999 reserved for observations
 observations:
-  # Growth & Variance Observations
+  # =============================================================================
+  # GROWTH & VARIANCE OBSERVATIONS (20001-20010)
+  # =============================================================================
+
   - id: 20001
-    name: growth_mom
+    name: "growth_mom"
     description: "Month-over-Month growth rate calculation"
     formula: "(current_period - prior_month) / prior_month"
     params:
       lookback_periods: 1
       period_type: "monthly"
       value_types: ["actual"]
-    materiality: null
+      calculation_type: "MoM Growth"
+    materiality: null  # Use default_materiality_threshold (5%)
 
-  - id: 20002
-    name: growth_qoq
+  - id: 20002  
+    name: "growth_qoq"
     description: "Quarter-over-Quarter growth rate calculation"
     formula: "(current_period - prior_quarter) / prior_quarter"
     params:
       lookback_periods: 1
-      period_type: "quarterly"
+      period_type: "quarterly" 
       value_types: ["actual"]
-    materiality: null
+      calculation_type: "QoQ Growth"
+    materiality: null  # Use default_materiality_threshold (5%)
 
   - id: 20003
-    name: growth_yoy
+    name: "growth_yoy" 
     description: "Year-over-Year growth rate calculation"
     formula: "(current_period - prior_year) / prior_year"
     params:
       lookback_periods: 1
       period_type: "yearly"
       value_types: ["actual"]
-    materiality: null
+      calculation_type: "YoY Growth"
+    materiality: null  # Use default_materiality_threshold (5%)
 
   - id: 20004
-    name: variance_vs_budget
+    name: "variance_vs_budget"
     description: "Variance against budget for same period"
     formula: "(actual_value - budget_value) / budget_value"
     params:
       comparison_type: "budget"
       value_types: ["actual", "budget"]
-    materiality: null
+      calculation_type: "Variance vs Budget"
+    materiality: 0.03  # 3% threshold for budget variances (more sensitive)
 
   - id: 20005
-    name: variance_vs_forecast
-    description: "Variance against forecast for same period"
+    name: "variance_vs_forecast"
+    description: "Variance against forecast for same period" 
     formula: "(actual_value - forecast_value) / forecast_value"
     params:
       comparison_type: "forecast"
       value_types: ["actual", "forecast"]
-    materiality: null
+      calculation_type: "Variance vs Forecast"
+    materiality: null  # Use default_materiality_threshold (5%)
 
   - id: 20006
-    name: ytd_performance
+    name: "ytd_performance"
     description: "Year-to-Date performance vs prior year"
-    formula: "(ytd_current - ytd_prior_year) / ytd_prior_year"
+    formula: "(ytd_current - ytd_prior_year) / ytd_prior_year" 
     params:
       aggregation_type: "ytd"
       comparison_period: "prior_year"
-    materiality: null
+      calculation_type: "YTD Growth"
+    materiality: null  # Use default_materiality_threshold (5%)
 
-  # Trend & Pattern Observations
+  # =============================================================================
+  # TREND & PATTERN OBSERVATIONS (20007-20015)
+  # =============================================================================
+
   - id: 20007
-    name: trend_direction
+    name: "trend_direction"
     description: "Multi-period trend direction analysis"
     formula: "linear_regression_slope(values[-6:])"
     params:
       window_periods: 6
       trend_sensitivity: 0.02
-    materiality: null
+      calculation_type: "Trend Analysis"
+    materiality: 0.02  # 2% threshold for trend detection (more sensitive)
 
   - id: 20008
-    name: volatility_measure
+    name: "volatility_measure"
     description: "Standard deviation of recent periods"
     formula: "stdev(values[-6:])"
     params:
-      window_periods: 6
+      window_periods: 6  
       volatility_threshold: 0.15
-    materiality: null
+      calculation_type: "Volatility Analysis"
+    materiality: null  # Use default_materiality_threshold (5%)
 
   - id: 20009
-    name: seasonal_variance
+    name: "seasonal_variance"
     description: "Deviation from seasonal pattern"
     formula: "(current - seasonal_average) / seasonal_average"
     params:
       seasonal_periods: 12
       seasonal_lookback: 3
-    materiality: null
+      calculation_type: "Seasonal Analysis"
+    materiality: null  # Use default_materiality_threshold (5%)
 
-  # Absolute Value Observations
+  # =============================================================================
+  # ABSOLUTE VALUE OBSERVATIONS (20010-20015)
+  # =============================================================================
+
   - id: 20010
-    name: absolute_change
+    name: "absolute_change"
     description: "Absolute dollar/unit change from prior period"
     formula: "current_period - prior_period"
     params:
       change_type: "absolute"
-      materiality_override: null     # Use global materiality by default
-    materiality: null
+      calculation_type: "Absolute Change"
+    materiality: null  # Use default_materiality_threshold (5%)
 
   - id: 20011
-    name: magnitude_check
+    name: "magnitude_check"
     description: "Unusual magnitude relative to historical range"
     formula: "(current - historical_mean) / historical_stdev"
     params:
       historical_periods: 12
       outlier_threshold: 2.0
-    materiality: null
+      calculation_type: "Magnitude Analysis"
+    materiality: null  # Use default_materiality_threshold (5%)
 
-  # Performance Ratio Observations
+  # =============================================================================
+  # PERFORMANCE RATIO OBSERVATIONS (20012-20015)
+  # =============================================================================
+
   - id: 20012
-    name: efficiency_ratio
+    name: "efficiency_ratio"
     description: "Performance efficiency metrics"
     formula: "dependent_metric / independent_metric"
     params:
       ratio_type: "efficiency"
       valid_denominators: ["revenue", "assets", "employees"]
-    materiality: null
+      calculation_type: "Efficiency Analysis"
+    materiality: null  # Use default_materiality_threshold (5%)
 
   - id: 20013
-    name: margin_analysis
+    name: "margin_analysis" 
     description: "Profit margin progression analysis"
     formula: "profit_metric / revenue_metric"
     params:
       margin_type: ["gross", "operating", "net"]
       benchmark_comparison: true
-    materiality: null
+      calculation_type: "Margin Analysis"
+    materiality: null  # Use default_materiality_threshold (5%)
 
-  # Predictive Observations
-  - id: 20014
-    name: forecast_accuracy
-    description: "Accuracy of previous forecasts"
-    formula: "abs((forecast - actual) / actual)"
-    params:
-      forecast_horizon: [1, 3, 6, 12]
-      accuracy_threshold: 0.10
-    materiality: null
-
-  - id: 20015
-    name: run_rate_projection
-    description: "Current period run-rate implications"
-    formula: "current_period_value * (12 / periods_elapsed)"
-    params:
-      projection_type: "annual_run_rate"
-      confidence_level: 0.85
-    materiality: null
+# =============================================================================
+# END OF FILE
+# - To extend: add new observations with IDs in 20016-29999 range
+# - All observation changes here flow through to questions_generator.py
+# - Link new observations to questions via observation_id in questions.yaml
+# =============================================================================
