@@ -80,7 +80,7 @@ questions:
     importance: 5
     category: growth_analysis
     priority: high
-    template_text: >-
+    template: >-
       {{ metric_name }} changed {{ percent(current_value, prior_month_value) }}% month-over-month
       ({{ format_currency(current_value) }} vs {{ format_currency(prior_month_value) }}).
       What operational factors drove this {{ conditional(current_value > prior_month_value, "growth", "decline") }}?
@@ -91,7 +91,7 @@ questions:
     importance: 4
     category: growth_analysis
     priority: high
-    template_text: >-
+    template: >-
       {{ metric_name }} showed {{ percent(current_value, prior_quarter_value) }}% growth quarter-over-quarter.
       How does this align with our quarterly targets and strategic initiatives?
     weight: 1.0
@@ -101,7 +101,7 @@ questions:
     importance: 5
     category: growth_analysis
     priority: high
-    template_text: >-
+    template: >-
       Year-over-year {{ metric_name }} {{ conditional(current_value > prior_year_value, "increased", "decreased") }}
       by {{ percent(current_value, prior_year_value) }}% ({{ format_abs(current_value - prior_year_value) }}).
       What strategic initiatives contributed to this performance?
@@ -112,7 +112,7 @@ questions:
     importance: 4
     category: growth_analysis
     priority: high
-    template_text: >-
+    template: >-
       Year-to-date {{ metric_name }} is {{ percent(ytd_current, ytd_prior) }}%
       {{ conditional(ytd_current > ytd_prior, "ahead of", "behind") }} last year.
       Are we on track for annual targets?
@@ -127,7 +127,7 @@ questions:
     importance: 5
     category: variance_analysis
     priority: high
-    template_text: >-
+    template: >-
       {{ metric_name }} is {{ percent(current_value, budget_value) }}%
       {{ conditional(current_value > budget_value, "above", "below") }} budget
       ({{ format_currency(current_value) }} vs {{ format_currency(budget_value) }}).
@@ -139,7 +139,7 @@ questions:
     importance: 5
     category: variance_analysis
     priority: high
-    template_text: >-
+    template: >-
       🚨 CRITICAL: {{ metric_name }} variance of {{ percent(current_value, budget_value) }}%
       impacts {{ format_currency(abs(current_value - budget_value)) }}.
       What immediate corrective actions are required?
@@ -150,7 +150,7 @@ questions:
     importance: 4
     category: variance_analysis
     priority: high
-    template_text: >-
+    template: >-
       {{ metric_name }} came in {{ percent(current_value, forecast_value) }}%
       {{ conditional(current_value > forecast_value, "higher", "lower") }} than forecast.
       Should we adjust our forecasting methodology or expectations?
@@ -165,7 +165,7 @@ questions:
     importance: 3
     category: trend_pattern
     priority: high
-    template_text: >-
+    template: >-
       {{ metric_name }} shows a {{ conditional(trend_slope > 0, "positive", "negative") }} trend
       over the past {{ trend_periods }} periods.
       Is this trend sustainable and aligned with our strategic direction?
@@ -176,7 +176,7 @@ questions:
     importance: 2
     category: trend_pattern
     priority: high
-    template_text: >-
+    template: >-
       {{ metric_name }} volatility is {{ round_smart(volatility * 100, 1) }}%.
       What factors are driving this variability and how can we improve predictability?
     weight: 0.8
@@ -186,7 +186,7 @@ questions:
     importance: 3
     category: trend_pattern
     priority: high
-    template_text: >-
+    template: >-
       {{ metric_name }} is {{ percent(current_value, seasonal_average) }}%
       {{ conditional(current_value > seasonal_average, "above", "below") }} seasonal norm.
       What changed our typical seasonal patterns?
@@ -201,7 +201,7 @@ questions:
     importance: 2
     category: absolute_magnitude
     priority: high
-    template_text: >-
+    template: >-
       Absolute change in {{ metric_name }} was {{ format_currency(absolute_change) }}.
       Is this magnitude significant relative to our scale of operations?
     weight: 0.7
@@ -211,7 +211,7 @@ questions:
     importance: 3
     category: absolute_magnitude
     priority: high
-    template_text: >-
+    template: >-
       {{ metric_name }} is {{ round_smart(z_score, 1) }}
       standard deviations {{ conditional(z_score > 0, "above", "below") }} its historical mean.
       Should this outlier be investigated further?
@@ -226,7 +226,7 @@ questions:
     importance: 3
     category: ratio_efficiency
     priority: high
-    template_text: >-
+    template: >-
       {{ ratio_name }} ratio is {{ round_smart(ratio_value, 2) }},
       {{ conditional(ratio_trend > 0, "improving", "declining") }} from prior periods.
       How does this impact our operational efficiency targets?
@@ -237,7 +237,7 @@ questions:
     importance: 4
     category: ratio_efficiency
     priority: high
-    template_text: >-
+    template: >-
       {{ metric_name }} margin is {{ round_smart(margin_percentage * 100, 1) }}%,
       {{ conditional(margin_change > 0, "up", "down") }} {{ round_smart(abs(margin_change) * 100, 1) }}% points.
       How does this compare to industry benchmarks and competitors?
@@ -252,7 +252,7 @@ questions:
     importance: 4
     category: growth_analysis
     priority: high
-    template_text: >-
+    template: >-
       Monthly {{ metric_name }} performance shows {{ percent(current_value, prior_month_value) }}% change.
       What specific business drivers contributed to this result?
     weight: 0.9
@@ -262,7 +262,7 @@ questions:
     importance: 4
     category: growth_analysis
     priority: high
-    template_text: >-
+    template: >-
       Annual {{ metric_name }} growth of {{ percent(current_value, prior_year_value) }}%
       represents {{ format_currency(current_value - prior_year_value) }} impact.
       How does this position us for next year's planning?
