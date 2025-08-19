@@ -17,6 +17,12 @@ const PORT = process.env.PORT || 4000;
 
 app.use(express.json());
 
+// --- Check
+console.log('Environment variables loaded:');
+console.log('VERCEL_BLOB_TOKEN:', process.env.VERCEL_BLOB_TOKEN ? 'SET' : 'NOT SET');
+console.log('BLOB_READ_WRITE_TOKEN:', process.env.BLOB_READ_WRITE_TOKEN ? 'SET' : 'NOT SET');
+
+
 // ─── Ensure writable folders ────────────────────────────────────────────
 const uploadDir = path.join(__dirname, 'Uploads');
 const reportsDir = path.join(__dirname, 'reports');
