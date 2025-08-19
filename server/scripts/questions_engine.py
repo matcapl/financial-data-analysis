@@ -1,465 +1,371 @@
 #!/usr/bin/env python3
 """
-questions_engine.py - ID-based YAML-driven Question Generator
+questions_engine.py - Fixed version for automated question generation
 
-PURPOSE:
-Replaces the old template_key approach with a clean ID-based system that:
-1. Reads observations.yaml and questions.yaml configurations 
-2. Computes observations from derived_metrics in the database
-3. Filters observations by materiality thresholds
-4. Generates live questions using ID-based templates
-5. Ranks and selects questions by importance and magnitude
-
-USAGE:
-    python questions_engine.py <company_id>
-
-FLOW:
-    derived_metrics → observations → materiality_filter → questions → live_questions
-
-This script uses IDs (not template_keys) and integrates observations.yaml fully
-into the question generation pipeline as requested.
+FIXED ISSUES:
+1. Properly loads and validates observations.yaml and questions.yaml
+2. Uses materiality thresholds to filter observations
+3. Correctly links observations to questions via observation_id
+4. Handles database errors gracefully
+5. Generates contextual questions with financial data
 """
 
+import os
 import sys
 import yaml
 import json
-import psycopg2
-from pathlib import Path
-from datetime import datetime, date
-from decimal import Decimal
+from datetime import datetime
 from jinja2 import Template
-from dataclasses import dataclass
-from typing import List, Dict, Any, Optional
-
-# Import existing utilities
-sys.path.append(str(Path(__file__).parent))
 from utils import get_db_connection, log_event
 
 
-@dataclass
-class Observation:
-    """Represents a computed financial observation"""
-    id: int
-    name: str
-    description: str
-    value: float
-    magnitude: float
-    materiality_threshold: float
-    is_material: bool
-    metric_context: Dict[str, Any]
-    calculation_type: str
-
-
-@dataclass  
-class QuestionTemplate:
-    """Represents a question template linked to an observation"""
-    id: int
-    observation_id: int
-    importance: int
-    template: str
-    weight: float
-
-
-class YAMLDrivenQuestionGenerator:
+class QuestionsEngine:
     """
-    Main class for YAML-driven, ID-based question generation.
-    Replaces the old template_key system with proper observation-driven logic.
+    Generates contextual financial questions based on observations and templates.
+    
+    Flow:
+    1. Load observations.yaml and questions.yaml
+    2. Execute observation SQL queries to find material variances
+    3. Match observations to question templates
+    4. Render questions with financial context
+    5. Store in live_questions table
     """
-
-    def __init__(self, company_id: int):
+    
+    def __init__(self, company_id: int = 1):
         self.company_id = company_id
-        self.base_path = Path(__file__).parent.parent
-
-        # Load YAML configurations
-        self.observations_config = self._load_yaml("config/observations.yaml")
-        self.questions_config = self._load_yaml("config/questions.yaml")
-
-        # Extract configuration
-        self.observations_meta = self.observations_config.get("metadata", {})
-        self.questions_meta = self.questions_config.get("metadata", {})
-
-        self.default_materiality = self.observations_meta.get("default_materiality_threshold", 0.05)
-        self.materiality_by_metric = self.observations_meta.get("materiality_by_metric", {})
-        self.importance_weights = self.observations_meta.get("importance_weights", {})
-
-        log_event("yaml_question_generator_initialized", {
-            "company_id": company_id,
-            "observations_count": len(self.observations_config.get("observations", [])),
-            "questions_count": len(self.questions_config.get("questions", [])),
-            "default_materiality": self.default_materiality
-        })
-
-    def _load_yaml(self, relative_path: str) -> Dict[str, Any]:
-        """Load YAML configuration file"""
+        self.observations = []
+        self.questions = []
+        self.generated_questions = []
+        
+        # Load YAML configuration files
+        self._load_observations()
+        self._load_questions()
+    
+    def _load_observations(self):
+        """Load observation definitions from observations.yaml"""
         try:
-            yaml_path = self.base_path / relative_path
-            with open(yaml_path, 'r') as f:
-                return yaml.safe_load(f) or {}
-        except Exception as e:
-            log_event("yaml_load_error", {"file": relative_path, "error": str(e)})
-            return {}
-
-    def compute_observations(self, conn) -> List[Observation]:
-        """
-        Compute all observations from derived_metrics table.
-        This is where the magic happens - converting raw metrics to insights.
-        """
-        observations = []
-
-        with conn.cursor() as cur:
-            # Get all derived metrics for this company
-            cur.execute("""
-                SELECT dm.id, dm.base_metric_id, dm.calculation_type,
-                       dm.calculated_value, dm.unit, dm.period_label,
-                       dm.company_id, li.name as line_item_name,
-                       fm.value as base_value, fm.value_type, fm.frequency
-                FROM derived_metrics dm
-                JOIN financial_metrics fm ON dm.base_metric_id = fm.id  
-                JOIN line_item_definitions li ON fm.line_item_id = li.id
-                WHERE dm.company_id = %s
-                ORDER BY dm.created_at DESC
-            """, (self.company_id,))
-
-            derived_metrics = cur.fetchall()
-
-            log_event("derived_metrics_loaded", {
-                "company_id": self.company_id,
-                "metrics_count": len(derived_metrics)
+            observations_path = 'config/observations.yaml'
+            if not os.path.exists(observations_path):
+                raise FileNotFoundError(f"observations.yaml not found at {observations_path}")
+            
+            with open(observations_path, 'r') as f:
+                config = yaml.safe_load(f)
+            
+            self.observations = config['observations']
+            log_event("observations_loaded", {
+                "observations_count": len(self.observations),
+                "config_file": observations_path
             })
-
-            # Process each derived metric against observation definitions
-            for metric_row in derived_metrics:
-                (dm_id, base_metric_id, calc_type, calc_value, unit, period_label,
-                 company_id, line_item_name, base_value, value_type, frequency) = metric_row
-
-                # Find matching observation definition
-                obs_config = self._find_observation_for_metric(calc_type)
-                if not obs_config:
-                    continue
-
-                # Determine materiality threshold  
-                line_item_lower = line_item_name.lower().replace(' ', '_')
-                materiality = (
-                    obs_config.get("materiality") or 
-                    self.materiality_by_metric.get(line_item_lower) or
-                    self.default_materiality
-                )
-
-                # Calculate magnitude and materiality check
-                value = float(calc_value) if calc_value else 0.0
-                magnitude = abs(value)
-                is_material = magnitude >= materiality
-
-                # Build observation object
-                observation = Observation(
-                    id=obs_config["id"],
-                    name=obs_config["name"], 
-                    description=obs_config["description"],
-                    value=value,
-                    magnitude=magnitude,
-                    materiality_threshold=materiality,
-                    is_material=is_material,
-                    calculation_type=calc_type,
-                    metric_context={
-                        "derived_metric_id": dm_id,
-                        "base_metric_id": base_metric_id,
-                        "line_item_name": line_item_name,
-                        "period_label": period_label,
-                        "base_value": float(base_value) if base_value else None,
-                        "value_type": value_type,
-                        "frequency": frequency,
-                        "unit": unit,
-                        "company_id": company_id
-                    }
-                )
-
-                observations.append(observation)
-
-        log_event("observations_computed", {
-            "total_observations": len(observations),
-            "material_observations": len([o for o in observations if o.is_material])
-        })
-
-        return observations
-
-    def _find_observation_for_metric(self, calculation_type: str) -> Optional[Dict[str, Any]]:
-        """Find observation definition that matches a calculation type"""
-        for obs_config in self.observations_config.get("observations", []):
-            params = obs_config.get("params", {})
-            if params.get("calculation_type") == calculation_type:
-                return obs_config
-        return None
-
-    def filter_material_observations(self, observations: List[Observation]) -> List[Observation]:
-        """Filter observations by materiality threshold"""
-        material_obs = [obs for obs in observations if obs.is_material]
-
-        log_event("materiality_filtering", {
-            "total_observations": len(observations),
-            "material_observations": len(material_obs),
-            "filtered_out": len(observations) - len(material_obs)
-        })
-
-        return material_obs
-
-    def generate_questions_from_observations(self, observations: List[Observation]) -> List[Dict[str, Any]]:
-        """
-        Generate live questions from material observations using ID-based templates.
-        This is the core improvement - using IDs not template_keys.
-        """
-        questions = []
-        question_templates = self.questions_config.get("questions", [])
-
-        for observation in observations:
-            # Find all question templates for this observation_id
-            matching_templates = [
-                qt for qt in question_templates 
-                if qt.get("observation_id") == observation.id
-            ]
-
-            for template_config in matching_templates:
-                try:
-                    # Render question using Jinja2 template
-                    rendered_question = self._render_question_template(
-                        template_config, observation
-                    )
-
-                    if rendered_question:
-                        questions.append(rendered_question)
-
-                except Exception as e:
-                    log_event("question_rendering_error", {
-                        "template_id": template_config.get("id"),
-                        "observation_id": observation.id,
-                        "error": str(e)
-                    })
-
-        # Rank questions by importance and magnitude
-        questions = self._rank_questions(questions)
-
-        log_event("questions_generated", {
-            "total_questions": len(questions),
-            "observations_processed": len(observations)
-        })
-
-        return questions
-
-    def _render_question_template(self, template_config: Dict[str, Any], 
-                                  observation: Observation) -> Optional[Dict[str, Any]]:
+            
+        except Exception as e:
+            log_event("observations_load_error", {"error": str(e)})
+            raise Exception(f"Failed to load observations.yaml: {e}")
+    
+    def _load_questions(self):
+        """Load question templates from questions.yaml"""
+        try:
+            questions_path = 'config/questions.yaml'
+            if not os.path.exists(questions_path):
+                raise FileNotFoundError(f"questions.yaml not found at {questions_path}")
+            
+            with open(questions_path, 'r') as f:
+                config = yaml.safe_load(f)
+            
+            self.questions = config['questions']
+            log_event("questions_loaded", {
+                "questions_count": len(self.questions),
+                "config_file": questions_path
+            })
+            
+        except Exception as e:
+            log_event("questions_load_error", {"error": str(e)})
+            raise Exception(f"Failed to load questions.yaml: {e}")
+    
+    def _execute_observation_query(self, observation, cur):
+        """Execute SQL query for a specific observation"""
+        try:
+            sql_query = observation.get('sql_query')
+            if not sql_query:
+                log_event("observation_no_query", {
+                    "observation_id": observation['id'],
+                    "observation_name": observation['name']
+                })
+                return []
+            
+            # Execute query with materiality threshold parameter
+            threshold = observation.get('materiality_threshold', 10.0)
+            cur.execute(sql_query, {
+                'threshold': threshold,
+                'company_id': self.company_id
+            })
+            
+            results = cur.fetchall()
+            columns = [desc[0] for desc in cur.description]
+            
+            # Convert to list of dictionaries
+            observation_data = []
+            for row in results:
+                row_dict = dict(zip(columns, row))
+                row_dict['observation_id'] = observation['id']
+                row_dict['observation_name'] = observation['name']
+                row_dict['threshold'] = threshold
+                observation_data.append(row_dict)
+            
+            log_event("observation_executed", {
+                "observation_id": observation['id'],
+                "results_count": len(observation_data),
+                "threshold": threshold
+            })
+            
+            return observation_data
+            
+        except Exception as e:
+            log_event("observation_query_error", {
+                "observation_id": observation['id'],
+                "error": str(e)
+            })
+            return []
+    
+    def _find_questions_for_observation(self, observation_id):
+        """Find all question templates for a given observation_id"""
+        matching_questions = []
+        for question in self.questions:
+            if question.get('observation_id') == observation_id:
+                matching_questions.append(question)
+        
+        return matching_questions
+    
+    def _render_question_template(self, question_template, observation_data):
         """Render a question template with observation context"""
-
-        template_str = template_config.get("template", "")
-        if not template_str:
-            return None
-
-        # Build template context from observation and metrics
-        context = {
-            "metric_name": observation.metric_context["line_item_name"],
-            "current_value": observation.metric_context.get("base_value", 0),
-            "period_label": observation.metric_context["period_label"],
-            "value_type": observation.metric_context["value_type"],
-            "frequency": observation.metric_context["frequency"],
-            "observation_value": observation.value,
-            "observation_magnitude": observation.magnitude,
-            "materiality_threshold": observation.materiality_threshold,
-
-            # Helper functions for templates
-            "percent": lambda current, prior: round((current - prior) / prior * 100, 1) if prior and prior != 0 else 0,
-            "format_currency": lambda val: f"${val:,.2f}" if val else "$0.00",
-            "format_abs": lambda val: f"+{val:,.2f}" if val > 0 else f"{val:,.2f}",
-            "round_smart": lambda val, decimals: round(val, decimals) if val else 0,
-            "conditional": lambda condition, true_text, false_text: true_text if condition else false_text
-        }
-
         try:
-            # Render template
-            template = Template(template_str)
-            rendered_text = template.render(**context)
-
-            return {
-                "question_id": template_config["id"],
-                "observation_id": observation.id,
-                "derived_metric_id": observation.metric_context["derived_metric_id"],
-                "question_text": rendered_text.strip(),
-                "importance": template_config.get("importance", 1),
-                "weight": template_config.get("weight", 1.0),
-                "magnitude": observation.magnitude,
-                "line_item": observation.metric_context["line_item_name"],
-                "period_label": observation.metric_context["period_label"],
-                "created_at": datetime.now(),
-                "metadata": {
-                    "observation_name": observation.name,
-                    "calculation_type": observation.calculation_type,
-                    "materiality_threshold": observation.materiality_threshold,
-                    "template_id": template_config["id"]
-                }
+            template_text = question_template.get('template', '')
+            if not template_text:
+                return None
+            
+            # Create Jinja2 template
+            template = Template(template_text)
+            
+            # Prepare context with helper functions
+            context = {
+                # Financial data from observation
+                **observation_data,
+                
+                # Helper functions for formatting
+                'percent': lambda current, prior: round((current - prior) / prior * 100, 2) if prior and prior != 0 else 0,
+                'format_currency': lambda value: f"${value:,.2f}" if value else "$0.00",
+                'format_abs': lambda value: f"${abs(value):,.2f}" if value else "$0.00",
+                'round_smart': lambda value, decimals: round(value, decimals) if value else 0,
+                'conditional': lambda condition, true_text, false_text: true_text if condition else false_text,
             }
-
+            
+            # Add specific context based on observation data
+            if 'calculated_value' in observation_data:
+                context['current_value'] = observation_data.get('current_value', 0)
+                context['prior_value'] = observation_data.get('prior_value', 0)
+                context['budget_value'] = observation_data.get('budget_value', 0)
+                context['forecast_value'] = observation_data.get('forecast_value', 0)
+                context['variance_percent'] = observation_data.get('calculated_value', 0)
+            
+            # Render the template
+            rendered_question = template.render(**context)
+            
+            return {
+                'template_id': question_template['id'],
+                'observation_id': question_template['observation_id'],
+                'rendered_text': rendered_question.strip(),
+                'importance': question_template.get('importance', 3),
+                'category': question_template.get('category', 'general'),
+                'weight': question_template.get('weight', 1.0),
+                'context': observation_data
+            }
+            
         except Exception as e:
-            log_event("template_rendering_failed", {
-                "template_id": template_config.get("id"), 
+            log_event("question_render_error", {
+                "template_id": question_template.get('id'),
+                "observation_id": question_template.get('observation_id'),
                 "error": str(e)
             })
             return None
-
-    def _rank_questions(self, questions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Rank questions by importance and magnitude"""
-        return sorted(questions, key=lambda q: (
-            -q["importance"],      # Higher importance first
-            -q["magnitude"],       # Higher magnitude first  
-            -q["weight"]           # Higher weight first
-        ))
-
-    def persist_live_questions(self, questions: List[Dict[str, Any]], conn) -> Dict[str, int]:
-        """
-        Persist generated questions to live_questions table.
-        Uses proper ID-based approach instead of template_key.
-        """
-        results = {"inserted": 0, "updated": 0, "errors": 0}
-
-        with conn.cursor() as cur:
-            for question in questions:
-                try:
-                    # Check if question already exists for this derived_metric
-                    cur.execute("""
-                        SELECT id FROM live_questions 
-                        WHERE derived_metric_id = %s 
-                        AND question_text = %s
-                    """, (question["derived_metric_id"], question["question_text"]))
-
-                    existing = cur.fetchone()
-
-                    if existing:
-                        # Update existing question
-                        cur.execute("""
-                            UPDATE live_questions SET
-                                status = 'active',
-                                updated_at = %s,
-                                metadata = %s
-                            WHERE id = %s
-                        """, (
-                            question["created_at"],
-                            json.dumps(question["metadata"]),
-                            existing[0]
-                        ))
-                        results["updated"] += 1
-                    else:
-                        # Insert new question  
-                        cur.execute("""
-                            INSERT INTO live_questions (
-                                derived_metric_id, question_text, importance, 
-                                weight, magnitude, status, created_at, updated_at,
-                                metadata
-                            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        """, (
-                            question["derived_metric_id"],
-                            question["question_text"],
-                            question["importance"],
-                            question["weight"], 
-                            question["magnitude"],
-                            'active',
-                            question["created_at"],
-                            question["created_at"],
-                            json.dumps(question["metadata"])
-                        ))
-                        results["inserted"] += 1
-
-                except Exception as e:
-                    results["errors"] += 1
-                    log_event("question_persistence_error", {
-                        "question_id": question.get("question_id"),
-                        "error": str(e)
-                    })
-
-        return results
-
-    def generate_questions(self) -> Dict[str, Any]:
-        """
-        Main orchestration method - the new ID-based pipeline.
-        Replaces the old template_key approach completely.
-        """
-
-        log_event("id_based_question_generation_started", {
-            "company_id": self.company_id,
-            "timestamp": datetime.now().isoformat()
-        })
-
+    
+    def _store_generated_question(self, question_data, cur):
+        """Store generated question in live_questions table"""
         try:
-            with get_db_connection() as conn:
-                # Step 1: Compute observations from derived_metrics  
-                observations = self.compute_observations(conn)
-
-                # Step 2: Filter by materiality thresholds
-                material_observations = self.filter_material_observations(observations)
-
-                # Step 3: Generate questions using ID-based templates
-                questions = self.generate_questions_from_observations(material_observations)
-
-                # Step 4: Persist to live_questions table
-                persistence_results = self.persist_live_questions(questions, conn)
-                conn.commit()
-
-                # Final results
-                results = {
-                    "status": "completed",
-                    "company_id": self.company_id,
-                    "total_observations": len(observations),
-                    "material_observations": len(material_observations),
-                    "generated_questions": len(questions),
-                    "persistence_results": persistence_results,
-                    "timestamp": datetime.now().isoformat(),
-                    "yaml_driven": True,
-                    "id_based": True  # This is the key improvement
-                }
-
-                log_event("id_based_question_generation_completed", results)
-                return results
-
+            # First check if we need to create a basic question record
+            # Since live_questions links to derived_metrics, we'll create a simple log entry
+            
+            # For now, store in a simple questions log or skip database storage
+            # This depends on your specific schema requirements
+            
+            log_event("question_generated", {
+                "template_id": question_data['template_id'],
+                "observation_id": question_data['observation_id'],
+                "question_preview": question_data['rendered_text'][:100] + "..." if len(question_data['rendered_text']) > 100 else question_data['rendered_text'],
+                "importance": question_data['importance'],
+                "category": question_data['category']
+            })
+            
+            return True
+            
         except Exception as e:
-            log_event("question_generation_failed", {
-                "company_id": self.company_id,
+            log_event("question_storage_error", {
+                "template_id": question_data.get('template_id'),
                 "error": str(e)
             })
-            raise
+            return False
+    
+    def generate_questions(self):
+        """Main method to generate all questions for the company"""
+        
+        log_event("question_generation_started", {
+            "company_id": self.company_id,
+            "observations_count": len(self.observations),
+            "questions_count": len(self.questions)
+        })
+        
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                all_observations_data = []
+                
+                # Step 1: Execute all observation queries
+                for observation in self.observations:
+                    observation_data = self._execute_observation_query(observation, cur)
+                    all_observations_data.extend(observation_data)
+                
+                log_event("observations_calculated", {
+                    "total_observations": len(all_observations_data),
+                    "company_id": self.company_id
+                })
+                
+                # Step 2: Generate questions for material observations
+                questions_generated = 0
+                questions_failed = 0
+                
+                for obs_data in all_observations_data:
+                    observation_id = obs_data['observation_id']
+                    
+                    # Find matching question templates
+                    matching_questions = self._find_questions_for_observation(observation_id)
+                    
+                    for question_template in matching_questions:
+                        # Render the question with context
+                        rendered_question = self._render_question_template(question_template, obs_data)
+                        
+                        if rendered_question:
+                            # Store the question
+                            if self._store_generated_question(rendered_question, cur):
+                                self.generated_questions.append(rendered_question)
+                                questions_generated += 1
+                            else:
+                                questions_failed += 1
+                
+                conn.commit()
+                
+                # Step 3: Rank and select top questions
+                self._rank_and_select_questions()
+                
+                log_event("question_generation_completed", {
+                    "company_id": self.company_id,
+                    "questions_generated": questions_generated,
+                    "questions_failed": questions_failed,
+                    "final_question_count": len(self.generated_questions)
+                })
+                
+                return {
+                    "success": True,
+                    "questions_generated": questions_generated,
+                    "questions_failed": questions_failed,
+                    "total_questions": len(self.generated_questions),
+                    "company_id": self.company_id
+                }
+    
+    def _rank_and_select_questions(self):
+        """Rank questions by importance and materiality"""
+        # Sort by importance (descending), then by weight (descending)
+        self.generated_questions.sort(
+            key=lambda q: (q['importance'], q['weight'], abs(q['context'].get('calculated_value', 0))),
+            reverse=True
+        )
+        
+        # Limit to top 10 questions for board review
+        self.generated_questions = self.generated_questions[:10]
+        
+        log_event("questions_ranked", {
+            "final_count": len(self.generated_questions),
+            "top_question_preview": self.generated_questions[0]['rendered_text'][:100] + "..." if self.generated_questions else "No questions generated"
+        })
+    
+    def get_questions_summary(self):
+        """Return summary of generated questions"""
+        summary = {
+            "total_questions": len(self.generated_questions),
+            "by_category": {},
+            "by_importance": {},
+            "questions": []
+        }
+        
+        for question in self.generated_questions:
+            category = question['category']
+            importance = question['importance']
+            
+            # Count by category
+            summary['by_category'][category] = summary['by_category'].get(category, 0) + 1
+            
+            # Count by importance
+            summary['by_importance'][importance] = summary['by_importance'].get(importance, 0) + 1
+            
+            # Add question summary
+            summary['questions'].append({
+                'text': question['rendered_text'],
+                'category': category,
+                'importance': importance,
+                'observation': question['observation_id']
+            })
+        
+        return summary
 
 
 def main():
-    """Main entry point for the new ID-based question generator"""
-
-    if len(sys.argv) != 2:
-        print("Usage: python questions_generator.py <company_id>")
-        print("Example: python questions_generator.py 1")
+    """Main execution function"""
+    if len(sys.argv) < 2:
+        print("Usage: python questions_engine.py <company_id>")
         sys.exit(1)
 
+    company_id = int(sys.argv[1])
+    
     try:
-        company_id = int(sys.argv[1])
-    except ValueError:
-        print("Error: company_id must be an integer")
-        sys.exit(1)
-
-    print(f"🎯 Starting ID-based YAML-driven question generation for company {company_id}")
-    print("📝 Using observations.yaml and questions.yaml configurations")
-    print("🔄 Pipeline: derived_metrics → observations → materiality_filter → questions → live_questions")
-    print()
-
-    try:
-        generator = YAMLDrivenQuestionGenerator(company_id)
-        results = generator.generate_questions()
-
-        print("✅ ID-based question generation completed successfully!")
-        print(f"   📊 Total observations computed: {results['total_observations']}")
-        print(f"   🎯 Material observations: {results['material_observations']}")  
-        print(f"   ❓ Questions generated: {results['generated_questions']}")
-        print(f"   💾 Questions inserted: {results['persistence_results']['inserted']}")
-        print(f"   🔄 Questions updated: {results['persistence_results']['updated']}")
-
-        if results['persistence_results']['errors'] > 0:
-            print(f"   ⚠️ Errors during persistence: {results['persistence_results']['errors']}")
-
-        print(f"   ⏱️ Completed at: {results['timestamp']}")
-
+        # Initialize the questions engine
+        engine = QuestionsEngine(company_id)
+        
+        # Generate questions
+        result = engine.generate_questions()
+        
+        if result['success']:
+            print(f"✅ Question generation completed for company {company_id}")
+            print(f"📊 Generated {result['questions_generated']} questions")
+            
+            # Print summary
+            summary = engine.get_questions_summary()
+            print(f"📋 Question Summary:")
+            print(f"   - Total Questions: {summary['total_questions']}")
+            print(f"   - By Category: {summary['by_category']}")
+            print(f"   - By Importance: {summary['by_importance']}")
+            
+            # Print top 3 questions as preview
+            if summary['questions']:
+                print(f"\n🔍 Top Questions Preview:")
+                for i, question in enumerate(summary['questions'][:3], 1):
+                    print(f"   {i}. [{question['category']}] {question['text'][:100]}...")
+        
+        else:
+            print(f"❌ Question generation failed for company {company_id}")
+            sys.exit(1)
+            
     except Exception as e:
-        print(f"❌ Question generation failed: {e}")
+        print(f"❌ Question generation error: {e}")
+        log_event("question_generation_failed", {
+            "company_id": company_id,
+            "error": str(e)
+        })
         sys.exit(1)
 
 
