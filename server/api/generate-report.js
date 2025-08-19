@@ -1,6 +1,6 @@
 const { spawn } = require('child_process');
 const { put } = require('@vercel/blob');
-const BLOB_TOKEN = process.env.BLOB_READ_WRITE_TOKEN || process.env.VERCEL_BLOB_TOKEN;
+const BLOB_TOKEN = process.env.VERCEL_BLOB_TOKEN;
 const path = require('path');
 const fs = require('fs');
 
