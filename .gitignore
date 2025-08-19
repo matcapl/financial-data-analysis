@@ -78,3 +78,5 @@ poetry.toml
 
 backups/
 AI/
+
+install_poetry.py

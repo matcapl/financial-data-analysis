@@ -124,7 +124,7 @@ tables:
           INSERT INTO periods (period_label, period_type, start_date, end_date, created_at, updated_at)
           SELECT period_label, period_type, start_date, end_date, now(), now()
           FROM all_p
-          ON CONFLICT (period_label) DO NOTHING;    
+          ON CONFLICT (period_label, period_type) DO NOTHING;
 
   - name: line_item_definitions
     columns:

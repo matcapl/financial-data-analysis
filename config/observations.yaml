@@ -38,7 +38,7 @@ metadata:
 
   # Global processing configuration
   processing_rules:
-    min_periods_required: 2            # Need at least 2 periods for comparison
+    min_periods_required: 1            # Need at least 2 periods for comparison for history not variance vs budget or forecast
     outlier_detection_factor: 3.0      # Values >3x std dev flagged as outliers  
     confidence_threshold: 0.80         # Minimum confidence for observation validity
 
