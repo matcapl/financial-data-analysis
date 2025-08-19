@@ -93,7 +93,10 @@ module.exports = async (req, res) => {
       // Upload to Vercel Blob immediately
       try {
         const fileBuffer = fs.readFileSync(permanentFilePath);
-        const blob = await put(safeName, fileBuffer, { access: 'public' });
+        const blob = await put(safeName, fileBuffer, {
+          access: 'public',
+          token: process.env.VERCEL_BLOB_TOKEN
+        });
         blobUrl = blob.url;
         processingSteps.push('✓ File stored in blob storage');
         console.log('✓ File uploaded to Vercel Blob');
@@ -145,7 +148,10 @@ module.exports = async (req, res) => {
         if (process.env.VERCEL_BLOB_TOKEN) {
           try {
             const fileBuffer = fs.readFileSync(permanentFilePath);
-            const blob = await put(safeName, fileBuffer, { access: 'public' });
+            const blob = await put(safeName, fileBuffer, {
+              access: 'public',
+              token: process.env.VERCEL_BLOB_TOKEN
+            });  
             blobUrl = blob.url;
             processingSteps.push('✓ File stored in blob storage');
             console.log('✓ File uploaded to blob storage');
