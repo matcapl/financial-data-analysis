@@ -21,7 +21,7 @@
 # that may warrant management attention when it exceeds materiality thresholds.
 #
 # USAGE:
-# - Used by questions_generator.py to compute observations on derived_metrics
+# - Used by questions_engine.py to compute observations on derived_metrics
 # - Linked to questions.yaml via observation_id foreign keys
 # - Materiality thresholds determine which observations trigger questions
 # - All business logic for scoring and ranking observations lives here
@@ -32,8 +32,8 @@
 metadata:
   version: "2.1"
   description: "Financial metrics observations for board-level question generation"
-  default_materiality_threshold: 0.05  # 5% threshold for financial significance
-  timestamp: "2025-08-18T19:16:00Z"
+  default_materiality_threshold: 0.05   # 5% threshold for financial significance
+  timestamp: "2025-08-19T08:00:00Z"
   author: "Financial Analytics Engine"
 
   # Global processing configuration
@@ -44,93 +44,194 @@ metadata:
 
   # Materiality thresholds by metric type (override default_materiality_threshold)
   materiality_by_metric:
-    revenue: 0.03                      # 3% threshold for revenue observations
-    gross_profit: 0.04                 # 4% threshold for gross profit  
-    ebitda: 0.06                       # 6% threshold for EBITDA
+    Revenue:       0.03  # 3% threshold for revenue observations
+    "Gross Profit": 0.04  # 4% threshold for gross profit  
+    EBITDA:        0.06  # 6% threshold for EBITDA
 
   # Scoring weights for observation importance ranking
   importance_weights:
-    growth_metrics: 1.0                # Highest priority for growth analysis
-    variance_metrics: 0.9              # High priority for budget/forecast variance
-    trend_metrics: 0.7                 # Medium priority for trend analysis
-    absolute_metrics: 0.5              # Lower priority for absolute values
-    ratio_metrics: 0.8                 # High priority for efficiency ratios
+    growth_metrics:    1.0  # Highest priority for growth analysis
+    variance_metrics:  0.9  # High priority for budget/forecast variance
+    trend_metrics:     0.7  # Medium priority for trend analysis
+    absolute_metrics:  0.5  # Lower priority for absolute values
+    ratio_metrics:     0.8  # High priority for efficiency ratios
 
 # ID ranges: 20001-29999 reserved for observations
 observations:
   # =============================================================================
-  # GROWTH & VARIANCE OBSERVATIONS (20001-20010)
+  # GROWTH & VARIANCE OBSERVATIONS (20001-20006)
   # =============================================================================
 
   - id: 20001
-    name: "growth_mom"
+    name: growth_mom
     description: "Month-over-Month growth rate calculation"
     formula: "(current_period - prior_month) / prior_month"
     params:
       lookback_periods: 1
       period_type: "monthly"
-      value_types: ["actual"]
+      value_types: ["Actual"]
       calculation_type: "MoM Growth"
-    materiality: null  # Use default_materiality_threshold (5%)
+    materiality: null    # Use default_materiality_threshold (5%)
+    importance: 5
+    category: growth_analysis
+    frequency: monthly
+    sql_query: |
+      SELECT
+        dm.calculated_value,
+        li.name  AS metric_name,
+        p.period_label,
+        dm.company_id
+      FROM derived_metrics dm
+      JOIN periods p ON dm.period_id = p.id
+      JOIN financial_metrics fm ON dm.base_metric_id = fm.id
+      JOIN line_item_definitions li ON fm.line_item_id = li.id
+      WHERE dm.calculation_type = 'MoM Growth'
+        AND ABS(dm.calculated_value) >= %(threshold)s
 
-  - id: 20002  
-    name: "growth_qoq"
+  - id: 20002
+    name: growth_qoq
     description: "Quarter-over-Quarter growth rate calculation"
     formula: "(current_period - prior_quarter) / prior_quarter"
     params:
       lookback_periods: 1
       period_type: "quarterly" 
-      value_types: ["actual"]
+      value_types: ["Actual"]
       calculation_type: "QoQ Growth"
-    materiality: null  # Use default_materiality_threshold (5%)
+    materiality: null
+    importance: 4
+    category: growth_analysis
+    frequency: quarterly
+    sql_query: |
+      SELECT
+        dm.calculated_value,
+        li.name  AS metric_name,
+        p.period_label,
+        dm.company_id
+      FROM derived_metrics dm
+      JOIN periods p ON dm.period_id = p.id
+      JOIN financial_metrics fm ON dm.base_metric_id = fm.id
+      JOIN line_item_definitions li ON fm.line_item_id = li.id
+      WHERE dm.calculation_type = 'QoQ Growth'
+        AND ABS(dm.calculated_value) >= %(threshold)s
 
   - id: 20003
-    name: "growth_yoy" 
+    name: growth_yoy
     description: "Year-over-Year growth rate calculation"
     formula: "(current_period - prior_year) / prior_year"
     params:
       lookback_periods: 1
       period_type: "yearly"
-      value_types: ["actual"]
+      value_types: ["Actual"]
       calculation_type: "YoY Growth"
-    materiality: null  # Use default_materiality_threshold (5%)
+    materiality: null
+    importance: 5
+    category: growth_analysis
+    frequency: yearly
+    sql_query: |
+      SELECT
+        dm.calculated_value,
+        li.name  AS metric_name,
+        p.period_label,
+        dm.company_id
+      FROM derived_metrics dm
+      JOIN periods p ON dm.period_id = p.id
+      JOIN financial_metrics fm ON dm.base_metric_id = fm.id
+      JOIN line_item_definitions li ON fm.line_item_id = li.id
+      WHERE dm.calculation_type = 'YoY Growth'
+        AND ABS(dm.calculated_value) >= %(threshold)s
 
   - id: 20004
-    name: "variance_vs_budget"
+    name: variance_vs_budget
     description: "Variance against budget for same period"
     formula: "(actual_value - budget_value) / budget_value"
     params:
-      comparison_type: "budget"
-      value_types: ["actual", "budget"]
+      comparison_type: "Budget"
+      value_types: ["Actual", "Budget"]
       calculation_type: "Variance vs Budget"
     materiality: 0.03  # 3% threshold for budget variances (more sensitive)
+    importance: 5
+    category: variance_analysis
+    frequency: monthly
+    sql_query: |
+      SELECT
+        ((a.value - b.value) / b.value * 100) AS calculated_value,
+        li.name  AS metric_name,
+        p.period_label,
+        a.company_id
+      FROM financial_metrics a
+      JOIN financial_metrics b
+        ON a.company_id = b.company_id
+       AND a.period_id  = b.period_id
+       AND a.line_item_id = b.line_item_id
+      JOIN periods p ON a.period_id = p.id
+      JOIN line_item_definitions li ON a.line_item_id = li.id
+      WHERE a.value_type = 'Actual'
+        AND b.value_type = 'Budget'
+        AND b.value <> 0
+        AND ABS((a.value - b.value) / b.value * 100) >= %(threshold)s
 
   - id: 20005
-    name: "variance_vs_forecast"
+    name: variance_vs_forecast
     description: "Variance against forecast for same period" 
     formula: "(actual_value - forecast_value) / forecast_value"
     params:
-      comparison_type: "forecast"
-      value_types: ["actual", "forecast"]
+      comparison_type: "Forecast"
+      value_types: ["Actual", "Forecast"]
       calculation_type: "Variance vs Forecast"
     materiality: null  # Use default_materiality_threshold (5%)
+    importance: 4
+    category: variance_analysis
+    frequency: monthly
+    sql_query: |
+      SELECT
+        ((a.value - f.value) / f.value * 100) AS calculated_value,
+        li.name  AS metric_name,
+        p.period_label,
+        a.company_id
+      FROM financial_metrics a
+      JOIN financial_metrics f
+        ON a.company_id = f.company_id
+       AND a.period_id  = f.period_id
+       AND a.line_item_id = f.line_item_id
+      JOIN periods p ON a.period_id = p.id
+      JOIN line_item_definitions li ON a.line_item_id = li.id
+      WHERE a.value_type = 'Actual'
+        AND f.value_type = 'Forecast'
+        AND f.value <> 0
+        AND ABS((a.value - f.value) / f.value * 100) >= %(threshold)s
 
   - id: 20006
-    name: "ytd_performance"
+    name: ytd_performance
     description: "Year-to-Date performance vs prior year"
     formula: "(ytd_current - ytd_prior_year) / ytd_prior_year" 
     params:
-      aggregation_type: "ytd"
-      comparison_period: "prior_year"
+      aggregation_type: "YTD"
+      comparison_period: "Prior Year"
       calculation_type: "YTD Growth"
     materiality: null  # Use default_materiality_threshold (5%)
+    importance: 4
+    category: growth_analysis
+    frequency: yearly
+    sql_query: |
+      SELECT
+        dm.calculated_value,
+        li.name  AS metric_name,
+        p.period_label,
+        dm.company_id
+      FROM derived_metrics dm
+      JOIN periods p ON dm.period_id = p.id
+      JOIN financial_metrics fm ON dm.base_metric_id = fm.id
+      JOIN line_item_definitions li ON fm.line_item_id = li.id
+      WHERE dm.calculation_type = 'YTD Growth'
+        AND p.period_label LIKE 'YTD %'
+        AND ABS(dm.calculated_value) >= %(threshold)s
 
   # =============================================================================
-  # TREND & PATTERN OBSERVATIONS (20007-20015)
+  # TREND & PATTERN OBSERVATIONS (20007-20009)
   # =============================================================================
 
   - id: 20007
-    name: "trend_direction"
+    name: trend_direction
     description: "Multi-period trend direction analysis"
     formula: "linear_regression_slope(values[-6:])"
     params:
@@ -138,19 +239,65 @@ observations:
       trend_sensitivity: 0.02
       calculation_type: "Trend Analysis"
     materiality: 0.02  # 2% threshold for trend detection (more sensitive)
+    importance: 3
+    category: trend_pattern
+    frequency: quarterly
+    sql_query: |
+      WITH trend_data AS (
+        SELECT
+          fm.company_id,
+          li.name     AS metric_name,
+          fm.value,
+          p.start_date,
+          ROW_NUMBER() OVER (PARTITION BY fm.company_id, li.id
+                             ORDER BY p.start_date) AS period_num
+        FROM financial_metrics fm
+        JOIN periods p ON fm.period_id = p.id
+        JOIN line_item_definitions li ON fm.line_item_id = li.id
+        WHERE fm.value_type = 'Actual'
+          AND p.start_date >= CURRENT_DATE - INTERVAL '12 months'
+      )
+      SELECT
+        company_id,
+        metric_name,
+        AVG(value)   AS avg_value,
+        STDDEV(value) AS volatility,
+        COUNT(*)     AS period_count
+      FROM trend_data
+      GROUP BY company_id, metric_name
+      HAVING COUNT(*) >= 3
 
   - id: 20008
-    name: "volatility_measure"
+    name: volatility_measure
     description: "Standard deviation of recent periods"
-    formula: "stdev(values[-6:])"
+    formula: "stddev(values[-6:])"
     params:
       window_periods: 6  
       volatility_threshold: 0.15
       calculation_type: "Volatility Analysis"
     materiality: null  # Use default_materiality_threshold (5%)
+    importance: 2
+    category: trend_pattern
+    frequency: monthly
+    sql_query: |
+      WITH vol_data AS (
+        SELECT
+          fm.company_id,
+          li.name      AS metric_name,
+          STDDEV(fm.value)/AVG(fm.value) AS volatility
+        FROM financial_metrics fm
+        JOIN periods p ON fm.period_id = p.id
+        JOIN line_item_definitions li ON fm.line_item_id = li.id
+        WHERE fm.value_type = 'Actual'
+          AND p.start_date >= CURRENT_DATE - INTERVAL '12 months'
+          AND fm.value > 0
+        GROUP BY fm.company_id, li.id, li.name
+        HAVING COUNT(*) >= 6
+      )
+      SELECT * FROM vol_data WHERE volatility >= %(threshold)s
 
   - id: 20009
-    name: "seasonal_variance"
+    name: seasonal_variance
     description: "Deviation from seasonal pattern"
     formula: "(current - seasonal_average) / seasonal_average"
     params:
@@ -158,22 +305,92 @@ observations:
       seasonal_lookback: 3
       calculation_type: "Seasonal Analysis"
     materiality: null  # Use default_materiality_threshold (5%)
+    importance: 3
+    category: trend_pattern
+    frequency: monthly
+    sql_query: |
+      WITH seasonal_avg AS (
+        SELECT
+          fm.company_id,
+          li.name   AS metric_name,
+          EXTRACT(MONTH FROM p.start_date) AS month_num,
+          AVG(fm.value) AS seasonal_avg
+        FROM financial_metrics fm
+        JOIN periods p ON fm.period_id = p.id
+        JOIN line_item_definitions li ON fm.line_item_id = li.id
+        WHERE fm.value_type = 'Actual'
+          AND p.start_date >= CURRENT_DATE - INTERVAL '36 months'
+        GROUP BY fm.company_id, li.id, li.name,
+                 EXTRACT(MONTH FROM p.start_date)
+        HAVING COUNT(*) >= 2
+      ),
+      current_data AS (
+        SELECT
+          fm.company_id,
+          li.name   AS metric_name,
+          fm.value  AS current_value,
+          EXTRACT(MONTH FROM p.start_date) AS month_num
+        FROM financial_metrics fm
+        JOIN periods p ON fm.period_id = p.id
+        JOIN line_item_definitions li ON fm.line_item_id = li.id
+        WHERE fm.value_type = 'Actual'
+          AND p.start_date >= CURRENT_DATE - INTERVAL '3 months'
+      )
+      SELECT
+        cd.company_id,
+        cd.metric_name,
+        cd.current_value,
+        sa.seasonal_avg,
+        ((cd.current_value - sa.seasonal_avg)/sa.seasonal_avg*100)
+          AS calculated_value
+      FROM current_data cd
+      JOIN seasonal_avg sa
+        ON cd.company_id = sa.company_id
+       AND cd.metric_name = sa.metric_name
+       AND cd.month_num   = sa.month_num
+      WHERE sa.seasonal_avg <> 0
+        AND ABS((cd.current_value - sa.seasonal_avg)
+                 / sa.seasonal_avg * 100) >= %(threshold)s
 
   # =============================================================================
-  # ABSOLUTE VALUE OBSERVATIONS (20010-20015)
+  # ABSOLUTE VALUE OBSERVATIONS (20010-20011)
   # =============================================================================
 
   - id: 20010
-    name: "absolute_change"
+    name: absolute_change
     description: "Absolute dollar/unit change from prior period"
     formula: "current_period - prior_period"
     params:
       change_type: "absolute"
       calculation_type: "Absolute Change"
     materiality: null  # Use default_materiality_threshold (5%)
+    importance: 2
+    category: absolute_magnitude
+    frequency: monthly
+    sql_query: |
+      SELECT
+        ABS(cur.value - pri.value) AS calculated_value,
+        li.name       AS metric_name,
+        p.period_label,
+        cur.company_id
+      FROM financial_metrics cur
+      JOIN financial_metrics pri
+        ON cur.company_id   = pri.company_id
+       AND cur.line_item_id = pri.line_item_id
+      JOIN periods p ON cur.period_id = p.id
+      JOIN line_item_definitions li ON cur.line_item_id = li.id
+      WHERE cur.value_type = 'Actual'
+        AND pri.value_type = 'Actual'
+        AND pri.period_id = (
+          SELECT MAX(p2.period_id)
+          FROM periods p2
+          WHERE p2.start_date < p.start_date
+            AND p2.period_type = p.period_type
+        )
+        AND ABS(cur.value - pri.value) >= %(threshold)s
 
   - id: 20011
-    name: "magnitude_check"
+    name: magnitude_check
     description: "Unusual magnitude relative to historical range"
     formula: "(current - historical_mean) / historical_stdev"
     params:
@@ -181,23 +398,96 @@ observations:
       outlier_threshold: 2.0
       calculation_type: "Magnitude Analysis"
     materiality: null  # Use default_materiality_threshold (5%)
+    importance: 3
+    category: absolute_magnitude
+    frequency: monthly
+    sql_query: |
+      WITH hist AS (
+        SELECT
+          fm.company_id,
+          li.name        AS metric_name,
+          AVG(fm.value)  AS mean_val,
+          STDDEV(fm.value) AS stddev_val
+        FROM financial_metrics fm
+        JOIN periods p ON fm.period_id = p.id
+        JOIN line_item_definitions li ON fm.line_item_id = li.id
+        WHERE fm.value_type = 'Actual'
+          AND p.start_date >= CURRENT_DATE - INTERVAL '24 months'
+        GROUP BY fm.company_id, li.id, li.name
+        HAVING COUNT(*) >= 12 AND STDDEV(fm.value) > 0
+      ),
+      curr AS (
+        SELECT
+          fm.company_id,
+          li.name       AS metric_name,
+          fm.value      AS current_value,
+          p.period_label
+        FROM financial_metrics fm
+        JOIN periods p ON fm.period_id = p.id
+        JOIN line_item_definitions li ON fm.line_item_id = li.id
+        WHERE fm.value_type = 'Actual'
+          AND p.start_date >= CURRENT_DATE - INTERVAL '1 month'
+      )
+      SELECT
+        c.company_id,
+        c.metric_name,
+        c.current_value,
+        h.mean_val,
+        (c.current_value - h.mean_val)/h.stddev_val
+          AS calculated_value
+      FROM curr c
+      JOIN hist h
+        ON c.company_id = h.company_id
+       AND c.metric_name = h.metric_name
+      WHERE ABS((c.current_value - h.mean_val)/h.stddev_val)
+            >= %(threshold)s
 
   # =============================================================================
-  # PERFORMANCE RATIO OBSERVATIONS (20012-20015)
+  # PERFORMANCE RATIO OBSERVATIONS (20012-20013)
   # =============================================================================
 
   - id: 20012
-    name: "efficiency_ratio"
+    name: efficiency_ratio
     description: "Performance efficiency metrics"
     formula: "dependent_metric / independent_metric"
     params:
       ratio_type: "efficiency"
-      valid_denominators: ["revenue", "assets", "employees"]
+      valid_denominators: ["Revenue", "assets", "employees"]
       calculation_type: "Efficiency Analysis"
     materiality: null  # Use default_materiality_threshold (5%)
+    importance: 3
+    category: ratio_efficiency
+    frequency: quarterly
+    sql_query: |
+      WITH ratios AS (
+        SELECT
+          gp.company_id,
+          gp.value/rev.value AS eff_ratio,
+          p.period_label,
+          li_gp.name      AS metric_name
+        FROM financial_metrics gp
+        JOIN financial_metrics rev
+          ON gp.company_id   = rev.company_id
+         AND gp.period_id    = rev.period_id
+        JOIN periods p ON gp.period_id = p.id
+        JOIN line_item_definitions li_gp ON gp.line_item_id = li_gp.id
+        JOIN line_item_definitions li_rev ON rev.line_item_id = li_rev.id
+        WHERE li_gp.name = 'Gross Profit'
+          AND li_rev.name = 'Revenue'
+          AND gp.value_type = 'Actual'
+          AND rev.value_type = 'Actual'
+          AND rev.value > 0
+      )
+      SELECT
+        company_id,
+        metric_name     AS metric_name,
+        eff_ratio       AS calculated_value,
+        period_label
+      FROM ratios
+      WHERE ABS(eff_ratio - 1) >= %(threshold)s
 
   - id: 20013
-    name: "margin_analysis" 
+    name: margin_analysis
     description: "Profit margin progression analysis"
     formula: "profit_metric / revenue_metric"
     params:
@@ -205,10 +495,40 @@ observations:
       benchmark_comparison: true
       calculation_type: "Margin Analysis"
     materiality: null  # Use default_materiality_threshold (5%)
+    importance: 4
+    category: ratio_efficiency
+    frequency: monthly
+    sql_query: |
+      WITH margins AS (
+        SELECT
+          m.company_id,
+          (m.value/rev.value*100) AS margin_pct,
+          p.period_label,
+          li.name            AS metric_name
+        FROM financial_metrics m
+        JOIN financial_metrics rev
+          ON m.company_id   = rev.company_id
+         AND m.period_id    = rev.period_id
+        JOIN periods p ON m.period_id = p.id
+        JOIN line_item_definitions li   ON m.line_item_id   = li.id
+        JOIN line_item_definitions li_rev ON rev.line_item_id = li_rev.id
+        WHERE li.name IN ('Gross Profit','EBITDA')
+          AND li_rev.name = 'Revenue'
+          AND m.value_type = 'Actual'
+          AND rev.value_type = 'Actual'
+          AND rev.value > 0
+      )
+      SELECT
+        company_id,
+        metric_name     AS metric_name,
+        margin_pct      AS calculated_value,
+        period_label
+      FROM margins
+      WHERE ABS(margin_pct - 0)*100 >= %(threshold)s
 
 # =============================================================================
 # END OF FILE
-# - To extend: add new observations with IDs in 20016-29999 range
-# - All observation changes here flow through to questions_generator.py
+# - To extend: add new observations with IDs in 20014–29999 range
+# - All observation changes here flow through to questions_engine.py
 # - Link new observations to questions via observation_id in questions.yaml
 # =============================================================================
