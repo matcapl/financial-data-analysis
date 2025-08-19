@@ -3,7 +3,7 @@
 #
 # PURPOSE:
 #   Seed data for question_templates table, driving automated question generation.
-#   - Each entry must have: id, observation_id, importance, template.
+#   - Each entry must have: id, observation_id, importance, category, priority, template_text.
 #   - Used by scripts/generate_questions.py to build schema/002_question_templates.sql.
 #
 #   Important: This file is validated by Pydantic in ci/00_config_validation.sh.
@@ -78,7 +78,9 @@ questions:
   - id: 30001
     observation_id: 20001  # growth_mom
     importance: 5
-    template: >-
+    category: growth_analysis
+    priority: high
+    template_text: >-
       {{ metric_name }} changed {{ percent(current_value, prior_month_value) }}% month-over-month
       ({{ format_currency(current_value) }} vs {{ format_currency(prior_month_value) }}).
       What operational factors drove this {{ conditional(current_value > prior_month_value, "growth", "decline") }}?
@@ -87,7 +89,9 @@ questions:
   - id: 30002
     observation_id: 20002  # growth_qoq
     importance: 4
-    template: >-
+    category: growth_analysis
+    priority: high
+    template_text: >-
       {{ metric_name }} showed {{ percent(current_value, prior_quarter_value) }}% growth quarter-over-quarter.
       How does this align with our quarterly targets and strategic initiatives?
     weight: 1.0
@@ -95,7 +99,9 @@ questions:
   - id: 30003
     observation_id: 20003  # growth_yoy
     importance: 5
-    template: >-
+    category: growth_analysis
+    priority: high
+    template_text: >-
       Year-over-year {{ metric_name }} {{ conditional(current_value > prior_year_value, "increased", "decreased") }}
       by {{ percent(current_value, prior_year_value) }}% ({{ format_abs(current_value - prior_year_value) }}).
       What strategic initiatives contributed to this performance?
@@ -104,7 +110,9 @@ questions:
   - id: 30004
     observation_id: 20006  # ytd_performance  
     importance: 4
-    template: >-
+    category: growth_analysis
+    priority: high
+    template_text: >-
       Year-to-date {{ metric_name }} is {{ percent(ytd_current, ytd_prior) }}%
       {{ conditional(ytd_current > ytd_prior, "ahead of", "behind") }} last year.
       Are we on track for annual targets?
@@ -117,7 +125,9 @@ questions:
   - id: 30011
     observation_id: 20004  # variance_vs_budget
     importance: 5
-    template: >-
+    category: variance_analysis
+    priority: high
+    template_text: >-
       {{ metric_name }} is {{ percent(current_value, budget_value) }}%
       {{ conditional(current_value > budget_value, "above", "below") }} budget
       ({{ format_currency(current_value) }} vs {{ format_currency(budget_value) }}).
@@ -126,8 +136,10 @@ questions:
 
   - id: 30012
     observation_id: 20004  # variance_vs_budget (critical version)
-    importance: 5  
-    template: >-
+    importance: 5
+    category: variance_analysis
+    priority: high
+    template_text: >-
       🚨 CRITICAL: {{ metric_name }} variance of {{ percent(current_value, budget_value) }}%
       impacts {{ format_currency(abs(current_value - budget_value)) }}.
       What immediate corrective actions are required?
@@ -136,7 +148,9 @@ questions:
   - id: 30013
     observation_id: 20005  # variance_vs_forecast
     importance: 4
-    template: >-
+    category: variance_analysis
+    priority: high
+    template_text: >-
       {{ metric_name }} came in {{ percent(current_value, forecast_value) }}%
       {{ conditional(current_value > forecast_value, "higher", "lower") }} than forecast.
       Should we adjust our forecasting methodology or expectations?
@@ -149,7 +163,9 @@ questions:
   - id: 30021
     observation_id: 20007  # trend_direction
     importance: 3
-    template: >-
+    category: trend_pattern
+    priority: high
+    template_text: >-
       {{ metric_name }} shows a {{ conditional(trend_slope > 0, "positive", "negative") }} trend
       over the past {{ trend_periods }} periods.
       Is this trend sustainable and aligned with our strategic direction?
@@ -157,8 +173,10 @@ questions:
 
   - id: 30022
     observation_id: 20008  # volatility_measure
-    importance: 2  
-    template: >-
+    importance: 2
+    category: trend_pattern
+    priority: high
+    template_text: >-
       {{ metric_name }} volatility is {{ round_smart(volatility * 100, 1) }}%.
       What factors are driving this variability and how can we improve predictability?
     weight: 0.8
@@ -166,7 +184,9 @@ questions:
   - id: 30023
     observation_id: 20009  # seasonal_variance
     importance: 3
-    template: >-
+    category: trend_pattern
+    priority: high
+    template_text: >-
       {{ metric_name }} is {{ percent(current_value, seasonal_average) }}%
       {{ conditional(current_value > seasonal_average, "above", "below") }} seasonal norm.
       What changed our typical seasonal patterns?
@@ -179,7 +199,9 @@ questions:
   - id: 30031
     observation_id: 20010  # absolute_change
     importance: 2
-    template: >-
+    category: absolute_magnitude
+    priority: high
+    template_text: >-
       Absolute change in {{ metric_name }} was {{ format_currency(absolute_change) }}.
       Is this magnitude significant relative to our scale of operations?
     weight: 0.7
@@ -187,7 +209,9 @@ questions:
   - id: 30032
     observation_id: 20011  # magnitude_check
     importance: 3
-    template: >-
+    category: absolute_magnitude
+    priority: high
+    template_text: >-
       {{ metric_name }} is {{ round_smart(z_score, 1) }}
       standard deviations {{ conditional(z_score > 0, "above", "below") }} its historical mean.
       Should this outlier be investigated further?
@@ -200,7 +224,9 @@ questions:
   - id: 30041
     observation_id: 20012  # efficiency_ratio
     importance: 3
-    template: >-
+    category: ratio_efficiency
+    priority: high
+    template_text: >-
       {{ ratio_name }} ratio is {{ round_smart(ratio_value, 2) }},
       {{ conditional(ratio_trend > 0, "improving", "declining") }} from prior periods.
       How does this impact our operational efficiency targets?
@@ -209,7 +235,9 @@ questions:
   - id: 30042
     observation_id: 20013  # margin_analysis
     importance: 4
-    template: >-
+    category: ratio_efficiency
+    priority: high
+    template_text: >-
       {{ metric_name }} margin is {{ round_smart(margin_percentage * 100, 1) }}%,
       {{ conditional(margin_change > 0, "up", "down") }} {{ round_smart(abs(margin_change) * 100, 1) }}% points.
       How does this compare to industry benchmarks and competitors?
@@ -222,7 +250,9 @@ questions:
   - id: 30051
     observation_id: 20001  # growth_mom (alternative template)
     importance: 4
-    template: >-
+    category: growth_analysis
+    priority: high
+    template_text: >-
       Monthly {{ metric_name }} performance shows {{ percent(current_value, prior_month_value) }}% change.
       What specific business drivers contributed to this result?
     weight: 0.9
@@ -230,7 +260,9 @@ questions:
   - id: 30052  
     observation_id: 20003  # growth_yoy (alternative template)
     importance: 4
-    template: >-
+    category: growth_analysis
+    priority: high
+    template_text: >-
       Annual {{ metric_name }} growth of {{ percent(current_value, prior_year_value) }}%
       represents {{ format_currency(current_value - prior_year_value) }} impact.
       How does this position us for next year's planning?

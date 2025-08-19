@@ -47,7 +47,6 @@ def generate_board_question_templates():
         "CREATE TABLE question_templates (",
         "    id INT PRIMARY KEY,",
         "    category TEXT NOT NULL,",
-        "    template_key TEXT NOT NULL,", 
         "    priority TEXT NOT NULL,",
         "    template_text TEXT NOT NULL,",
         "    condition_formula TEXT,",
@@ -57,7 +56,6 @@ def generate_board_question_templates():
         "    target_audience TEXT DEFAULT 'board',",
         "    created_at TIMESTAMP DEFAULT NOW() NOT NULL,",
         "    updated_at TIMESTAMP DEFAULT NOW() NOT NULL,",
-        "    UNIQUE (category, template_key)",
         ");",
         ""
     ])
@@ -67,7 +65,7 @@ def generate_board_question_templates():
         lines.extend([
             "-- Seed board-level question templates",
             "INSERT INTO question_templates (",
-            "    id, category, template_key, priority, template_text,",
+            "    id, category, priority, template_text,",
             "    condition_formula, materiality_threshold, follow_up_questions,",
             "    context_variables, target_audience",
             ") VALUES"
@@ -77,7 +75,6 @@ def generate_board_question_templates():
         for q in questions:
             qid = q["id"]
             category = q["category"]
-            template_key = q["template_key"] 
             priority = q["priority"]
             template_text = q["template_text"].replace("'", "''")
             condition_formula = q.get("condition_formula", "").replace("'", "''")
@@ -89,7 +86,7 @@ def generate_board_question_templates():
             target_audience = q.get("target_audience", "board")
             
             template_values.append(
-                f"    ({qid}, '{category}', '{template_key}', '{priority}', '{template_text}', "
+                f"    ({qid}, '{category}', '{priority}', '{template_text}', "
                 f"'{condition_formula}', {materiality_threshold}, '{follow_ups}'::jsonb, "
                 f"'{context_vars}'::jsonb, '{target_audience}')"
             )
@@ -98,7 +95,6 @@ def generate_board_question_templates():
         lines.extend([
             "ON CONFLICT (id) DO UPDATE SET",
             "    category = EXCLUDED.category,",
-            "    template_key = EXCLUDED.template_key,", 
             "    priority = EXCLUDED.priority,",
             "    template_text = EXCLUDED.template_text,",
             "    condition_formula = EXCLUDED.condition_formula,",
@@ -197,7 +193,6 @@ DROP TABLE IF EXISTS question_templates CASCADE;
 CREATE TABLE question_templates (
     id SERIAL PRIMARY KEY,
     category TEXT DEFAULT 'general',
-    template_key TEXT DEFAULT 'basic',
     priority TEXT DEFAULT 'medium',
     template_text TEXT NOT NULL,
     condition_formula TEXT,
@@ -211,9 +206,9 @@ CREATE TABLE question_templates (
 
 -- Insert basic fallback template
 INSERT INTO question_templates (
-    id, category, template_key, priority, template_text, condition_formula
+    id, category, priority, template_text, condition_formula
 ) VALUES (
-    1, 'general', 'basic_change', 'medium', 
+    1, 'general', 'medium', 
     '{metric} changed by {change_pct:.1f}%. What factors contributed to this change?',
     'abs(change_pct) > 5.0'
 ) ON CONFLICT (id) DO NOTHING;
