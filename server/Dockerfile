@@ -15,7 +15,13 @@ RUN apt-get update && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Install Poetry
-RUN pip install --no-cache-dir poetry
+ARG POETRY_VERSION=2.1.4
+ARG POETRY_CHECKSUM=963d56703976ce9cdc6ff460c44a4f8fbad64c110dc447b86eeabb4a47ec2160
+RUN curl -fsSL https://install.python-poetry.org -o install-poetry.py \
+ && echo "${POETRY_CHECKSUM}  install-poetry.py" | sha256sum -c - \
+ && python3 install-poetry.py --version $POETRY_VERSION --yes \
+ && ln -s /root/.local/bin/poetry /usr/local/bin/poetry \
+ && rm install-poetry.py
 
 # Set workdir
 WORKDIR /app

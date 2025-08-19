@@ -122,7 +122,7 @@ echo "DATABASE_URL=postgresql://your_user:your_password@ep-xxx.neon.tech:5432/yo
 docker build -t finance-server -f server/Dockerfile .
 
 # Find and kill process on a port
-lsof -ti:4000 | xargs -r kill -9  
+lsof -ti:4000 | xargs -r kill -9
 
 # Check Docker is open
 open -a Docker
@@ -477,6 +477,13 @@ curl -s http://localhost:4000/health
 
 # Stop test container
 docker stop finance-server_ci
+
+# Extreme: Prune Docker's build cache
+docker builder prune --all
+
+# Rebuild without cache
+docker build --no-cache -t finance-server -f server/Dockerfile .
+
 ```
 
 ## **Step 5: Database Debugging (if CI fails)**
