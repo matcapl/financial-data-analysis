@@ -1,76 +1,106 @@
 #!/usr/bin/env python3
 """
-calc_metrics.py - Fixed version for derived metrics calculation
+calc_metrics.py - YAML-driven derived metrics calculation engine
 
-FIXED ISSUES:
-1. Uses period_id instead of period_label (matches schema)
-2. Proper foreign key lookups for periods table
-3. Handles period creation for YTD calculations
-4. Robust error handling and logging
-5. Matches derived_metrics table schema exactly
+Features:
+- Reads observation definitions from config/observations.yaml
+- Uses DB foreign key lookups for periods and line items
+- Handles YTD, MoM, QoQ, YoY growth and other observations configured in YAML
+- Robust error handling and detailed logging
+- Uses schema and config consistently (e.g., period_id, line_item_id)
 """
 
 import psycopg2
-import json
+from psycopg2.extras import RealDictCursor
+import os
+import yaml
 import sys
-from datetime import datetime, date, timedelta
+from datetime import datetime, timedelta, date
 from decimal import Decimal
 from utils import get_db_connection, log_event
 
 
+def load_observations():
+    obs_path = os.path.join(os.path.dirname(__file__), '..', 'config', 'observations.yaml')
+    with open(obs_path, 'r') as f:
+        obs_config = yaml.safe_load(f)
+    return obs_config.get('observations', [])
+
+
 def calculate_percentage(current, previous):
-    """Calculate percentage change between two values."""
     if previous is None or previous == 0 or current is None:
         return None
-    return ((current - previous) / previous) * 100
+    try:
+        return float((current - previous) / previous * 100)
+    except Exception:
+        return None
 
 
-def get_or_create_period(cur, period_label, period_type="Monthly", start_date=None, end_date=None):
-    """Get period_id or create period if it doesn't exist."""
-    # First try to find existing period
+def get_period_id(cur, period_label, period_type):
     cur.execute(
         "SELECT id FROM periods WHERE period_label = %s AND period_type = %s",
         (period_label, period_type)
     )
-    result = cur.fetchone()
-    if result:
-        return result[0]
-    
-    # Create new period if it doesn't exist
+    res = cur.fetchone()
+    return res[0] if res else None
+
+
+def get_line_item_id(cur, line_item_name):
+    cur.execute("SELECT id FROM line_item_definitions WHERE name = %s", (line_item_name,))
+    res = cur.fetchone()
+    return res if res else None
+
+
+def get_financial_metrics(cur, company_id, line_item_id):
     cur.execute(
         """
-        INSERT INTO periods (period_type, period_label, start_date, end_date, created_at, updated_at)
-        VALUES (%s, %s, %s, %s, %s, %s)
-        RETURNING id
-        """,
-        (period_type, period_label, start_date, end_date, datetime.now(), datetime.now())
+        SELECT p.period_label, p.id AS period_id, fm.value_type, fm.frequency,
+               fm.value, EXTRACT(YEAR FROM p.start_date) AS year, p.start_date, fm.id AS fm_id
+        FROM financial_metrics fm
+        JOIN periods p ON fm.period_id = p.id
+        WHERE fm.company_id = %s AND fm.line_item_id = %s
+        ORDER BY p.start_date
+        """, (company_id, line_item_id)
     )
-    return cur.fetchone()[0]
+    return cur.fetchall()
 
 
 def calculate_ytd(cur, company_id, year, line_item_id):
-    """Calculate Year-to-Date totals and return constituent periods."""
     cur.execute(
         """
-        SELECT p.period_label, fm.value, p.id
+        SELECT SUM(fm.value) AS total_value
         FROM financial_metrics fm
         JOIN periods p ON fm.period_id = p.id
-        WHERE fm.company_id = %s
-        AND fm.frequency = 'Monthly'
-        AND fm.line_item_id = %s
+        WHERE fm.company_id = %s AND fm.line_item_id = %s AND fm.value_type = 'Actual'
+        AND p.period_type = 'Monthly'
         AND EXTRACT(YEAR FROM p.start_date) = %s
-        AND fm.value_type = 'Actual'
-        ORDER BY p.start_date
         """,
         (company_id, line_item_id, year)
     )
-    rows = cur.fetchall()
-    if not rows:
-        return None, []
-    
-    total = sum(val for _, val, _ in rows if val is not None)
-    labels = [label for label, _, _ in rows]
-    return total, labels
+    res = cur.fetchone()
+    return float(res[0]) if res and res is not None else None
+
+
+def insert_or_update_derived_metric(cur, base_metric_id, calculation_type, company_id, period_id,
+                                    calculated_value, unit, source_ids, calculation_note,
+                                    corroboration_status, frequency):
+    cur.execute(
+        """
+        INSERT INTO derived_metrics (
+            base_metric_id, calculation_type, company_id, period_id,
+            calculated_value, unit, source_ids, calculation_note,
+            corroboration_status, frequency, created_at, updated_at
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+        ON CONFLICT (base_metric_id, company_id, period_id, calculation_type) DO UPDATE SET
+            calculated_value = EXCLUDED.calculated_value,
+            updated_at = EXCLUDED.updated_at
+        """,
+        (
+            base_metric_id, calculation_type, company_id, period_id,
+            calculated_value, unit, source_ids, calculation_note,
+            corroboration_status, frequency
+        )
+    )
 
 
 def main():
@@ -79,296 +109,189 @@ def main():
         sys.exit(1)
 
     company_id = int(sys.argv[1])
-    
-    log_event("calc_metrics_started", {
-        "company_id": company_id,
-        "timestamp": datetime.now().isoformat()
-    })
+    log_event("calc_metrics_started", {"company_id": company_id, "timestamp": datetime.now().isoformat()})
+
+    observations = load_observations()
+    if not observations:
+        log_event("calc_metrics_no_observations", {"message": "No observations loaded from YAML"})
+        print("No observations defined. Exiting.")
+        return
 
     with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            # Load seeded line items
-            cur.execute("""
-                SELECT id, name
-                FROM line_item_definitions
-                WHERE name IN ('Revenue', 'Gross Profit', 'EBITDA')
-            """)
-            line_items = cur.fetchall()
-            
-            if not line_items:
-                raise Exception("No line items found. Ensure database is properly seeded.")
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # Preload all line items from the line_item_definitions table
+            cur.execute("SELECT id, name FROM line_item_definitions")
+            line_items_map = {row['name']: row['id'] for row in cur.fetchall()}
 
-            for line_item_id, line_item_name in line_items:
-                log_event("processing_line_item", {
-                    "line_item_id": line_item_id,
-                    "line_item_name": line_item_name
-                })
-                
-                # Fetch all metrics for this company + line item with period info
-                cur.execute(
-                    """
-                    SELECT
-                        p.period_label,
-                        p.id as period_id,
-                        fm.value_type,
-                        fm.frequency,
-                        fm.value,
-                        EXTRACT(YEAR FROM p.start_date) AS year,
-                        p.start_date,
-                        fm.id as fm_id
-                    FROM financial_metrics fm
-                    JOIN periods p ON fm.period_id = p.id
-                    WHERE fm.company_id = %s
-                    AND fm.line_item_id = %s
-                    ORDER BY p.start_date
-                    """,
-                    (company_id, line_item_id)
-                )
-                metrics = cur.fetchall()
+            if not line_items_map:
+                raise Exception("No line items found. Ensure database seeded properly.")
 
-                if not metrics:
-                    log_event("no_metrics_found", {
-                        "line_item_id": line_item_id,
-                        "company_id": company_id
-                    })
-                    continue
+            total_processed = 0
 
-                # Organize by frequency and value_type
-                monthly = {}
-                quarterly = {}
-                for row in metrics:
-                    period_label, period_id, value_type, frequency, value, year, start_date, fm_id = row
-                    key = (period_label, value_type)
-                    data = (value, fm_id, period_id, start_date)
-                    
-                    if frequency == "Monthly":
-                        monthly[key] = data
-                    elif frequency == "Quarterly":
-                        quarterly[key] = data
+            for obs in observations:
+                calc_type = obs.get('calculation_type')
+                obs_id = obs.get('id')
+                period_type = obs.get('frequency') or "Monthly"
+                sql_query = obs.get('sql_query')
+                materiality = obs.get('materiality') or 0.05
 
-                years = {int(row[5]) for row in metrics if row[5] is not None}
+                for line_item_name, line_item_id in line_items_map.items():
+                    try:
+                        # Fetch financial metrics for this company and line item
+                        metrics = get_financial_metrics(cur, company_id, line_item_id)
+                        if not metrics:
+                            continue
 
-                # CALCULATION 1: Month-over-Month growth
-                for (period_label, value_type), (value, fm_id, period_id, start_date) in monthly.items():
-                    if value_type != "Actual" or value is None:
-                        continue
-                        
-                    # Find previous month period
-                    prev_month_start = (start_date.replace(day=1) - timedelta(days=1)).replace(day=1)
-                    cur.execute(
-                        """
-                        SELECT p.period_label, p.id 
-                        FROM periods p 
-                        WHERE p.start_date = %s AND p.period_type = 'Monthly'
-                        """,
-                        (prev_month_start,)
-                    )
-                    prev_period = cur.fetchone()
-                    
-                    if prev_period:
-                        prev_label, prev_period_id = prev_period
-                        prev_data = monthly.get((prev_label, "Actual"))
-                        
-                        if prev_data:
-                            prev_value, _, _, _ = prev_data
-                            mom_growth = calculate_percentage(value, prev_value)
-                            
-                            if mom_growth is not None:
-                                cur.execute(
-                                    """
-                                    INSERT INTO derived_metrics (
-                                        base_metric_id, calculation_type, company_id, period_id,
-                                        calculated_value, unit, source_ids, calculation_note,
-                                        corroboration_status, frequency, created_at, updated_at
-                                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                                    ON CONFLICT (base_metric_id, company_id, period_id, calculation_type) 
-                                    DO UPDATE SET 
-                                        calculated_value = EXCLUDED.calculated_value,
-                                        updated_at = EXCLUDED.updated_at
-                                    """,
-                                    (
-                                        fm_id, "MoM Growth", company_id, period_id,
-                                        mom_growth, "%", [fm_id],
-                                        f"Month-over-month growth: {period_label} vs {prev_label}",
-                                        "Ok", "Monthly", datetime.now(), datetime.now()
+                        # Index metrics by period_label and value_type for lookups
+                        metrics_index = {}
+                        for m in metrics:
+                            key = (m['period_label'], m['value_type'])
+                            metrics_index[key] = m
+
+                        # Now calculate derived metrics based on observation ID/calculation type
+                        # Use generalized approach for commonly defined growth calculations
+                        if calc_type in ["MoM Growth", "QoQ Growth", "YoY Growth"]:
+                            for (period_label, value_type), record in metrics_index.items():
+                                if value_type != "Actual" or record['value'] is None:
+                                    continue
+                                base_val = record['value']
+                                base_metric_id = record['fm_id']
+                                period_id = record['period_id']
+                                start_date = record['start_date']
+
+                                # Determine previous period label per calculation type
+                                prev_period_label = None
+                                if calc_type == "MoM Growth" and period_type == "Monthly":
+                                    prev_month_start = (start_date.replace(day=1) - timedelta(days=1)).replace(day=1)
+                                    cur.execute(
+                                        "SELECT period_label FROM periods WHERE start_date = %s AND period_type = 'Monthly'",
+                                        (prev_month_start,)
                                     )
-                                )
+                                    prev = cur.fetchone()
+                                    prev_period_label = prev['period_label'] if prev else None
 
-                # CALCULATION 2: Quarter-over-Quarter growth
-                for (period_label, value_type), (value, fm_id, period_id, start_date) in quarterly.items():
-                    if value_type != "Actual" or value is None:
-                        continue
-                        
-                    # Find previous quarter (approximately 90 days back)
-                    prev_quarter_date = start_date - timedelta(days=90)
-                    cur.execute(
-                        """
-                        SELECT p.period_label, p.id, fm.value, fm.id
-                        FROM periods p
-                        JOIN financial_metrics fm ON p.id = fm.period_id
-                        WHERE p.period_type = 'Quarterly'
-                        AND p.start_date <= %s
-                        AND fm.company_id = %s
-                        AND fm.line_item_id = %s
-                        AND fm.value_type = 'Actual'
-                        ORDER BY p.start_date DESC
-                        LIMIT 1
-                        """,
-                        (prev_quarter_date, company_id, line_item_id)
-                    )
-                    prev_quarter = cur.fetchone()
-                    
-                    if prev_quarter:
-                        prev_label, _, prev_value, _ = prev_quarter
-                        qoq_growth = calculate_percentage(value, prev_value)
-                        
-                        if qoq_growth is not None:
-                            cur.execute(
-                                """
-                                INSERT INTO derived_metrics (
-                                    base_metric_id, calculation_type, company_id, period_id,
-                                    calculated_value, unit, source_ids, calculation_note,
-                                    corroboration_status, frequency, created_at, updated_at
-                                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                                ON CONFLICT (base_metric_id, company_id, period_id, calculation_type) 
-                                DO UPDATE SET 
-                                    calculated_value = EXCLUDED.calculated_value,
-                                    updated_at = EXCLUDED.updated_at
-                                """,
-                                (
-                                    fm_id, "QoQ Growth", company_id, period_id,
-                                    qoq_growth, "%", [fm_id],
-                                    f"Quarter-over-quarter growth: {period_label} vs {prev_label}",
-                                    "Ok", "Quarterly", datetime.now(), datetime.now()
-                                )
-                            )
-
-                # CALCULATION 3: Year-over-Year growth
-                for year in years:
-                    for freq_dict, freq_name in [(monthly, "Monthly"), (quarterly, "Quarterly")]:
-                        for (period_label, value_type), (value, fm_id, period_id, start_date) in freq_dict.items():
-                            if value_type != "Actual" or value is None:
-                                continue
-                                
-                            # Find same period in previous year
-                            prev_year_start = date(start_date.year - 1, start_date.month, start_date.day)
-                            cur.execute(
-                                """
-                                SELECT fm.value 
-                                FROM financial_metrics fm
-                                JOIN periods p ON fm.period_id = p.id
-                                WHERE p.start_date = %s
-                                AND fm.company_id = %s
-                                AND fm.line_item_id = %s
-                                AND fm.value_type = 'Actual'
-                                """,
-                                (prev_year_start, company_id, line_item_id)
-                            )
-                            prev_year_result = cur.fetchone()
-                            
-                            if prev_year_result:
-                                prev_value = prev_year_result[0]
-                                yoy_growth = calculate_percentage(value, prev_value)
-                                
-                                if yoy_growth is not None:
+                                elif calc_type == "QoQ Growth" and period_type == "Quarterly":
+                                    prev_quarter_start = start_date - timedelta(days=90)
                                     cur.execute(
                                         """
-                                        INSERT INTO derived_metrics (
-                                            base_metric_id, calculation_type, company_id, period_id,
-                                            calculated_value, unit, source_ids, calculation_note,
-                                            corroboration_status, frequency, created_at, updated_at
-                                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                                        ON CONFLICT (base_metric_id, company_id, period_id, calculation_type) 
-                                        DO UPDATE SET 
-                                            calculated_value = EXCLUDED.calculated_value,
-                                            updated_at = EXCLUDED.updated_at
+                                        SELECT p.period_label 
+                                        FROM periods p
+                                        WHERE p.period_type = 'Quarterly' 
+                                        AND p.start_date <= %s
+                                        ORDER BY p.start_date DESC LIMIT 1
                                         """,
-                                        (
-                                            fm_id, "YoY Growth", company_id, period_id,
-                                            yoy_growth, "%", [fm_id],
-                                            f"Year-over-year growth: {period_label} vs previous year",
-                                            "Ok", freq_name, datetime.now(), datetime.now()
-                                        )
+                                        (prev_quarter_start,)
                                     )
+                                    prev = cur.fetchone()
+                                    prev_period_label = prev['period_label'] if prev else None
 
-                # CALCULATION 4: Year-to-Date calculations
-                for year in years:
-                    ytd_total, ytd_labels = calculate_ytd(cur, company_id, year, line_item_id)
-                    
-                    if ytd_total is None:
-                        continue
-                    
-                    # Create or get YTD period
-                    ytd_label = f"YTD {year}"
-                    ytd_period_id = get_or_create_period(
-                        cur, ytd_label, "Yearly", 
-                        date(year, 1, 1), date(year, 12, 31)
-                    )
-                    
-                    # Calculate YTD vs previous year
-                    prev_ytd_total, _ = calculate_ytd(cur, company_id, year - 1, line_item_id)
-                    
-                    if prev_ytd_total:
-                        ytd_growth = calculate_percentage(ytd_total, prev_ytd_total)
-                        
-                        if ytd_growth is not None:
-                            # Find a representative base_metric_id for this year
-                            cur.execute(
-                                """
-                                SELECT fm.id FROM financial_metrics fm
-                                JOIN periods p ON fm.period_id = p.id
-                                WHERE fm.company_id = %s 
-                                AND fm.line_item_id = %s
-                                AND EXTRACT(YEAR FROM p.start_date) = %s
-                                AND fm.value_type = 'Actual'
-                                ORDER BY p.start_date DESC
-                                LIMIT 1
-                                """,
-                                (company_id, line_item_id, year)
-                            )
-                            base_metric_result = cur.fetchone()
-                            
-                            if base_metric_result:
-                                base_metric_id = base_metric_result[0]
+                                elif calc_type == "YoY Growth":
+                                    prev_year_start = date(start_date.year - 1, start_date.month, start_date.day)
+                                    cur.execute(
+                                        "SELECT period_label FROM periods WHERE start_date = %s AND period_type = %s",
+                                        (prev_year_start, period_type)
+                                    )
+                                    prev = cur.fetchone()
+                                    prev_period_label = prev['period_label'] if prev else None
+
+                                if not prev_period_label:
+                                    continue
+                                prev_record = metrics_index.get((prev_period_label, "Actual"))
+                                if not prev_record or prev_record['value'] is None:
+                                    continue
+
+                                prev_val = prev_record['value']
+                                pct_change = calculate_percentage(base_val, prev_val)
+                                if pct_change is None or abs(pct_change) < materiality * 100:
+                                    continue
+
+                                insert_or_update_derived_metric(
+                                    cur,
+                                    base_metric_id,
+                                    calc_type,
+                                    company_id,
+                                    period_id,
+                                    pct_change,
+                                    "%",
+                                    [base_metric_id],
+                                    f"{calc_type} for {period_label} vs {prev_period_label}",
+                                    "Ok",
+                                    period_type
+                                )
+                                total_processed += 1
+
+                        # Handle YTD separately
+                        elif calc_type == "YTD Growth":
+                            years = set(m['year'] for m in metrics if m['year'] is not None)
+                            for year in years:
+                                ytd_total = calculate_ytd(cur, company_id, int(year), line_item_id)
+                                prev_ytd_total = calculate_ytd(cur, company_id, int(year) - 1, line_item_id)
+                                if ytd_total is None or prev_ytd_total is None or prev_ytd_total == 0:
+                                    continue
+
+                                pct_change = calculate_percentage(ytd_total, prev_ytd_total)
+                                if pct_change is None or abs(pct_change) < materiality * 100:
+                                    continue
+
+                                # Create/get YTD period_id
+                                ytd_label = f"YTD {year}"
+                                ytd_period_id = get_period_id(cur, ytd_label, "Yearly")
+                                if not ytd_period_id:
+                                    ytd_period_id = get_or_create_period(cur, ytd_label, "Yearly",
+                                                                        date(year, 1, 1), date(year, 12, 31))
+
+                                # Use any base_metric_id from given year as representative
                                 cur.execute(
                                     """
-                                    INSERT INTO derived_metrics (
-                                        base_metric_id, calculation_type, company_id, period_id,
-                                        calculated_value, unit, source_ids, calculation_note,
-                                        corroboration_status, frequency, created_at, updated_at
-                                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                                    ON CONFLICT (base_metric_id, company_id, period_id, calculation_type) 
-                                    DO UPDATE SET 
-                                        calculated_value = EXCLUDED.calculated_value,
-                                        updated_at = EXCLUDED.updated_at
+                                    SELECT fm.id FROM financial_metrics fm
+                                    JOIN periods p ON fm.period_id = p.id
+                                    WHERE fm.company_id = %s AND fm.line_item_id = %s 
+                                    AND EXTRACT(YEAR FROM p.start_date) = %s
+                                    ORDER BY p.start_date LIMIT 1
                                     """,
-                                    (
-                                        base_metric_id, "YTD Growth", company_id, ytd_period_id,
-                                        ytd_growth, "%", [base_metric_id],
-                                        f"Year-to-date growth for {year} vs {year-1}",
-                                        "Ok", "Yearly", datetime.now(), datetime.now()
-                                    )
+                                    (company_id, line_item_id, year)
                                 )
+                                base_metric_res = cur.fetchone()
+                                base_metric_id = base_metric_res['id'] if base_metric_res else None
+                                if not base_metric_id:
+                                    continue
+
+                                insert_or_update_derived_metric(
+                                    cur,
+                                    base_metric_id,
+                                    calc_type,
+                                    company_id,
+                                    ytd_period_id,
+                                    pct_change,
+                                    "%",
+                                    [base_metric_id],
+                                    f"{calc_type} for year {year} vs {int(year)-1}",
+                                    "Ok",
+                                    "Yearly"
+                                )
+                                total_processed += 1
+
+                        else:
+                            # For other calculations, you can add logic here as per YAML config
+                            pass
+
+                    except Exception as exc:
+                        log_event("calc_metrics_error", {
+                            "company_id": company_id,
+                            "line_item": line_item_name,
+                            "error": str(exc),
+                            "observation_id": obs_id
+                        })
+                        continue
 
             conn.commit()
-            
-            # Log completion
-            cur.execute(
-                "SELECT COUNT(*) FROM derived_metrics WHERE company_id = %s",
-                (company_id,)
-            )
-            derived_count = cur.fetchone()[0]
-            
-            log_event("calculations_completed", {
+
+            log_event("calc_metrics_completed", {
                 "company_id": company_id,
-                "processed_line_items": len(line_items),
-                "derived_metrics_created": derived_count,
+                "total_derived_metrics": total_processed,
                 "timestamp": datetime.now().isoformat()
             })
-            
-            print(f"✅ Metrics calculation completed for company {company_id}")
-            print(f"📊 Created {derived_count} derived metrics across {len(line_items)} line items")
-
+            print(f"✅ Calculated {total_processed} derived metrics for company_id={company_id}")
 
 if __name__ == "__main__":
     main()

@@ -1,5 +1,5 @@
 # server/scripts/persistence.py
-from typing import List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 from utils import log_event, get_db_connection
 import psycopg2
 from psycopg2.extras import RealDictCursor
