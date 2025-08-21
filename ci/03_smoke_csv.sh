@@ -51,7 +51,8 @@ docker build -t finance-server -f server/Dockerfile .
 echo "Starting API container..."
 docker run --rm -d \
   --env-file .env \
-  -e VERCEL_BLOB_TOKEN \
+  -e "DATABASE_URL=${DATABASE_URL}" \
+  -e "VERCEL_BLOB_TOKEN=${VERCEL_BLOB_TOKEN}" \
   -v "$(pwd)/.env":/app/.env \
   -p "$PORT:$PORT" \
   --name "$CONTAINER_NAME" \
@@ -74,7 +75,7 @@ done
 
 # Upload smoke test file
 echo "Uploading smoke test CSV..."
-UPLOAD_RESPONSE=$(curl -sf -F "file=@$SMOKE_FILE" "http://localhost:$PORT/api/upload" 2>&1)
+UPLOAD_RESPONSE=$(curl -v -F "file=@$SMOKE_FILE" "http://localhost:$PORT/api/upload" 2>&1)
 echo "Upload response: $UPLOAD_RESPONSE"
 
 # After the upload, show more detailed logs

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -xeuo pipefail
 
 ENV_FILE="${ENV_FILE:-.env}"
 if [ -f "$ENV_FILE" ]; then
