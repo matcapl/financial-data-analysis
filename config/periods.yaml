@@ -1,0 +1,46 @@
+# config/periods.yaml
+# Period parsing configuration for financial data analysis
+# Used by utils.py parse_period function
+
+metadata:
+  version: "1.0"
+  description: "Period parsing configuration for financial analytics"
+  author: "Financial Analytics Engine"
+  timestamp: "2025-08-20T16:20:00Z"
+
+# Supported date formats for period parsing
+date_formats:
+  - "%Y-%m-%d"      # 2025-02-01
+  - "%m/%d/%Y"      # 02/01/2025  
+  - "%d-%m-%Y"      # 01-02-2025
+  - "%Y/%m/%d"      # 2025/02/01
+  - "%b %Y"         # Feb 2025
+  - "%B %Y"         # February 2025
+  - "Q%s %Y"        # Q1 2025
+
+# Valid period types
+period_types:
+  - "Monthly"
+  - "Quarterly" 
+  - "Yearly"
+  - "YTD"
+
+# Auto-creation settings
+auto_create_periods:
+  enabled: true
+  default_type: "Monthly"
+  fiscal_year_end: "12-31"  # December 31st
+
+# Default period when parsing fails
+default_period:
+  type: "Monthly"
+  label: "Unknown Period"
+  start_date: null  # Will use current date
+  end_date: null    # Will use current date
+
+# Period validation rules
+validation_rules:
+  max_future_years: 5    # Don't allow periods more than 5 years in future
+  max_past_years: 20     # Don't allow periods more than 20 years in past
+  require_year: true     # Require year in period label
+  require_valid_dates: false  # Allow placeholder dates for incomplete periods
