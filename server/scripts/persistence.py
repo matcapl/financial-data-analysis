@@ -1,203 +1,325 @@
-# server/scripts/persistence.py - Database operations layer using existing patterns
-from datetime import datetime
-from utils import get_db_connection, log_event, hash_datapoint
+# server/scripts/persistence.py
+from typing import List, Dict, Any
+from utils import log_event, get_db_connection
+import psycopg2
+from psycopg2.extras import RealDictCursor
 
-
-class DatabasePersistence:
-    """Handles database operations using existing connection patterns"""
+def persist_data(normalized_rows: List[Dict[str, Any]], company_id: int = 1) -> Dict[str, int]:
+    """
+    Persist normalized data to the database with deduplication and error handling.
+    Returns dict with counts: {'inserted': int, 'skipped': int, 'errors': int}
+    """
+    if not normalized_rows:
+        log_event("persistence_no_data", {"message": "No rows to persist"})
+        return {'inserted': 0, 'skipped': 0, 'errors': 0}
     
-    def __init__(self, company_id: int = 1):
-        self.company_id = company_id
-        self.current_file_hashes = set()  # Track duplicates within current file
-        
-    def persist_row(self, normalized_row: dict, conn, cur) -> dict:
-        """
-        Persist a single normalized row to database
-        Returns: {"status": "inserted"|"skipped"|"error", "message": str}
-        """
-        
-        row_number = normalized_row.get('_row_number', 0)
-        
-        try:
-            # 1. Lookup line_item_id (consistent with existing ingest_xlsx.py logic)
-            cur.execute("SELECT id FROM line_item_definitions WHERE name=%s", (normalized_row["line_item"],))
-            li = cur.fetchone()
-            
-            if not li:
-                cur.execute("SELECT name FROM line_item_definitions")
-                available = [r[0] for r in cur.fetchall()]
-                raise Exception(f"Line item not found: {normalized_row['line_item']}. Available: {available}")
-            line_item_id = li[0]
-            
-            # 2. Lookup or insert period_id (consistent with existing logic)
-            period_info = normalized_row.get("_period_info")
-            if period_info:
-                cur.execute(
-                    "SELECT id FROM periods WHERE period_type=%s AND period_label=%s",
-                    (period_info["type"], period_info["label"])
-                )
-                pr = cur.fetchone()
-                
-                if pr:
-                    period_id = pr[0]
-                else:
-                    # Insert new period
-                    cur.execute(
-                        "INSERT INTO periods "
-                        "(period_type,period_label,start_date,end_date,created_at,updated_at) "
-                        "VALUES (%s,%s,%s,%s,%s,%s) RETURNING id",
-                        (period_info["type"], period_info["label"],
-                         period_info["start_date"], period_info["end_date"],
-                         datetime.now(), datetime.now())
-                    )
-                    period_id = cur.fetchone()[0]
-            else:
-                raise Exception(f"Period information missing for row {row_number}")
-                
-            # 3. Compute hash for deduplication (using existing utility)
-            row_hash = hash_datapoint(
-                self.company_id, period_id,
-                normalized_row["line_item"], normalized_row["value_type"],
-                normalized_row["frequency"], normalized_row["value"]
-            )
-            
-            # 4. In-file duplicate check (consistent with existing logic)
-            if row_hash in self.current_file_hashes:
-                log_event("duplicate_skipped_infile", {
-                    "row_number": row_number, 
-                    "hash": row_hash
-                })
-                return {"status": "skipped", "message": "Duplicate within file"}
-                
-            # 5. Database duplicate check (consistent with existing logic)
-            cur.execute("SELECT id FROM financial_metrics WHERE hash=%s", (row_hash,))
-            existing = cur.fetchone()
-            
-            if existing:
-                log_event("duplicate_skipped_db", {
-                    "row_number": row_number,
-                    "hash": row_hash,
-                    "existing_id": existing[0]
-                })
-                return {"status": "skipped", "message": "Duplicate in database"}
-                
-            # 6. Insert metric (using correct table name from schema)
-            cur.execute(
-                """INSERT INTO financial_metrics (
-                    company_id, period_id, line_item_id, value_type, frequency,
-                    value, currency, source_file, source_page, source_type,
-                    notes, hash, created_at, updated_at
-                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
-                (
-                    self.company_id, period_id, line_item_id,
-                    normalized_row["value_type"], normalized_row["frequency"],
-                    normalized_row["value"], normalized_row["currency"],
-                    normalized_row["source_file"], normalized_row["source_page"],
-                    normalized_row["source_type"], normalized_row.get("notes"),
-                    row_hash, datetime.now(), datetime.now()
-                )
-            )
-            
-            # 7. Track success
-            self.current_file_hashes.add(row_hash)
-            
-            log_event("metric_inserted", {
-                "row_number": row_number,
-                "line_item": normalized_row["line_item"],
-                "period_label": normalized_row.get("period_label"),
-                "value_type": normalized_row["value_type"],
-                "value": normalized_row["value"],
-                "hash": row_hash
-            })
-            
-            return {"status": "inserted", "message": "Successfully inserted"}
-            
-        except Exception as e:
-            log_event("persistence_error", {
-                "row_number": row_number,
-                "error": str(e),
-                "line_item": normalized_row.get("line_item"),
-                "period_label": normalized_row.get("period_label")
-            })
-            return {"status": "error", "message": str(e)}
-            
-    def persist_batch(self, normalized_rows: list) -> dict:
-        """
-        Persist a batch of normalized rows to database
-        Returns: {"inserted": int, "skipped": int, "errors": int, "total": int}
-        """
-        
-        results = {"inserted": 0, "skipped": 0, "errors": 0, "total": len(normalized_rows)}
-        
-        log_event("batch_persistence_started", {
-            "company_id": self.company_id,
-            "total_rows": len(normalized_rows)
-        })
-        
-        # Use existing connection pattern from utils.py
+    results = {'inserted': 0, 'skipped': 0, 'errors': 0}
+    
+    log_event("persistence_started", {
+        "input_rows": len(normalized_rows),
+        "company_id": company_id
+    })
+    
+    try:
         with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                for normalized_row in normalized_rows:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                
+                # Process each row
+                for row_idx, row in enumerate(normalized_rows, 1):
                     try:
-                        result = self.persist_row(normalized_row, conn, cur)
+                        # Validate required fields
+                        required_fields = ['company_id', 'period_id', 'line_item_id', 'value', 'hash']
+                        missing_fields = [field for field in required_fields if field not in row or row[field] is None]
                         
-                        if result["status"] == "inserted":
-                            results["inserted"] += 1
-                        elif result["status"] == "skipped":
-                            results["skipped"] += 1
-                        else:
-                            results["errors"] += 1
-                            
-                    except Exception as e:
-                        results["errors"] += 1
-                        row_number = normalized_row.get('_row_number', 0)
-                        log_event("batch_row_error", {
-                            "row_number": row_number,
-                            "error": str(e)
+                        if missing_fields:
+                            log_event("persistence_row_skip_missing_fields", {
+                                "row_number": row.get('_row_number', row_idx),
+                                "missing_fields": missing_fields
+                            })
+                            results['errors'] += 1
+                            continue
+                        
+                        # Check for duplicates using hash
+                        cur.execute("""
+                            SELECT id FROM financial_metrics 
+                            WHERE hash = %s
+                        """, (row['hash'],))
+                        
+                        existing = cur.fetchone()
+                        if existing:
+                            log_event("persistence_row_skip_duplicate", {
+                                "row_number": row.get('_row_number', row_idx),
+                                "existing_id": existing['id'],
+                                "hash": row['hash']
+                            })
+                            results['skipped'] += 1
+                            continue
+                        
+                        # Alternative duplicate check by key fields
+                        cur.execute("""
+                            SELECT id FROM financial_metrics 
+                            WHERE company_id = %s AND period_id = %s AND line_item_id = %s 
+                            AND value_type = %s
+                        """, (row['company_id'], row['period_id'], row['line_item_id'], 
+                              row.get('value_type', 'Actual')))
+                        
+                        existing = cur.fetchone()
+                        if existing:
+                            log_event("persistence_row_skip_key_duplicate", {
+                                "row_number": row.get('_row_number', row_idx),
+                                "existing_id": existing['id'],
+                                "keys": {
+                                    "company_id": row['company_id'],
+                                    "period_id": row['period_id'],
+                                    "line_item_id": row['line_item_id'],
+                                    "value_type": row.get('value_type', 'Actual')
+                                }
+                            })
+                            results['skipped'] += 1
+                            continue
+                        
+                        # Insert new record
+                        insert_sql = """
+                            INSERT INTO financial_metrics (
+                                company_id, period_id, line_item_id, value, value_type, 
+                                frequency, currency, source_file, source_page, source_type, 
+                                notes, hash, created_at, updated_at
+                            ) VALUES (
+                                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW()
+                            ) RETURNING id
+                        """
+                        
+                        insert_values = (
+                            row['company_id'],
+                            row['period_id'],
+                            row['line_item_id'],
+                            row['value'],
+                            row.get('value_type', 'Actual'),
+                            row.get('frequency', 'Monthly'),
+                            row.get('currency', 'USD'),
+                            row.get('source_file'),
+                            row.get('source_page'),
+                            row.get('source_type'),
+                            row.get('notes'),
+                            row['hash']
+                        )
+                        
+                        cur.execute(insert_sql, insert_values)
+                        new_id = cur.fetchone()['id']
+                        
+                        log_event("persistence_row_inserted", {
+                            "row_number": row.get('_row_number', row_idx),
+                            "new_id": new_id,
+                            "period": row.get('_canonical_period'),
+                            "line_item_id": row['line_item_id'],
+                            "value": row['value']
                         })
                         
-                # Commit all changes at once
+                        results['inserted'] += 1
+                        
+                        # Commit every 100 rows to avoid long transactions
+                        if results['inserted'] % 100 == 0:
+                            conn.commit()
+                            log_event("persistence_batch_commit", {
+                                "rows_committed": results['inserted']
+                            })
+                    
+                    except psycopg2.Error as db_error:
+                        log_event("persistence_row_db_error", {
+                            "row_number": row.get('_row_number', row_idx),
+                            "error": str(db_error),
+                            "error_code": db_error.pgcode if hasattr(db_error, 'pgcode') else None
+                        })
+                        results['errors'] += 1
+                        # Rollback the current transaction and continue
+                        conn.rollback()
+                        continue
+                    
+                    except Exception as e:
+                        log_event("persistence_row_error", {
+                            "row_number": row.get('_row_number', row_idx),
+                            "error": str(e),
+                            "error_type": type(e).__name__
+                        })
+                        results['errors'] += 1
+                        continue
+                
+                # Final commit
                 conn.commit()
                 
-        log_event("batch_persistence_completed", {
-            "company_id": self.company_id,
-            **results
+                log_event("persistence_completed", {
+                    "input_rows": len(normalized_rows),
+                    "inserted": results['inserted'],
+                    "skipped": results['skipped'],
+                    "errors": results['errors'],
+                    "success_rate": results['inserted'] / len(normalized_rows) if normalized_rows else 0
+                })
+    
+    except Exception as e:
+        log_event("persistence_failed", {
+            "error": str(e),
+            "error_type": type(e).__name__,
+            "partial_results": results
         })
-        
-        return results
+        raise
+    
+    return results
 
-
-def persist_data(normalized_rows: list, company_id: int = 1) -> dict:
-    """Convenience function for backward compatibility"""
-    persistence = DatabasePersistence(company_id)
-    return persistence.persist_batch(normalized_rows)
-
-
-if __name__ == "__main__":
-    # Test persistence with sample data
-    sample_normalized_row = {
-        "_row_number": 1,
-        "line_item": "Revenue",
-        "period_label": "Feb 2025",
-        "value": 1000000.0,
-        "value_type": "Actual",
-        "frequency": "Monthly",
-        "currency": "USD",
-        "source_file": "test.csv",
-        "source_page": 1,
-        "source_type": "Raw",
-        "notes": "",
-        "_period_info": {
-            "type": "Monthly",
-            "label": "Feb 2025",
-            "start_date": "2025-02-01",
-            "end_date": "2025-02-28"
-        }
+def validate_foreign_keys(normalized_rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Validate that all foreign key references exist in the database.
+    Returns validation report.
+    """
+    validation_report = {
+        'valid_periods': set(),
+        'invalid_periods': set(),
+        'valid_line_items': set(),
+        'invalid_line_items': set(),
+        'valid_companies': set(),
+        'invalid_companies': set()
     }
     
     try:
-        persistence = DatabasePersistence(company_id=1)
-        result = persistence.persist_batch([sample_normalized_row])
-        print(f"Persistence result: {result}")
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                
+                # Get all unique references from the data
+                period_ids = set(row.get('period_id') for row in normalized_rows if row.get('period_id'))
+                line_item_ids = set(row.get('line_item_id') for row in normalized_rows if row.get('line_item_id'))
+                company_ids = set(row.get('company_id') for row in normalized_rows if row.get('company_id'))
+                
+                # Validate period IDs
+                if period_ids:
+                    cur.execute("SELECT id FROM periods WHERE id = ANY(%s)", (list(period_ids),))
+                    valid_periods = set(row[0] for row in cur.fetchall())
+                    validation_report['valid_periods'] = valid_periods
+                    validation_report['invalid_periods'] = period_ids - valid_periods
+                
+                # Validate line item IDs
+                if line_item_ids:
+                    cur.execute("SELECT id FROM line_item_definitions WHERE id = ANY(%s)", (list(line_item_ids),))
+                    valid_line_items = set(row[0] for row in cur.fetchall())
+                    validation_report['valid_line_items'] = valid_line_items
+                    validation_report['invalid_line_items'] = line_item_ids - valid_line_items
+                
+                # Validate company IDs
+                if company_ids:
+                    cur.execute("SELECT id FROM companies WHERE id = ANY(%s)", (list(company_ids),))
+                    valid_companies = set(row[0] for row in cur.fetchall())
+                    validation_report['valid_companies'] = valid_companies
+                    validation_report['invalid_companies'] = company_ids - valid_companies
+                
+                log_event("foreign_key_validation", {
+                    "period_ids_checked": len(period_ids),
+                    "valid_periods": len(validation_report['valid_periods']),
+                    "invalid_periods": len(validation_report['invalid_periods']),
+                    "line_item_ids_checked": len(line_item_ids),
+                    "valid_line_items": len(validation_report['valid_line_items']),
+                    "invalid_line_items": len(validation_report['invalid_line_items']),
+                    "company_ids_checked": len(company_ids),
+                    "valid_companies": len(validation_report['valid_companies']),
+                    "invalid_companies": len(validation_report['invalid_companies'])
+                })
+    
     except Exception as e:
-        print(f"Persistence test failed: {e}")
+        log_event("foreign_key_validation_error", {"error": str(e)})
+        raise
+    
+    return validation_report
+
+def get_persistence_statistics(company_id: Optional[int] = None) -> Dict[str, Any]:
+    """
+    Get statistics about persisted data.
+    """
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                
+                # Base query with optional company filter
+                where_clause = "WHERE company_id = %s" if company_id else ""
+                params = [company_id] if company_id else []
+                
+                # Total metrics
+                cur.execute(f"SELECT COUNT(*) as total FROM financial_metrics {where_clause}", params)
+                total_metrics = cur.fetchone()['total']
+                
+                # Metrics by value type
+                cur.execute(f"""
+                    SELECT value_type, COUNT(*) as count 
+                    FROM financial_metrics {where_clause}
+                    GROUP BY value_type 
+                    ORDER BY count DESC
+                """, params)
+                by_value_type = dict(cur.fetchall())
+                
+                # Metrics by period type
+                cur.execute(f"""
+                    SELECT p.period_type, COUNT(*) as count 
+                    FROM financial_metrics fm
+                    JOIN periods p ON fm.period_id = p.id
+                    {where_clause}
+                    GROUP BY p.period_type 
+                    ORDER BY count DESC
+                """, params)
+                by_period_type = dict(cur.fetchall())
+                
+                # Metrics by line item
+                cur.execute(f"""
+                    SELECT li.name, COUNT(*) as count 
+                    FROM financial_metrics fm
+                    JOIN line_item_definitions li ON fm.line_item_id = li.id
+                    {where_clause}
+                    GROUP BY li.name 
+                    ORDER BY count DESC
+                    LIMIT 10
+                """, params)
+                by_line_item = dict(cur.fetchall())
+                
+                # Recent activity
+                cur.execute(f"""
+                    SELECT DATE(created_at) as date, COUNT(*) as count 
+                    FROM financial_metrics 
+                    {where_clause}
+                    GROUP BY DATE(created_at) 
+                    ORDER BY date DESC 
+                    LIMIT 7
+                """, params)
+                recent_activity = dict(cur.fetchall())
+                
+                stats = {
+                    'total_metrics': total_metrics,
+                    'by_value_type': by_value_type,
+                    'by_period_type': by_period_type,
+                    'by_line_item': by_line_item,
+                    'recent_activity': recent_activity,
+                    'company_id_filter': company_id
+                }
+                
+                log_event("persistence_statistics_generated", {
+                    "company_id": company_id,
+                    "total_metrics": total_metrics,
+                    "value_types": len(by_value_type),
+                    "period_types": len(by_period_type),
+                    "line_items": len(by_line_item)
+                })
+                
+                return stats
+    
+    except Exception as e:
+        log_event("persistence_statistics_error", {"error": str(e)})
+        raise
+
+from typing import Optional
+
+if __name__ == "__main__":
+    # Test persistence functions
+    print("Testing persistence module...")
+    
+    # Get statistics
+    try:
+        stats = get_persistence_statistics()
+        print(f"Total metrics in database: {stats['total_metrics']}")
+        print(f"Value types: {list(stats['by_value_type'].keys())}")
+        print(f"Period types: {list(stats['by_period_type'].keys())}")
+    except Exception as e:
+        print(f"Statistics error: {e}")
