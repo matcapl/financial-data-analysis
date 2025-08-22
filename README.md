@@ -49,6 +49,198 @@ By aligning each part of the stack with the platform that best supports its runt
 - **Shell (bash) scripts** for CI
 - **Deployment**: Vercel for hosting and scalability.
 
+--
+Below is a consolidated overview of the entire data-processing and CI pipeline, including all YAML-driven configuration, three-layer ingestion, downstream analytics, and report generation. On the left is the processing flow of the main programs; on the right are the CI scripts that validate and rebuild each stage to ensure nothing breaks.
+
+            ┌───────────────────────────┐        ┌──────────────────────────┐
+            │      Configuration        │        │      CI Validation       │
+            │  (config/*.yaml files)    │        │ci/00_config_validation.sh│
+            └───────────────────────────┘        └──────────────────────────┘
+                        │                                    │
+                        ▼                                    └─ Lint and schema‐generation
+            ┌───────────────────────────┐                    scripts generate SQL DDL 
+            │   Schema Generation       │                    (scripts/generate_schema.sh)
+            │  (ci/generate_schema.sh)  │.         ci/test_database_url.sh
+            └───────────────────────────┘                    └───────────────────────────┘
+                        │                                    │
+                        ▼                                    ▼
+            ┌───────────────────────────┐        ┌──────────────────────────┐
+            │ Drop & Recreate DB Tables │        │  ci/01_drop_tables.sh    │
+            │  (ci/01_drop_tables.sh)   │◀──────▶│  ci/02_create_tables.sh  │
+            └───────────────────────────┘        └──────────────────────────┘
+                        │                                    │
+                        ▼                                    ▼
+            ┌───────────────────────────┐        ┌──────────────────────────┐
+            │      Ingestion Layer      │        │  ci/03_smoke_csv.sh      │
+            │ 1. extraction.py          │        │  ci/04_integration_pdf.sh│
+            │ 2. field_mapper.py        │◀──────▶│  Smoke / Integration tests│
+            │ 3. normalization.py       │        └──────────────────────────┘
+            │ 4. persistence.py         │
+            └───────────────────────────┘
+                        │                                    │
+                        ▼                                    ▼
+            ┌───────────────────────────┐        ┌──────────────────────────┐
+            │  Analytics & Observations │        │  ci/05_full_integration   │
+            │ 5. calc_metrics.py        │◀──────▶│  tests on metrics &       │
+            │ 6. questions_engine.py    │        │  observation generation   │
+            └───────────────────────────┘        └──────────────────────────┘
+                        │                                    │
+                        ▼                                    ▼
+            ┌───────────────────────────┐        ┌──────────────────────────┐
+            │  Ranking / Scoring        │        │  ci/06_report_smoke.sh    │
+            │   (within questions_engine│◀──────▶│  Smoke‐test report output │
+            │    and calc_metrics)      │        │  and PDF generation       │
+            └───────────────────────────┘        └──────────────────────────┘
+                        │                                    │
+                        ▼                                    ▼
+            ┌───────────────────────────┐        ┌──────────────────────────┐
+            │  Report Generation        │        │  ci/07_publish_report.sh  │
+            │ 7. report_generator.py    │◀──────▶│  CI step to upload PDF    │
+            │                           │        └──────────────────────────┘
+            └───────────────────────────┘
+
+Key linkages & components:
+
+-  **Configuration** (config/fields.yaml, taxonomy.yaml, periods.yaml, observations.yaml, questions.yaml) drives both schema generation and the three-layer ingestion logic.  
+-  **Schema Generation** uses config YAML to build `schema/*.sql`, ensuring DB tables reflect the latest field mappings and period definitions.  
+-  **CI 01 & 02** drop and recreate all tables, seeding master data (line items, question templates).  
+-  **Ingestion Layer** (extract → map → normalize → persist) reads source files and writes into `periods` and `financial_metrics`.  
+-  **Analytics & Observations** compute derived metrics and apply business-rule validations.  
+-  **Question Generation** uses thresholds defined in YAML to produce prioritized questions.  
+-  **Ranking/Scoring** is embedded in the question engine, ordering questions by importance.  
+-  **Report Generation** assembles metrics and questions into a PDF, then CI publishes it.  
+
+Everything is orchestrated by CI scripts on the right, which run in lockstep with each stage of the main program flow. This ensures that configuration changes, code updates, and data‐processing improvements are continuously validated—protecting against dropped logic or broken linkages.
+--
+
+# Repository File Overview and Interdependencies
+
+This section briefly describes each key file/module in the financial-data-analysis system, its purpose, and how it links to preceding or succeeding components.
+
+## Configuration (`config/`)
+0. **tables.yaml
+
+1. **fields.yaml**  
+   -  Defines column‐header synonyms, field mappings, and data‐type validation rules.  
+   -  **Consumed by:** `ingest_xlsx.py`, `ingest_pdf.py`, `field_mapper.py`.
+
+2. **taxonomy.yaml**  
+   -  Lists canonical metric names (“Revenue,” “EBITDA,” etc.) and their synonyms.  
+   -  **Consumed by:** `field_mapper.py` and ingestion scripts for business‐term mapping.
+
+3. **periods.yaml**  
+   -  Maps real‐world period variants to ISO‐8601 canonical labels.  
+   -  **Consumed by:** `parse_period()` (in `utils.py`) and ingestion scripts for period normalization.
+
+4. **observations.yaml**  
+   -  Contains business‐rule definitions (accounting equations, outlier thresholds) and data‐quality checks.  
+   -  **Consumed by:** `validation_engine.py` (if present) or inline validation in ingestion scripts.
+
+5. **questions.yaml**  
+   -  Templates and thresholds for the question‐generation engine.  
+   -  **Consumed by:** `questions_engine.py`.
+
+***
+
+## Schema (`schema/`)
+1. **001_financial_schema.sql**  
+   -  DDL to create core tables: `companies`, `periods`, `line_item_definitions`, `financial_metrics`, `derived_metrics`, etc.  
+   -  **Applied by:** `ci/02_create_tables.sh`.
+
+2. **002_question_templates.sql**  
+   -  DDL and seed data for question‐template tables.  
+   -  **Applied by:** `ci/02_create_tables.sh`.
+
+***
+
+## Continuous Integration (`ci/`)
+1. **validate_yaml.sh**  
+   -  Lints and validates all YAML files.  
+   -  **Precedes:** schema generation.
+
+2. **generate_schema.sh**  
+   -  Reads YAML configs to produce or update `schema/*.sql`.  
+   -  **Precedes:** dropping and recreating DB tables.
+
+3. **01_drop_tables.sh**  
+   -  Drops all public tables in the target database.  
+   -  **Precedes:** `02_create_tables.sh`.
+
+4. **02_create_tables.sh**  
+   -  Applies `001_financial_schema.sql` and `002_question_templates.sql` to recreate schema.  
+   -  **Precedes:** ingestion smoke tests.
+
+5. **03_smoke_csv.sh**, **04_integration_pdf.sh**  
+   -  Smoke‐tests ingestion of sample CSV/PDF files.  
+   -  **Follows:** database recreation; **Precedes:** downstream report generation tests.
+
+***
+
+## Utility Modules (`server/scripts/` or `server/utils/`)
+1. **utils.py**  
+   -  `get_db_connection()`, `parse_period()`, `clean_numeric_value()`, `hash_datapoint()`, `log_event()`.  
+   -  **Used by:** all ingestion scripts (`ingest_xlsx.py`, `ingest_pdf.py`), normalization, persistence.
+
+2. **field_mapper.py**  
+   -  `map_and_filter_row(raw_row)`: maps raw fields to canonical metrics via `taxonomy.yaml` and filters out unrecognized rows.  
+   -  **Used by:** ingestion scripts.
+
+3. **extraction.py**  
+   -  `extract_data(file_path)`: abstract wrapper that delegates to XLSX/CSV readers and PDF extractors.  
+   -  **Used by:** `ingest_xlsx.py` (if refactored), `ingest_pdf.py`.
+
+4. **normalization.py**  
+   -  `normalize_data(mapped_rows, file_path)`: enforces data types, applies `observations.yaml` rules, and returns cleaned rows plus error count.  
+   -  **Used by:** ingestion orchestrator or `ingest_xlsx.py` variants.
+
+5. **persistence.py**  
+   -  `persist_data(rows, company_id)`: inserts periods and metrics into the database, with deduplication.  
+   -  **Used by:** ingestion orchestrator.
+
+***
+
+## Ingestion Scripts
+1. **ingest_xlsx.py**  
+   -  Orchestrates Extract → Header Normalization → Field Mapping → Period Normalization → Business‐Rule Validation → Persistence.  
+   -  **Preceded by:** CI schema creation; **Follows:** `extraction.py`, `field_mapper.py`, `normalization.py`, `persistence.py`.
+
+2. **ingest_pdf.py**  
+   -  Similar orchestration for PDF files; uses `pdfplumber`/OCR; then mapping/normalization/persistence.  
+   -  **Preceded by:** CI schema creation; **Follows:** PDF extraction libraries, utilities, mapping, normalization, persistence.
+
+***
+
+## Analytics & Reporting
+1. **calc_metrics.py**  
+   -  Reads raw and derived metrics; computes time‐series and variance metrics (MoM, QoQ, YoY, YTD).  
+   -  **Precedes:** `questions_engine.py`.
+
+2. **questions_engine.py**  
+   -  Loads `questions.yaml`; analyzes metric patterns and threshold breaches; generates a set of analytical questions.  
+   -  **Precedes:** `report_generator.py`.
+
+3. **report_generator.py**  
+   -  Compiles computed metrics and generated questions into a formatted PDF; uploads to a blob store.  
+   -  **Follows:** metrics calculation and question generation.
+
+***
+
+## Are Linkages Intact?
+
+- **YAML → Schema generation → CI scripts**: intact, provided you run `validate_yaml.sh` and `generate_schema.sh` before `01_drop_tables.sh`/`02_create_tables.sh`.
+- **Extraction → Mapping → Normalization → Persistence**: intact if you use the orchestrator scripts (`ingest_xlsx.py`, `ingest_pdf.py`) or the layered `extraction.py` → `field_mapper.py` → `normalization.py` → `persistence.py` flow.
+- **Metrics → Questions → Reports**: intact as long as you run `calc_metrics.py` before `questions_engine.py` and then `report_generator.py`.
+
+If you've been directly editing `ingest_xlsx.py` or `ingest_pdf.py`, ensure you haven’t broken references to:
+
+- `utils.parse_period()` and `clean_numeric_value()`  
+- `field_mapper.map_and_filter_row()`  
+- `normalization.normalize_data()`  
+- `persistence.persist_data()`  
+
+Confirm CI scripts still apply schema and smoke tests still pass. If any upstream mapping or schema change was made without updating dependent scripts, those linkages may be broken. Otherwise, the core architecture remains joined and functional.
+
+
 
 # Complete Setup Guide: Financial Data Analysis System
 
