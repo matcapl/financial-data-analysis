@@ -1,44 +1,35 @@
-# server/scripts/normalization.py
 import os
 import yaml
 import re
-import hashlib
 from typing import List, Dict, Any, Tuple, Optional
+from utils import log_event, get_db_connection
+import pandas as pd
 from decimal import Decimal, InvalidOperation
 from datetime import datetime
-from utils import log_event, get_db_connection
+from pathlib import Path
 
-# Load period configuration
 def load_periods_config() -> Dict[str, Any]:
-    """Load consolidated period configuration from periods.yaml"""
-    config_path = os.path.join(os.path.dirname(__file__), '..', 'config', 'periods.yaml')
+    cfg_path = Path(__file__).resolve().parent.parent / 'config' / 'periods.yaml'
     try:
-        with open(config_path, 'r') as f:
-            return yaml.safe_load(f)
+        return yaml.safe_load(cfg_path.read_text())
     except Exception as e:
         log_event("periods_config_load_error", {"error": str(e)})
         return {}
 
 PERIODS_CONFIG = load_periods_config()
 
-def normalize_period_label(raw_period: str) -> Tuple[Optional[str], Optional[str]]:
-    """
-    Normalize period labels to ISO 8601 canonical format using periods.yaml configuration.
-    Returns (canonical_period, period_type) or (None, None) if not found.
-    """
-    if not raw_period or pd.isna(raw_period):
+def normalize_period_label(raw_period: Any) -> Tuple[Optional[str], Optional[str]]:
+    if raw_period is None or (isinstance(raw_period, float) and pd.isna(raw_period)):
         return None, None
-    
-    raw_period_clean = str(raw_period).strip()
-    if not raw_period_clean:
+    raw = str(raw_period).strip()
+    if not raw:
         return None, None
-    
-    # Direct lookup in period aliases
-    period_aliases = PERIODS_CONFIG.get('period_aliases', {})
-    for canonical, config in period_aliases.items():
-        aliases = config.get('aliases', [])
-        if raw_period_clean in aliases or raw_period_clean.lower() in [a.lower() for a in aliases]:
-            return canonical, config.get('period_type')
+
+    # Direct alias lookup
+    for canonical, conf in PERIODS_CONFIG.get('period_aliases', {}).items():
+        for alias in conf.get('aliases', []):
+            if raw.lower() == alias.lower():
+                return canonical, conf.get('period_type')
     
     # Fallback pattern matching
     patterns = PERIODS_CONFIG.get('parsing', {}).get('patterns', {})

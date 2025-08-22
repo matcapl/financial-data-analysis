@@ -113,6 +113,208 @@ Key linkages & components:
 Everything is orchestrated by CI scripts on the right, which run in lockstep with each stage of the main program flow. This ensures that configuration changes, code updates, and data‐processing improvements are continuously validated—protecting against dropped logic or broken linkages.
 --
 
+I have updated the annotated diagram to reflect only the actual files and correct three-layer ingestion flow:
+
+-  **Top Inputs**:  
+  – smoke.csv (CSV)  
+  – financial_data_template.xlsx (XLSX)  
+  - sample_board_pack.pdf
+
+-  **Left: YAML Configurations**:  
+  – config/tables.yaml  
+  – config/fields.yaml  
+  – config/taxonomy.yaml  
+  – config/periods.yaml  
+  – config/observations.yaml  
+  – config/questions.yaml  
+
+-  **Center: Three-Layer Ingestion & Analytics**:  
+  1. extraction.py → Reads CSV/Excel  
+  2. field_mapper.py → Maps headers & line items  
+  3. normalization.py → Normalizes periods & values  
+  4. persistence.py → Inserts into financial_metrics  
+  5. calc_metrics.py → Computes derived_metrics  
+  6. questions_engine.py → Generates questions  
+  7. report_generator.py → Builds PDF report  
+
+-  **Database Layout** (center-right):  
+  – companies, periods, line_item_definitions, financial_metrics, derived_metrics, question_templates, questions, generated_reports  
+
+-  **Right: CI Scripts**:  
+  – ci/00_config_validation.sh  
+  – ci/01_drop_tables.sh  
+  – ci/02_reset_db.sh  
+  – ci/03_smoke_csv.sh  
+  – ci/04_integration_xlsx.sh  
+  – ci/05_full_sample.sh  
+  – ci/06_metric_validation.sh  
+  – ci/test_database_url.sh  
+
+-  **Bottom Output**:  
+  – Example PDF: report_1_1722513661225.pdf  
+
+This corrected diagram ensures all referenced files and flows truly exist in the repository.
+
+--
+
+Below is a detailed description of the interlinked components and their roles. Use this as guidance for a more refined illustration.
+
+1. Front-End (React client)
+   -  Located in `client/`  
+   -  Consumes the backend API:  
+     – `/api/upload` to submit CSV/XLSX/PDF  
+     – `/api/generate-report` to trigger report  
+   -  Displays reports and visualizes data.
+
+2. Middle/Glue (Express/Node API + Python orchestration)
+   -  `server/server.js`  
+     – Defines HTTP routes (`/health`, `/api/upload`, `/api/generate-report`)  
+     – On file upload: spawns Python ingestion (`ingest_xlsx.py` or `ingest_pdf.py`).  
+     – On report request: calls Python report generator (`report_generator.py`).  
+   -  Python scripts (under `server/scripts/`):  
+     – extraction.py: raw data extraction  
+     – field_mapper.py: map raw to canonical fields using `fields.yaml` & `taxonomy.yaml`  
+     – normalization.py: normalize periods/values via `periods.yaml`  
+     – persistence.py: insert into DB  
+     – calc_metrics.py & questions_engine.py: compute derived metrics and generate questions using `observations.yaml` and `questions.yaml`  
+     – report_generator.py: compile PDF.
+
+3. Back-End (PostgreSQL DB)
+   -  Schema created from `config/tables.yaml` via `scripts/generate_schema.py`  
+   -  Tables:  
+     – `companies`, `periods`, `line_item_definitions`, `financial_metrics`, `derived_metrics`, `question_templates`, `questions`, `generated_reports`  
+
+4. CI (Bash scripts under `ci/`)
+   -  001_config_validation.sh: validate YAML (`fields.yaml`, `observations.yaml`, `questions.yaml`) and generate SQL  
+   -  002_test_database_url.sh: verify DB connectivity and tables  
+   -  03_smoke_csv.sh / 04_integration_xlsx.sh / 05_full_sample.sh / 06_metric_validation.sh: end-to-end pipeline tests  
+   -  They ensure each YAML change or script update propagates through extraction → mapping → normalization → persistence → analytics → reporting.
+
+5. YAML Interlinkages
+   -  `tables.yaml` → DB schema  
+   -  `fields.yaml` & `taxonomy.yaml` → field_mapper  
+   -  `periods.yaml` → normalization  
+   -  `observations.yaml` → questions_engine  
+   -  `questions.yaml` → generate_questions.py → question_templates table  
+
+6. CI Role
+   -  Validates that YAML formats are correct and up-to-date.  
+   -  Regenerates schema and question templates automatically.  
+   -  Runs smoke tests to catch ingestion/modeling errors early.  
+   -  Tests DB connectivity, ensuring back-end integration.
+
+The **handover** points:
+-  Front-end ↔ API: HTTP routes  
+-  API ↔ Python scripts: command-line calls  
+-  Python ingestion ↔ DB: persistence layer  
+-  Python analytics ↔ question_templates & derived_metrics: downstream tables  
+-  question_templates ↔ report_generator: templating  
+-  report_generator ↔ front-end: PDF blob URL  
+
+Use this mapping to craft an integrated, annotated diagram that clearly shows data, control, and dependency flows across all layers.
+--
+grok version (outdated file names)
+Left: YAML Channel              | Middle: Functional Scripts & Actions          | Right: CI Files
+--------------------------------|-----------------------------------------------|--------------------------------
+1. (Expected but absent:        | 1. scripts/validate_yaml.py                   | 
+   tables.yaml, fields.yaml,    |    -- Validates YAML configs (inferred from   | 
+   taxonomy.yaml, periods.yaml, |      name; likely loads left-channel YAMLs)   | 
+   observations.yaml,           |    → Outputs validation results or errors     | 
+   questions.yaml in config/)   |                                               | 
+   -- No files present;         |                                               | 
+      channel starts empty       |                                               | 
+--------------------------------|-----------------------------------------------|--------------------------------
+                                | 2. scripts/generate_schema.py                 | 
+                                |    -- Generates database schema (inferred;   | 
+                                |      uses validated YAMLs like tables.yaml,   | 
+                                |      fields.yaml)                             | 
+                                |    → Outputs to schema/001_financial_schema.sql 
+                                |                                               | 
+--------------------------------|-----------------------------------------------|--------------------------------
+                                | 3. scripts/generate_questions.py              | 
+                                |    -- Generates question templates (inferred;| 
+                                |      uses YAMLs like questions.yaml,          | 
+                                |      taxonomy.yaml, observations.yaml)        | 
+                                |    → Outputs to schema/002_question_templates.sql 
+                                |                                               | 
+--------------------------------|-----------------------------------------------|--------------------------------
+                                |                                               | 4. ci/migrate.sh
+                                |                                               |    -- Applies schema SQL files
+                                |                                               |      (001_financial_schema.sql,
+                                |                                               |       002_question_templates.sql)
+                                |                                               |    ← Depends on middle generation
+                                |                                               |    → Sets up DB for ingestion
+--------------------------------|-----------------------------------------------|--------------------------------
+                                |                                               | 5. ci/01_drop_tables.sh & 
+                                |                                               |    ci/02_reset_db.sh
+                                |                                               |    -- Drops tables and resets DB
+                                |                                               |      (pre-migration or test prep)
+                                |                                               |    → Prepares for fresh runs
+--------------------------------|-----------------------------------------------|--------------------------------
+                                | 6. server/scripts/ingest_xlsx.py              | 
+                                |    -- Ingests XLSX data (from data/ files     | 
+                                |      like financial_data_template.csv?        | 
+                                |      but CSV; perhaps handles similar)        | 
+                                |    -- Likely: extract → map (via field_mapper.py) 
+                                |      → normalize → persist to DB              | 
+                                |    ← May load YAMLs (fields.yaml for mapping) | 
+--------------------------------|-----------------------------------------------|--------------------------------
+                                | 7. server/scripts/ingest_pdf.py               | 
+                                |    -- Ingests PDF data (e.g., data/test.pdf)  | 
+                                |    -- Similar pipeline: extract → map →       | 
+                                |      normalize → persist                      | 
+                                |    ← YAML linkage for taxonomy/fields         | 
+--------------------------------|-----------------------------------------------|--------------------------------
+                                | 8. server/scripts/field_mapper.py             | 
+                                |    -- Maps fields during ingestion (inferred; | 
+                                |      called by ingest_xlsx.py or ingest_pdf.py)| 
+                                |    ← Uses fields.yaml or taxonomy.yaml        | 
+--------------------------------|-----------------------------------------------|--------------------------------
+                                | 9. server/scripts/calc_metrics.py             | 
+                                |    -- Calculates financial metrics on         | 
+                                |      ingested data (post-persist)             | 
+                                |    ← DB query; may use periods.yaml           | 
+                                |    → Outputs for reporting                    | 
+--------------------------------|-----------------------------------------------|--------------------------------
+                                | 10. server/scripts/questions_engine.py        | 
+                                |     -- Processes questions on data/metrics    | 
+                                |       (uses generated question templates)     | 
+                                |     ← YAML like questions.yaml, observations.yaml
+                                |     → Outputs insights for report             | 
+--------------------------------|-----------------------------------------------|--------------------------------
+                                | 11. server/scripts/report_generator.py        | 
+                                |     -- Generates final reports (combines      | 
+                                |       metrics and questions outputs)          | 
+                                |     ← Inputs from calc_metrics.py,            | 
+                                |       questions_engine.py                     | 
+--------------------------------|-----------------------------------------------|--------------------------------
+                                |                                               | 12. ci/03_smoke_csv.sh
+                                |                                               |     -- Smoke test on CSV (data/smoke.csv)
+                                |                                               |       likely invokes ingest_xlsx.py or similar
+                                |                                               |       → Verifies basic ingestion/persist
+                                |                                               |     -- Checks DB schema/ data insertion
+--------------------------------|-----------------------------------------------|--------------------------------
+                                |                                               | 13. ci/04_integration_xlsx.sh
+                                |                                               |     -- Integration test for XLSX/PDF? (name
+                                |                                               |        suggests XLSX; may call ingest_pdf.py
+                                |                                               |        if shortcut)
+                                |                                               |     → Tests full flow: ingest → calc → report
+                                |                                               |     -- Uses data/financial_data_template.csv
+                                |                                               |        or test.pdf
+--------------------------------|-----------------------------------------------|--------------------------------
+                                |                                               | 14. ci/05_full_sample.sh
+                                |                                               |     -- Full sample test (inferred; runs entire
+                                |                                               |        pipeline on sample data)
+                                |                                               |     → Invokes multiple middle scripts
+--------------------------------|-----------------------------------------------|--------------------------------
+                                |                                               | 15. ci/smoke_test.sh & 
+                                |                                               |     ci/reset_local_db.sh
+                                |                                               |     -- Orchestrates smoke tests/reset
+                                |                                               |       (calls other sh files like 03_smoke_csv.sh)
+                                |                                               |     → Ensures CI green by verifying linkages
+--------------------------------|-----------------------------------------------|--------------------------------
+
+
 # Repository File Overview and Interdependencies
 
 This section briefly describes each key file/module in the financial-data-analysis system, its purpose, and how it links to preceding or succeeding components.

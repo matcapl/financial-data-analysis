@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """
-questions_engine.py - Fixed version for automated question generation
+questions_engine.py - Fixed version for automated question generation (FIXED PATHS)
 
 FIXED ISSUES:
-1. Properly loads and validates observations.yaml and questions.yaml
+1. Properly loads and validates observations.yaml and questions.yaml using absolute paths
 2. Uses materiality thresholds to filter observations
 3. Correctly links observations to questions via observation_id
 4. Handles database errors gracefully
 5. Generates contextual questions with financial data
+6. FIXED: Uses absolute paths from project root
 """
 
 import os
@@ -16,6 +17,12 @@ import yaml
 import json
 from datetime import datetime
 from jinja2 import Template
+from pathlib import Path
+
+# FIXED: Use absolute path resolution from project root
+project_root = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(project_root / 'server' / 'scripts'))
+
 from utils import get_db_connection, log_event
 
 
@@ -24,7 +31,7 @@ class QuestionsEngine:
     Generates contextual financial questions based on observations and templates.
     
     Flow:
-    1. Load observations.yaml and questions.yaml
+    1. Load observations.yaml and questions.yaml using absolute paths
     2. Execute observation SQL queries to find material variances
     3. Match observations to question templates
     4. Render questions with financial context
@@ -36,16 +43,17 @@ class QuestionsEngine:
         self.observations = []
         self.questions = []
         self.generated_questions = []
+        self.project_root = project_root
         
         # Load YAML configuration files
         self._load_observations()
         self._load_questions()
     
     def _load_observations(self):
-        """Load observation definitions from observations.yaml"""
+        """Load observation definitions from observations.yaml using absolute path"""
         try:
-            observations_path = 'config/observations.yaml'
-            if not os.path.exists(observations_path):
+            observations_path = self.project_root / 'config' / 'observations.yaml'
+            if not observations_path.exists():
                 raise FileNotFoundError(f"observations.yaml not found at {observations_path}")
             
             with open(observations_path, 'r') as f:
@@ -54,7 +62,7 @@ class QuestionsEngine:
             self.observations = config['observations']
             log_event("observations_loaded", {
                 "observations_count": len(self.observations),
-                "config_file": observations_path
+                "config_file": str(observations_path)
             })
             
         except Exception as e:
@@ -62,10 +70,10 @@ class QuestionsEngine:
             raise Exception(f"Failed to load observations.yaml: {e}")
     
     def _load_questions(self):
-        """Load question templates from questions.yaml"""
+        """Load question templates from questions.yaml using absolute path"""
         try:
-            questions_path = 'config/questions.yaml'
-            if not os.path.exists(questions_path):
+            questions_path = self.project_root / 'config' / 'questions.yaml'
+            if not questions_path.exists():
                 raise FileNotFoundError(f"questions.yaml not found at {questions_path}")
             
             with open(questions_path, 'r') as f:
@@ -74,7 +82,7 @@ class QuestionsEngine:
             self.questions = config['questions']
             log_event("questions_loaded", {
                 "questions_count": len(self.questions),
-                "config_file": questions_path
+                "config_file": str(questions_path)
             })
             
         except Exception as e:
@@ -118,7 +126,7 @@ class QuestionsEngine:
             })
             
             return observation_data
-            
+        
         except Exception as e:
             log_event("observation_query_error", {
                 "observation_id": observation['id'],
@@ -178,7 +186,7 @@ class QuestionsEngine:
                 'weight': question_template.get('weight', 1.0),
                 'context': observation_data
             }
-            
+        
         except Exception as e:
             log_event("question_render_error", {
                 "template_id": question_template.get('id'),
@@ -205,7 +213,7 @@ class QuestionsEngine:
             })
             
             return True
-            
+        
         except Exception as e:
             log_event("question_storage_error", {
                 "template_id": question_data.get('template_id'),
@@ -219,7 +227,8 @@ class QuestionsEngine:
         log_event("question_generation_started", {
             "company_id": self.company_id,
             "observations_count": len(self.observations),
-            "questions_count": len(self.questions)
+            "questions_count": len(self.questions),
+            "config_path": str(self.project_root / 'config')
         })
         
         with get_db_connection() as conn:
@@ -262,21 +271,22 @@ class QuestionsEngine:
                 
                 # Step 3: Rank and select top questions
                 self._rank_and_select_questions()
-                
-                log_event("question_generation_completed", {
-                    "company_id": self.company_id,
-                    "questions_generated": questions_generated,
-                    "questions_failed": questions_failed,
-                    "final_question_count": len(self.generated_questions)
-                })
-                
-                return {
-                    "success": True,
-                    "questions_generated": questions_generated,
-                    "questions_failed": questions_failed,
-                    "total_questions": len(self.generated_questions),
-                    "company_id": self.company_id
-                }
+        
+        log_event("question_generation_completed", {
+            "company_id": self.company_id,
+            "questions_generated": questions_generated,
+            "questions_failed": questions_failed,
+            "final_question_count": len(self.generated_questions),
+            "config_path": str(self.project_root / 'config')
+        })
+        
+        return {
+            "success": True,
+            "questions_generated": questions_generated,
+            "questions_failed": questions_failed,
+            "total_questions": len(self.generated_questions),
+            "company_id": self.company_id
+        }
     
     def _rank_and_select_questions(self):
         """Rank questions by importance and materiality"""
@@ -346,20 +356,20 @@ def main():
             # Print summary
             summary = engine.get_questions_summary()
             print(f"📋 Question Summary:")
-            print(f"   - Total Questions: {summary['total_questions']}")
-            print(f"   - By Category: {summary['by_category']}")
-            print(f"   - By Importance: {summary['by_importance']}")
+            print(f"  - Total Questions: {summary['total_questions']}")
+            print(f"  - By Category: {summary['by_category']}")
+            print(f"  - By Importance: {summary['by_importance']}")
             
             # Print top 3 questions as preview
             if summary['questions']:
                 print(f"\n🔍 Top Questions Preview:")
                 for i, question in enumerate(summary['questions'][:3], 1):
-                    print(f"   {i}. [{question['category']}] {question['text'][:100]}...")
+                    print(f"  {i}. [{question['category']}] {question['text'][:100]}...")
         
         else:
             print(f"❌ Question generation failed for company {company_id}")
             sys.exit(1)
-            
+    
     except Exception as e:
         print(f"❌ Question generation error: {e}")
         log_event("question_generation_failed", {
