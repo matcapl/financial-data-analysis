@@ -78,7 +78,10 @@ def render_table(tbl):
 def render_seeds(tbl):
     out = []
     for seed in tbl.get("seed", []):
-        out.append(str(seed).strip() + "\n")
+        if isinstance(seed, dict) and "sql" in seed:
+            out.append(seed["sql"].rstrip() + "\n")
+        else:
+            out.append(str(seed).rstrip() + "\n")
     return "\n".join(out)
 
 def main():

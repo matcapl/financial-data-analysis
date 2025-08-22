@@ -69,7 +69,7 @@ tables:
         constraints: [NOT NULL]
     unique_constraints:
       - [period_label, period_type]
-    seeds:
+    seed:
       - sql: |
           WITH
             today AS (
