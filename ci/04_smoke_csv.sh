@@ -242,16 +242,16 @@ echo "Final revenue value found: '$ACTUAL'"
 # Validation logic
 if [[ -z "$ACTUAL" ]]; then
     echo "❌ No revenue data found in database"
-    echo "=== Debug: All financial metrics ===")
+    echo "=== Debug: All financial metrics ==="
     psql "$DATABASE_URL" -c "SELECT * FROM financial_metrics;"
-    echo "=== Debug: All periods ===")
+    echo "=== Debug: All periods ==="
     psql "$DATABASE_URL" -c "SELECT * FROM periods WHERE period_label LIKE '%2025%';"
     exit 1
 fi
 
 if [[ "$ACTUAL" != "$EXPECTED_REVENUE" ]]; then
     echo "❌ Data verification failed: expected $EXPECTED_REVENUE, got $ACTUAL"
-    echo "=== Debug: Revenue records ===")
+    echo "=== Debug: Revenue records ==="
     psql "$DATABASE_URL" -c "
         SELECT 
             fm.value,

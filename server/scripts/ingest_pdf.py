@@ -1,362 +1,178 @@
-# server/scripts/ingest_pdf.py
+#!/usr/bin/env python3
+"""
+ingest_pdf.py - Unified Three-Layer PDF Ingestion Module
 
-import fitz
-import pytesseract
-from pdf2image import convert_from_path
-import pandas as pd
-import psycopg2
+This module uses the same three-layer pipeline as CSV/Excel ingestion:
+1. Extraction (PDF tables or OCR text → raw rows)
+2. Field Mapping (YAML-driven header and field standardization)
+3. Normalization (period and value normalization)
+4. Persistence (database insertion with deduplication)
+
+Author: Financial Data Analysis Team
+Version: 3.0 (Three-Layer Integration)
+"""
+
 import sys
 import os
-import re
-from datetime import datetime
-import pathlib
+import logging
+from pathlib import Path
+from typing import List, Dict, Any, Union
 
-# Ensure local imports resolve
-sys.path.append(str(pathlib.Path(__file__).resolve().parent))
-from utils import (
-    hash_datapoint, log_event, get_db_connection,
-    clean_numeric_value, parse_period
-)
+import pandas as pd
+import fitz  # PyMuPDF
+import pytesseract
+from pdf2image import convert_from_path
+
+# Ensure server/scripts is on PYTHONPATH
+current_dir = Path(__file__).resolve().parent
+sys.path.insert(0, str(current_dir))
+
 from field_mapper import map_and_filter_row
+from normalization import normalize_data
+from persistence import persist_data
+from utils import log_event
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
-class PDFIngester:
-    def __init__(self, file_path: str, company_id: int = 1):
-        """
-        Enhanced PDF Ingester with fixed TableFinder handling
-        and stable hashing for duplicate detection.
-        """
-        self.file_path = file_path
-        self.company_id = company_id
-        self.conn = None
-        self.ingested_count = 0
-        self.skipped_count = 0
-        self.error_count = 0
-        # Track hashes within this file
-        self.current_file_hashes = set()
-
-    def __enter__(self):
-        self.conn = get_db_connection()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        if self.conn:
-            self.conn.close()
-
-    def process_file(self):
-        log_event("pdf_ingestion_started", {
-            "file_path": self.file_path,
-            "company_id": self.company_id
-        })
+def extract_pdf_rows(file_path: Path) -> List[Dict[str, Any]]:
+    """
+    Extract raw rows from PDF:
+    - Tables via PyMuPDF TableFinder
+    - Fallback OCR via pytesseract
+    """
+    raw_rows: List[Dict[str, Any]] = []
+    doc = fitz.open(str(file_path))
+    for page_index in range(len(doc)):
+        page = doc[page_index]
+        tables = []
         try:
-            doc = fitz.open(self.file_path)
-            for page_index in range(len(doc)):
-                self._process_page(doc[page_index], page_index + 1)
-            doc.close()
-
-            summary = {
-                "file_path": self.file_path,
-                "ingested_count": self.ingested_count,
-                "skipped_count": self.skipped_count,
-                "error_count": self.error_count,
-                "status": "completed"
-            }
-            log_event("pdf_ingestion_completed", summary)
-            return summary
-
-        except Exception as e:
-            log_event("pdf_ingestion_failed", {
-                "file_path": self.file_path,
-                "error": str(e)
-            })
-            raise
-
-    def _process_page(self, page, page_num):
-        log_event("page_processing_started", {"page_number": page_num})
-        try:
-            # Fixed: handle TableFinder properly for PyMuPDF >= 1.22
             tf = page.find_tables()
-            tables = []
-            if tf:
-                try:
-                    tables = list(tf)
-                except TypeError:
-                    if hasattr(tf, "__len__"):
-                        tables = tf
-                    else:
-                        tables = getattr(tf, "tables", [])
+            # TableFinder returns list or generator
+            tables = list(tf) if hasattr(tf, "__iter__") else tf.tables
+        except Exception:
+            pass
 
-            if tables:
-                log_event("tables_found", {
-                    "page_number": page_num,
-                    "table_count": len(tables)
-                })
-                for tbl_idx, tbl in enumerate(tables):
-                    try:
-                        df = pd.DataFrame(tbl.extract())
-                        self._process_table(df, page_num, tbl_idx)
-                    except Exception as tbl_err:
-                        log_event("table_extraction_error", {
-                            "page_number": page_num,
-                            "table_index": tbl_idx,
-                            "error": str(tbl_err)
-                        })
-            else:
-                log_event("no_tables_found_using_ocr", {"page_number": page_num})
+        if tables:
+            log_event("pdf_tables_found", {"page": page_index + 1, "count": len(tables)})
+            for tbl_idx, tbl in enumerate(tables):
                 try:
-                    images = convert_from_path(
-                        self.file_path, first_page=page_num, last_page=page_num
-                    )
-                    text = pytesseract.image_to_string(images[0])
-                    self._process_text(text, page_num)
-                except Exception as ocr_err:
-                    log_event("ocr_extraction_error", {
-                        "page_number": page_num,
-                        "error": str(ocr_err)
+                    df = pd.DataFrame(tbl.extract())
+                    df.columns = [str(c).strip() for c in df.columns]
+                    rows = df.to_dict(orient="records")
+                    for r in rows:
+                        r["_sheet_name"] = f"page_{page_index+1}_table_{tbl_idx+1}"
+                        raw_rows.append(r)
+                except Exception as e:
+                    log_event("pdf_table_extract_error", {
+                        "page": page_index + 1,
+                        "table": tbl_idx + 1,
+                        "error": str(e)
                     })
-
-        except Exception as e:
-            self.error_count += 1
-            log_event("page_processing_error", {
-                "page_number": page_num,
-                "error": str(e)
-            })
-
-    def _process_table(self, df, page_num, table_idx):
-        """Process extracted DataFrame table rows"""
-        if df.empty:
-            log_event("empty_table_skipped", {
-                "page_number": page_num,
-                "table_index": table_idx
-            })
-            return
-
-        df.columns = [str(c).strip() for c in df.columns]
-        log_event("table_processing", {
-            "page_number": page_num,
-            "table_index": table_idx,
-            "columns": df.columns.tolist(),
-            "rows": len(df)
-        })
-
-        for row_idx, row in df.iterrows():
-            label = str(row.iloc[0]).strip()
-            if not label or label.lower() in ["nan", "none", ""]:
-                continue
-
-            for col_idx, col in enumerate(df.columns[1:], start=1):
-                if col_idx >= len(row):
-                    continue
-                val = self._extract_number(row.iloc[col_idx])
-                if val is None:
-                    continue
-
-                period_info = self._parse_period_from_header(col, page_num, table_idx)
-                raw = {
-                    "line_item": label,
-                    "period_label": period_info["label"],
-                    "period_type": period_info["type"],
-                    "value_type": "Actual",
-                    "frequency": period_info["type"],
-                    "value": val,
-                    "currency": "USD",
-                    "source_file": os.path.basename(self.file_path),
-                    "source_page": page_num,
-                    "notes": f"Table {table_idx+1}, Row '{label}', Col '{col}'"
-                }
-                mapped = map_and_filter_row(raw)
-                if mapped:
-                    self._insert_mapped(mapped, page_num)
-
-    def _process_text(self, text, page_num):
-        """Fallback OCR text processing"""
-        for idx, line in enumerate(text.split("\n"), start=1):
-            ln = line.strip()
-            if not ln:
-                continue
-            nums = self._extract_numbers_from_line(ln)
-            for num in nums:
-                period_info = self._infer_period_from_context(ln, page_num)
-                raw = {
-                    "line_item": ln,
-                    "period_label": period_info["label"],
-                    "period_type": period_info["type"],
-                    "value_type": "Actual",
-                    "frequency": period_info["type"],
-                    "value": num,
-                    "currency": "USD",
-                    "source_file": os.path.basename(self.file_path),
-                    "source_page": page_num,
-                    "notes": f"Text line {idx}"
-                }
-                mapped = map_and_filter_row(raw)
-                if mapped:
-                    self._insert_mapped(mapped, page_num)
-
-    def _insert_mapped(self, mapped_row, page_num):
-        """Insert mapped row into DB with stable hash"""
-        try:
-            with self.conn.cursor() as cur:
-                cur.execute(
-                    "SELECT id FROM line_item_definitions WHERE name = %s",
-                    (mapped_row["line_item"],)
-                )
-                li = cur.fetchone()
-                if not li:
-                    self.error_count += 1
-                    log_event("line_item_not_found", {"line_item": mapped_row["line_item"]})
-                    return
-                line_item_id = li[0]
-
-                period_info = parse_period(
-                    mapped_row["period_label"],
-                    mapped_row.get("period_type", "Monthly")
-                )
-                cur.execute(
-                    "SELECT id FROM periods WHERE period_type = %s AND period_label = %s",
-                    (period_info["type"], period_info["label"])
-                )
-                pr = cur.fetchone()
-                if pr:
-                    period_id = pr[0]
-                else:
-                    cur.execute(
-                        "INSERT INTO periods "
-                        "(period_type, period_label, start_date, end_date, created_at, updated_at) "
-                        "VALUES (%s,%s,%s,%s,%s,%s) RETURNING id",
-                        (
-                            period_info["type"], period_info["label"],
-                            period_info["start_date"], period_info["end_date"],
-                            datetime.now(), datetime.now()
-                        )
-                    )
-                    period_id = cur.fetchone()[0]
-
-                try:
-                    src_pg = int(mapped_row.get("source_page", page_num))
-                except:
-                    src_pg = page_num
-
-                data = {
-                    "company_id": self.company_id,
-                    "period_id": period_id,
-                    "line_item_id": line_item_id,
-                    "value_type": mapped_row.get("value_type", "Actual"),
-                    "frequency": mapped_row.get("frequency", period_info["type"]),
-                    "value": clean_numeric_value(mapped_row["value"]),
-                    "currency": mapped_row.get("currency", "USD"),
-                    "source_file": mapped_row.get("source_file"),
-                    "source_page": src_pg,
-                    "source_type": "Raw",
-                    "notes": mapped_row.get("notes", "")
-                }
-
-                # Stable hash (no timestamp)
-                row_hash = hash_datapoint(
-                    data["company_id"], data["period_id"],
-                    mapped_row["line_item"], data["value_type"],
-                    data["frequency"], data["value"]
-                )
-
-                if row_hash in self.current_file_hashes:
-                    self.skipped_count += 1
-                    log_event("duplicate_skipped", {"hash": row_hash})
-                    return
-                self.current_file_hashes.add(row_hash)
-
-                cur.execute(
-                    "SELECT 1 FROM financial_metrics WHERE hash = %s",
-                    (row_hash,)
-                )
-                if cur.fetchone():
-                    self.skipped_count += 1
-                    log_event("duplicate_skipped", {"hash": row_hash})
-                    return
-
-                cur.execute(
-                    """INSERT INTO financial_metrics(
-                        company_id, period_id, line_item_id, value_type, frequency,
-                        value, currency, source_file, source_page, source_type,
-                        notes, hash, created_at, updated_at
-                    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
-                    (
-                        data["company_id"], data["period_id"],
-                        data["line_item_id"], data["value_type"],
-                        data["frequency"], data["value"], data["currency"],
-                        data["source_file"], data["source_page"],
-                        data["source_type"], data["notes"], row_hash,
-                        datetime.now(), datetime.now()
-                    )
-                )
-                self.ingested_count += 1
-                log_event("metric_inserted", {
-                    "line_item": mapped_row["line_item"],
-                    "period_label": period_info["label"],
-                    "value": data["value"]
-                })
-
-        except Exception as e:
-            self.error_count += 1
-            log_event("insert_error", {"error": str(e), "mapped_row": mapped_row})
-
-    def _extract_number(self, cell):
-        if cell is None or pd.isna(cell):
-            return None
-        text = str(cell).strip()
-        if not text or text.lower() in ["nan", "none", "-", ""]:
-            return None
-        is_neg = text.startswith("(") and text.endswith(")")
-        if is_neg:
-            text = text[1:-1]
-        cleaned = re.sub(r"[^\d\.\,\-]", "", text).replace(",", "")
-        try:
-            val = float(cleaned)
-            return -val if is_neg else val
-        except:
-            return None
-
-    def _extract_numbers_from_line(self, line):
-        patterns = [r"\(\s*[\d,]+\.?\d*\s*\)", r"-?[\d,]+\.?\d*"]
-        nums = []
-        for p in patterns:
-            for m in re.findall(p, line):
-                v = self._extract_number(m)
-                if v is not None:
-                    nums.append(v)
-        return nums
-
-    def _parse_period_from_header(self, header, page_num, table_idx):
-        hdr = str(header)
-        lhdr = hdr.lower()
-        if any(w in lhdr for w in ["ytd", "current"]):
-            tp = "YTD"
-        elif any(w in lhdr for w in ["budget", "forecast", "plan"]):
-            tp = "Budget"
-        elif any(w in lhdr for w in ["prior", "previous", "py"]):
-            tp = "Prior Year"
         else:
-            tp = "Monthly"
-        lbl = f"{hdr} (Page {page_num}, Table {table_idx+1})"
-        return {"type": tp, "label": lbl, "start_date": None, "end_date": None}
+            log_event("pdf_no_tables", {"page": page_index + 1})
+            try:
+                images = convert_from_path(str(file_path), first_page=page_index+1, last_page=page_index+1)
+                text = pytesseract.image_to_string(images[0])
+                for line in text.splitlines():
+                    if line.strip():
+                        raw_rows.append({"line_text": line.strip(), "_sheet_name": f"page_{page_index+1}"})
+            except Exception as e:
+                log_event("pdf_ocr_error", {"page": page_index + 1, "error": str(e)})
 
-    def _infer_period_from_context(self, line, page_num):
-        months = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"]
-        fl = next((m for m in months if m in line.lower()), None)
-        if fl:
-            lbl = f"{fl.title()} {datetime.now().year}"
-        else:
-            lbl = f"Unknown (Page {page_num})"
-        return {"type": "Monthly", "label": lbl, "start_date": None, "end_date": None}
+    doc.close()
+    return raw_rows
 
 
-if __name__ == "__main__":
+def convert_text_rows_to_structured(raw_rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Convert OCR text rows into structured raw data dictionaries.
+    Assumes 'line_text' field in row.
+    """
+    structured: List[Dict[str, Any]] = []
+    for row in raw_rows:
+        text = row.get("line_text")
+        if not text:
+            continue
+        # Simple parsing: split on whitespace to get [line_item, period, value]
+        parts = text.split()
+        if len(parts) >= 3:
+            raw = {
+                "line_item": parts[0],
+                "period_label": parts[1],
+                "value": parts[2],
+                "source_file": row.get("_sheet_name"),
+                "notes": "OCR fallback"
+            }
+            structured.append(raw)
+    return structured
+
+
+def ingest_pdf(file_path: Union[str, Path], company_id: int = 1) -> Dict[str, Any]:
+    """
+    Main three-layer ingestion for PDF files.
+    Returns summary dict with counts.
+    """
+    file_path = Path(file_path)
+    log_event("pdf_ingestion_started", {"file_path": str(file_path), "company_id": company_id})
+
+    # 1) Extraction
+    raw_rows = extract_pdf_rows(file_path)
+    if not raw_rows:
+        return {
+            "status": "no_data",
+            "file_path": str(file_path),
+            "ingested": 0,
+            "skipped": 0,
+            "errors": 0
+        }
+
+    # 2) Field Mapping
+    mapped_rows = []
+    map_errors = 0
+    for idx, row in enumerate(raw_rows, start=1):
+        try:
+            mapped = map_and_filter_row(row)
+            mapped_rows.append(mapped)
+        except Exception as e:
+            log_event("pdf_map_error", {"row": idx, "error": str(e)})
+            map_errors += 1
+
+    # 3) Normalization
+    normalized, norm_errors = normalize_data(mapped_rows, str(file_path))
+
+    # 4) Persistence
+    persistence_results = persist_data(normalized)
+
+    summary = {
+        "file_path": str(file_path),
+        "company_id": company_id,
+        "rows_extracted": len(raw_rows),
+        "rows_mapped": len(mapped_rows),
+        "map_errors": map_errors,
+        "rows_normalized": len(normalized),
+        "norm_errors": norm_errors,
+        "persisted": persistence_results["inserted"],
+        "skipped": persistence_results["skipped"],
+        "persist_errors": persistence_results["errors"],
+        "status": "completed"
+    }
+    log_event("pdf_ingestion_completed", summary)
+    return summary
+
+
+def main():
     if len(sys.argv) < 2:
         print("Usage: python ingest_pdf.py <file_path> [company_id]")
         sys.exit(1)
 
     file_path = sys.argv[1]
     company_id = int(sys.argv[2]) if len(sys.argv) > 2 else 1
+    result = ingest_pdf(file_path, company_id)
+    print(f"Ingestion summary: {result}")
 
-    with PDFIngester(file_path, company_id) as ingester:
-        result = ingester.process_file()
-        print(f"PDF ingestion result: {result}")
+
+if __name__ == "__main__":
+    main()
