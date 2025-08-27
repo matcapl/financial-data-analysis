@@ -4,6 +4,9 @@ const path = require('path');
 const fs = require('fs');
 const sanitize = require('sanitize-filename');
 
+const ROOT_DIR = path.resolve(__dirname, '..', '..');
+const SCRIPTS_DIR = path.join(ROOT_DIR, 'server', 'scripts');
+
 // CORS headers for cross-origin uploads
 const express = require('express');
 express()
@@ -13,7 +16,7 @@ express()
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     if (req.method === 'OPTIONS') return res.sendStatus(200);
     next();
-});
+  });
 
 module.exports = async (req, res) => {
   /**
@@ -25,6 +28,7 @@ module.exports = async (req, res) => {
    * 3. Enhanced error handling with detailed feedback
    * 4. Secure file processing with sanitization
    * 5. Progress tracking through response
+   * 6. FIXED: Enhanced Docker-compatible script path resolution
    */
   
   const isVercel = process.env.VERCEL === '1';
@@ -151,7 +155,7 @@ module.exports = async (req, res) => {
             const blob = await put(safeName, fileBuffer, {
               access: 'public',
               token: process.env.VERCEL_BLOB_TOKEN
-            });  
+            }); 
             blobUrl = blob.url;
             processingSteps.push('✓ File stored in blob storage');
             console.log('✓ File uploaded to blob storage');
@@ -229,24 +233,92 @@ module.exports = async (req, res) => {
 };
 
 /**
- * Helper function to run Python scripts securely using spawn
- * Only works in non-Vercel environments
+ * FIXED Helper function to run Python scripts securely using spawn
+ * Enhanced with Docker-compatible path resolution and debugging
  */
 function runPythonScript(scriptName, args) {
   return new Promise((resolve, reject) => {
-    const scriptPath = path.resolve(__dirname, '..', 'scripts', scriptName);
+    // ENHANCED: Try multiple path resolution strategies for Docker compatibility
+    const possiblePaths = [
+      // Current approach - should work in Docker
+      path.join(SCRIPTS_DIR, scriptName),
+      // Absolute Docker container paths
+      path.resolve('/app/server/scripts', scriptName),
+      // Alternative relative paths
+      path.resolve(__dirname, '..', 'scripts', scriptName),
+      path.resolve(process.cwd(), 'server', 'scripts', scriptName)
+    ];
     
-    // Verify script exists
-    if (!fs.existsSync(scriptPath)) {
-      const error = new Error(`Script not found: ${scriptName}`);
+    let scriptPath = null;
+    
+    // DEBUG: Log path resolution attempts
+    console.log(`🔍 Resolving script path for: ${scriptName}`);
+    console.log(`📂 SCRIPTS_DIR: ${SCRIPTS_DIR}`);
+    console.log(`📂 Current __dirname: ${__dirname}`);
+    console.log(`📂 Current process.cwd(): ${process.cwd()}`);
+    
+    // Try each possible path until we find the script
+    for (const testPath of possiblePaths) {
+      console.log(`  Testing path: ${testPath}`);
+      if (fs.existsSync(testPath)) {
+        scriptPath = testPath;
+        console.log(`  ✅ Found script at: ${scriptPath}`);
+        break;
+      } else {
+        console.log(`  ❌ Not found at: ${testPath}`);
+      }
+    }
+    
+    // If no script found, provide detailed debugging info
+    if (!scriptPath) {
+      console.log('❌ Script not found in any location. Debug info:');
+      console.log('📂 Directory structure check:');
+      
+      // Check if directories exist and list contents
+      const checkDirs = [
+        '/app/server/scripts',
+        './server/scripts', 
+        '../scripts',
+        SCRIPTS_DIR,
+        path.resolve(__dirname, '..', 'scripts')
+      ];
+      
+      checkDirs.forEach(dir => {
+        const exists = fs.existsSync(dir);
+        console.log(`  ${dir}: ${exists ? 'EXISTS' : 'NOT FOUND'}`);
+        if (exists) {
+          try {
+            if (fs.statSync(dir).isDirectory()) {
+              const files = fs.readdirSync(dir);
+              console.log(`    Contents: ${files.join(', ')}`);
+            } else {
+              console.log(`    (Not a directory)`);
+            }
+          } catch (e) {
+            console.log(`    Error reading directory: ${e.message}`);
+          }
+        }
+      });
+      
+      const error = new Error(`Script not found: ${scriptName}. Tried ${possiblePaths.length} locations.`);
       error.step = `Script lookup (${scriptName})`;
+      error.paths_tried = possiblePaths;
       reject(error);
       return;
     }
     
+    // Fixed environment variables (note: DATABSE_URL typo fix)
+    const env = {
+      ...process.env,
+      DATABASE_URL: process.env.DATABASE_URL,
+      LOCAL_DATABASE_URL: process.env.LOCAL_DATABASE_URL,
+      PYTHONUNBUFFERED: '1',
+    };
+    
     // Spawn Python process with arguments
     const python = spawn('python3', [scriptPath, ...args], {
       cwd: path.resolve(__dirname, '..', '..'),
+      env,
       stdio: ['pipe', 'pipe', 'pipe'],
       timeout: 60000 // 60 second timeout
     });
