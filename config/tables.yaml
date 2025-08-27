@@ -199,7 +199,7 @@ tables:
       - columns: [line_item_id]
         references: line_item_definitions(id)
     indexes:
-      - columns: [company_id, period_id]
+      - columns: [company_id, period_id, line_item_id, value_type, source_file]
       - columns: [company_id]
       - columns: [period_id]
 
