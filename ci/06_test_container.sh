@@ -13,7 +13,7 @@ fi
 
 # Build container
 echo "🔨 Building test container..."
-docker build -t finance-server-debug -f server/Dockerfile .
+docker build --no-cache -t finance-server-debug -f server/Dockerfile .
 
 # Start container with debug capabilities
 echo "🚀 Starting debug container..."

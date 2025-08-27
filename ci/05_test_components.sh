@@ -16,20 +16,20 @@ echo ""
 
 # Test 1: Test extraction.py directly
 echo "🔍 Test 1: extraction.py standalone"
-python3 server/scripts/extraction.py data/smoke.csv || echo "❌ extraction.py failed"
+python3 server/scripts/extraction.py data/sample_data.csv || echo "❌ extraction.py failed"
 echo ""
 
 # Test 2: Test ingest_xlsx.py with verbose output  
 echo "🔍 Test 2: ingest_xlsx.py with detailed logging"
 # Clear test data first
-psql "$DATABASE_URL" -c "DELETE FROM financial_metrics WHERE source_file = 'smoke.csv';" > /dev/null
+psql "$DATABASE_URL" -c "DELETE FROM financial_metrics WHERE source_file = 'sample_data.csv';" > /dev/null
 
-echo "Running: python3 server/scripts/ingest_xlsx.py data/smoke.csv 1"
-python3 server/scripts/ingest_xlsx.py data/smoke.csv 1
+echo "Running: python3 server/scripts/ingest_xlsx.py data/sample_data.csv 1"
+python3 server/scripts/ingest_xlsx.py data/sample_data.csv 1
 
 # Check what actually got inserted
 echo "Database check after ingestion:"
-psql "$DATABASE_URL" -c "SELECT COUNT(*) as inserted_rows FROM financial_metrics WHERE source_file = 'smoke.csv';"
+psql "$DATABASE_URL" -c "SELECT COUNT(*) as inserted_rows FROM financial_metrics WHERE source_file = 'sample_data.csv';"
 echo ""
 
 # Test 3: Test calc_metrics.py

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -xeuo pipefail
 
 # Comprehensive Three-Layer Ingestion Testing Suite
 # Tests each component individually to isolate problems

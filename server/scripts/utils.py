@@ -242,7 +242,7 @@ def parse_period(period_str, period_type=None):
         'start_date': datetime.now().date(),
         'end_date': datetime.now().date()
     }
-
+# It appears hash_datapoint is a leftover utility intended for an alternative hashing strategy (SHA256 over business fields plus value) but is not actively used in the current codebase. You can safely remove or repurpose it without affecting your ingestion pipeline.
 def hash_datapoint(company_id, period_id, line_item, value_type, frequency, value):
     """
     Compute a stable SHA256 hash for a data point, omitting timestamps to avoid duplicate skipping.

@@ -1,16 +1,27 @@
 #!/usr/bin/env bash
-set -xeuo pipefail
+set -euo pipefail
 
-ENV_FILE="${ENV_FILE:-.env}"
-if [ -f "$ENV_FILE" ]; then
-  set -a
-  source "$ENV_FILE"
-  set +a
+# Load env
+if [[ -f .env ]]; then
+  set -a; source .env; set +a
 fi
-: "${DATABASE_URL:?DATABASE_URL must be set}"
 
-echo "02 | Resetting schema (applying base SQL files)..."
-psql "$DATABASE_URL" -f schema/001_financial_schema.sql
-psql "$DATABASE_URL" -f schema/002_question_templates.sql
+# Function to apply schema files to a given database URL
+apply_schema() {
+  local url=$1
+  echo "Applying schema to $url"
+  psql "$url" -f schema/001_financial_schema.sql
+  psql "$url" -f schema/002_question_templates.sql
+}
 
-echo "02 | Schema reset complete."
+# Apply to remote
+apply_schema "$DATABASE_URL"
+
+# Apply to local if set
+if [[ -n "${LOCAL_DATABASE_URL:-}" ]]; then
+  apply_schema "$LOCAL_DATABASE_URL"
+else
+  echo "Warning: LOCAL_DATABASE_URL not set, skipping local apply."
+fi
+
+echo "Schema and seed SQL applied to both remote and local databases."

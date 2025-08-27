@@ -175,6 +175,8 @@ def normalize_data(mapped: List[Dict[str, Any]], src: str) -> Tuple[List[Dict[st
         source_file = os.path.basename(src)
         hsh = create_hash(1, pid, lid, row.get("value_type") or "Actual", source_file)
 
+        source_type = os.path.splitext(src)[1].lstrip('.').upper() or 'CSV'    
+
         normalized_rows.append({
             "company_id": 1,
             "period_id": pid,
@@ -185,6 +187,7 @@ def normalize_data(mapped: List[Dict[str, Any]], src: str) -> Tuple[List[Dict[st
             "currency": normalize_text(row.get("currency")) or "USD",
             "source_file": source_file,
             "source_page": row.get("source_page") or row.get("_sheet_name"),
+            "source_type": source_type,
             "notes": normalize_text(row.get("notes")),
             "hash": hsh,
             "_row": idx

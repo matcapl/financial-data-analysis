@@ -307,11 +307,12 @@ line_items:
     name: EBITDA
     aliases:
       - ebitda
+      - EBITDA
+      - Ebitda
       - earnings before interest
       - earnings_before_interest
       - earnings before taxes
       - operating profit
       - earnings before interest taxes
-      - earnings_before_interest_taxes  # Preserved original
       - earnings_before_taxes
     description: Earnings before interest taxes depreciation amortization
