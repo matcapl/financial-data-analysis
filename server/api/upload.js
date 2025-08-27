@@ -316,7 +316,8 @@ function runPythonScript(scriptName, args) {
     };
     
     // Spawn Python process with arguments
-    const python = spawn('python3', [scriptPath, ...args], {
+    const pythonPath = path.join(ROOT_DIR, '.venv', 'bin', 'python3');
+    const python = spawn(pythonPath, [scriptPath, ...args], {
       cwd: path.resolve(__dirname, '..', '..'),
       env,
       stdio: ['pipe', 'pipe', 'pipe'],
