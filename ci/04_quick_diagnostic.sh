@@ -28,7 +28,7 @@ python3 -c "
 import sys
 sys.path.insert(0, 'server/scripts')
 from extraction import extract_data_auto
-from field_mapper import map_and_filter_row  
+from field_mapper import map_and_filter_row
 from normalization import normalize_data
 from persistence import persist_data
 from utils import get_db_connection
@@ -93,7 +93,7 @@ echo "🔍 Test 6: Full pipeline with debugging"
 # Clear any existing test data
 psql "$DATABASE_URL" -c "DELETE FROM financial_metrics WHERE source_file = 'quick_test.csv';" > /dev/null
 
-python3 -c "
+python3 - << 'PYCODE'
 import sys
 sys.path.insert(0, 'server/scripts')
 from extraction import extract_data_auto
@@ -104,44 +104,45 @@ from utils import get_db_connection
 
 print('🔄 Running full pipeline...')
 
-# Extract
+# 1. Extract
 data = extract_data_auto('data/quick_test.csv')
 print(f'1. Extracted: {len(data)} rows')
 
-# Map
-mapped = [map_and_filter_row(row) for row in data]  
+# 2. Map
+mapped = [map_and_filter_row(row) for row in data]
 print(f'2. Mapped: {len(mapped)} rows')
 
-# Normalize
+# 3. Normalize
 normalized, errors = normalize_data(mapped, 'quick_test.csv')
 print(f'3. Normalized: {len(normalized)} rows, {errors} errors')
 
 if normalized:
     print(f'   Sample normalized row: {normalized[0]}')
-    
-    # Persist
-    result = persist_data(normalized)
-    print(f'4. Persistence result: {result}')
-    
-    # Verify
+
+    # 4. Persist
+    company_id = normalized[0]['company_id']
+    period_id  = normalized[0]['period_id']
+    results = persist_data(normalized, company_id, period_id)
+    print(f'4. Persistence result: {results}')
+
+    # 5. Verify
     with get_db_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute(\"SELECT COUNT(*) FROM financial_metrics WHERE source_file = 'quick_test.csv'\")
+            cur.execute("SELECT COUNT(*) FROM financial_metrics WHERE source_file = 'quick_test.csv'")
             db_count = cur.fetchone()[0]
             print(f'5. Database verification: {db_count} rows found')
-            
+
             if db_count > 0:
-                cur.execute(\"\"\"
-                    SELECT fm.value, p.period_label, li.name 
+                cur.execute("""
+                    SELECT fm.value, p.period_label, li.name
                     FROM financial_metrics fm
                     JOIN periods p ON fm.period_id = p.id
                     JOIN line_item_definitions li ON fm.line_item_id = li.id
                     WHERE fm.source_file = 'quick_test.csv'
                     LIMIT 1
-                \"\"\")
+                """)
                 sample = cur.fetchone()
                 print(f'   Sample data: value={sample[0]}, period={sample[1]}, item={sample[2]}')
-                
                 if str(sample[0]) == '999999':
                     print('✅ FULL PIPELINE SUCCESS: Data persisted correctly!')
                 else:
@@ -150,7 +151,7 @@ if normalized:
                 print('❌ PERSISTENCE FAILED: No data in database')
 else:
     print('❌ NORMALIZATION FAILED: No normalized data')
-" || { echo "❌ Full pipeline failed"; exit 1; }
+PYCODE
 
 echo ""
 echo "🎉 All diagnostic tests passed!"

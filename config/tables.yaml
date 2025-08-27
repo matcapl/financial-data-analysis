@@ -189,8 +189,6 @@ tables:
         type: TIMESTAMP
         default: NOW()
         constraints: [NOT NULL]
-    unique_constraints:
-      - [company_id, period_id, line_item_id]
     foreign_keys:
       - columns: [company_id]
         references: companies(id)
@@ -199,7 +197,15 @@ tables:
       - columns: [line_item_id]
         references: line_item_definitions(id)
     indexes:
-      - columns: [company_id, period_id, line_item_id, value_type, source_file]
+      - columns: 
+          [
+            company_id, 
+            period_id, 
+            line_item_id, 
+            value_type, 
+            source_file
+          ]
+        unique: true
       - columns: [company_id]
       - columns: [period_id]
 

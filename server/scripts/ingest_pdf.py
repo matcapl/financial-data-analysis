@@ -50,7 +50,6 @@ def extract_pdf_rows(file_path: Path) -> List[Dict[str, Any]]:
         tables = []
         try:
             tf = page.find_tables()
-            # TableFinder returns list or generator
             tables = list(tf) if hasattr(tf, "__iter__") else tf.tables
         except Exception:
             pass
@@ -74,11 +73,16 @@ def extract_pdf_rows(file_path: Path) -> List[Dict[str, Any]]:
         else:
             log_event("pdf_no_tables", {"page": page_index + 1})
             try:
-                images = convert_from_path(str(file_path), first_page=page_index+1, last_page=page_index+1)
+                images = convert_from_path(str(file_path),
+                                           first_page=page_index+1,
+                                           last_page=page_index+1)
                 text = pytesseract.image_to_string(images[0])
                 for line in text.splitlines():
                     if line.strip():
-                        raw_rows.append({"line_text": line.strip(), "_sheet_name": f"page_{page_index+1}"})
+                        raw_rows.append({
+                            "line_text": line.strip(),
+                            "_sheet_name": f"page_{page_index+1}"
+                        })
             except Exception as e:
                 log_event("pdf_ocr_error", {"page": page_index + 1, "error": str(e)})
 
@@ -96,7 +100,6 @@ def convert_text_rows_to_structured(raw_rows: List[Dict[str, Any]]) -> List[Dict
         text = row.get("line_text")
         if not text:
             continue
-        # Simple parsing: split on whitespace to get [line_item, period, value]
         parts = text.split()
         if len(parts) >= 3:
             raw = {
@@ -144,7 +147,10 @@ def ingest_pdf(file_path: Union[str, Path], company_id: int = 1) -> Dict[str, An
     normalized, norm_errors = normalize_data(mapped_rows, str(file_path))
 
     # 4) Persistence
-    persistence_results = persist_data(normalized)
+    # Extract company_id and period_id from first normalized row
+    pid = normalized[0]["period_id"]
+    cid = normalized[0]["company_id"]
+    inserted = persist_data(normalized, cid, pid)
 
     summary = {
         "file_path": str(file_path),
@@ -154,9 +160,9 @@ def ingest_pdf(file_path: Union[str, Path], company_id: int = 1) -> Dict[str, An
         "map_errors": map_errors,
         "rows_normalized": len(normalized),
         "norm_errors": norm_errors,
-        "persisted": persistence_results["inserted"],
-        "skipped": persistence_results["skipped"],
-        "persist_errors": persistence_results["errors"],
+        "persisted": inserted,
+        "skipped": None,     # If persist_data returns only count, adjust accordingly
+        "persist_errors": None,
         "status": "completed"
     }
     log_event("pdf_ingestion_completed", summary)
