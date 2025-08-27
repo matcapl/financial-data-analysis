@@ -1,484 +1,3715 @@
-# config/periods.yaml - CONSOLIDATED SINGLE SOURCE OF TRUTH (ISO 8601 Edition)
-# Replaces scattered period logic across multiple files
-# Aligned with ISO 8601 period seeding in tables.yaml
-
 metadata:
-  version: "3.0"
-  description: "Complete period handling configuration - ISO 8601 compliant"
-  author: "Financial Analytics Engine"
-  timestamp: "2025-08-21T14:30:00Z"
+  version: '3.0'
+  description: Auto-generated periods.yaml
+  author: generate_periods_yaml.py
+  timestamp: '2025-08-27'
   iso_compliant: true
-
-# =============================================================================
-# CANONICAL PERIOD DEFINITIONS (ISO 8601 FORMAT - matches tables.yaml seed)
-# =============================================================================
 canonical_formats:
-  monthly: "YYYY-MM"        # 2025-02 (ISO 8601)
-  quarterly: "YYYY-QN"      # 2025-Q1 (ISO 8601 with quarters)
-  yearly: "YYYY"            # 2025 (ISO 8601)
-
-# =============================================================================
-# COMPREHENSIVE ALIAS MAPPING - All possible input variants → ISO canonical
-# =============================================================================
+  monthly: YYYY-MM
+  quarterly: YYYY-QN
+  yearly: YYYY
 period_aliases:
-  # February 2025 canonical mappings → 2025-02
-  "2025-02":
-    canonical: "2025-02"
-    period_type: "Monthly"
-    start_date: "2025-02-01"
-    end_date: "2025-02-28"
+  2015-01:
+    period_type: Monthly
+    start_date: '2015-01-01'
+    end_date: '2015-01-31'
     aliases:
-      - "2025-02"           # ISO format (direct)
-      - "Feb 2025"          # Business format
-      - "February 2025"     # Full month name
-      - "02/2025"           # US format
-      - "2025/02"           # Alternative slash
-      - "Feb-2025"          # Hyphenated
-      - "Feb '25"           # Abbreviated year with quote
-      - "F25"               # Ultra short
-      - "2/25"              # Short slash
-      - "2025.02"           # Dotted format
-      - "February Twenty Twenty-Five"  # Written out
-      - "2025 Feb"          # Reversed
-      - "25-Feb"            # Short year first
-
-  # January 2025 → 2025-01
-  "2025-01":
-    canonical: "2025-01"
-    period_type: "Monthly"
-    start_date: "2025-01-01"
-    end_date: "2025-01-31"
+    - 2015-01
+    - 1/2015
+    - '2015.01'
+    - Jan 2015
+    - January 2015
+    - Jan-2015
+    - Jan '15
+    - 1/15
+    - 2015 Jan
+    - 15-Jan
+  2015-02:
+    period_type: Monthly
+    start_date: '2015-02-01'
+    end_date: '2015-02-28'
     aliases:
-      - "2025-01"
-      - "Jan 2025"
-      - "January 2025"
-      - "01/2025"
-      - "2025/01"
-      - "Jan-2025"
-      - "Jan '25"
-      - "J25"
-      - "1/25"
-      - "2025.01"
-
-  # March 2025 → 2025-03
-  "2025-03":
-    canonical: "2025-03"
-    period_type: "Monthly"
-    start_date: "2025-03-01"
-    end_date: "2025-03-31"
+    - 2015-02
+    - 2/2015
+    - '2015.02'
+    - Feb 2015
+    - February 2015
+    - Feb-2015
+    - Feb '15
+    - 2/15
+    - 2015 Feb
+    - 15-Feb
+  2015-03:
+    period_type: Monthly
+    start_date: '2015-03-01'
+    end_date: '2015-03-31'
     aliases:
-      - "2025-03"
-      - "Mar 2025"
-      - "March 2025"
-      - "03/2025"
-      - "2025/03"
-      - "Mar-2025"
-      - "Mar '25"
-      - "M25"
-      - "3/25"
-
-  # April 2025 → 2025-04
-  "2025-04":
-    canonical: "2025-04"
-    period_type: "Monthly"
-    start_date: "2025-04-01"
-    end_date: "2025-04-30"
+    - 2015-03
+    - 3/2015
+    - '2015.03'
+    - Mar 2015
+    - March 2015
+    - Mar-2015
+    - Mar '15
+    - 3/15
+    - 2015 Mar
+    - 15-Mar
+  2015-04:
+    period_type: Monthly
+    start_date: '2015-04-01'
+    end_date: '2015-04-30'
     aliases:
-      - "2025-04"
-      - "Apr 2025"
-      - "April 2025"
-      - "04/2025"
-      - "2025/04"
-      - "Apr-2025"
-      - "Apr '25"
-      - "A25"
-      - "4/25"
-
-  # May 2025 → 2025-05
-  "2025-05":
-    canonical: "2025-05"
-    period_type: "Monthly"
-    start_date: "2025-05-01"
-    end_date: "2025-05-31"
+    - 2015-04
+    - 4/2015
+    - '2015.04'
+    - Apr 2015
+    - April 2015
+    - Apr-2015
+    - Apr '15
+    - 4/15
+    - 2015 Apr
+    - 15-Apr
+  2015-05:
+    period_type: Monthly
+    start_date: '2015-05-01'
+    end_date: '2015-05-31'
     aliases:
-      - "2025-05"
-      - "May 2025"
-      - "05/2025"
-      - "2025/05"
-      - "May-2025"
-      - "May '25"
-      - "5/25"
-
-  # June 2025 → 2025-06
-  "2025-06":
-    canonical: "2025-06"
-    period_type: "Monthly"
-    start_date: "2025-06-01"
-    end_date: "2025-06-30"
+    - 2015-05
+    - 5/2015
+    - '2015.05'
+    - May 2015
+    - May 2015
+    - May-2015
+    - May '15
+    - 5/15
+    - 2015 May
+    - 15-May
+  2015-06:
+    period_type: Monthly
+    start_date: '2015-06-01'
+    end_date: '2015-06-30'
     aliases:
-      - "2025-06"
-      - "Jun 2025"
-      - "June 2025"
-      - "06/2025"
-      - "2025/06"
-      - "Jun-2025"
-      - "Jun '25"
-      - "6/25"
-
-  # July 2025 → 2025-07
-  "2025-07":
-    canonical: "2025-07"
-    period_type: "Monthly"
-    start_date: "2025-07-01"
-    end_date: "2025-07-31"
+    - 2015-06
+    - 6/2015
+    - '2015.06'
+    - Jun 2015
+    - June 2015
+    - Jun-2015
+    - Jun '15
+    - 6/15
+    - 2015 Jun
+    - 15-Jun
+  2015-07:
+    period_type: Monthly
+    start_date: '2015-07-01'
+    end_date: '2015-07-31'
     aliases:
-      - "2025-07"
-      - "Jul 2025"
-      - "July 2025"
-      - "07/2025"
-      - "2025/07"
-      - "Jul-2025"
-      - "Jul '25"
-      - "7/25"
-
-  # August 2025 → 2025-08
-  "2025-08":
-    canonical: "2025-08"
-    period_type: "Monthly"
-    start_date: "2025-08-01"
-    end_date: "2025-08-31"
+    - 2015-07
+    - 7/2015
+    - '2015.07'
+    - Jul 2015
+    - July 2015
+    - Jul-2015
+    - Jul '15
+    - 7/15
+    - 2015 Jul
+    - 15-Jul
+  2015-08:
+    period_type: Monthly
+    start_date: '2015-08-01'
+    end_date: '2015-08-31'
     aliases:
-      - "2025-08"
-      - "Aug 2025"
-      - "August 2025"
-      - "08/2025"
-      - "2025/08"
-      - "Aug-2025"
-      - "Aug '25"
-      - "8/25"
-
-  # September 2025 → 2025-09
-  "2025-09":
-    canonical: "2025-09"
-    period_type: "Monthly"
-    start_date: "2025-09-01"
-    end_date: "2025-09-30"
+    - 2015-08
+    - 8/2015
+    - '2015.08'
+    - Aug 2015
+    - August 2015
+    - Aug-2015
+    - Aug '15
+    - 8/15
+    - 2015 Aug
+    - 15-Aug
+  2015-09:
+    period_type: Monthly
+    start_date: '2015-09-01'
+    end_date: '2015-09-30'
     aliases:
-      - "2025-09"
-      - "Sep 2025"
-      - "September 2025"
-      - "Sept 2025"
-      - "09/2025"
-      - "2025/09"
-      - "Sep-2025"
-      - "Sep '25"
-      - "9/25"
-
-  # October 2025 → 2025-10
-  "2025-10":
-    canonical: "2025-10"
-    period_type: "Monthly"
-    start_date: "2025-10-01"
-    end_date: "2025-10-31"
+    - 2015-09
+    - 9/2015
+    - '2015.09'
+    - Sep 2015
+    - September 2015
+    - Sep-2015
+    - Sep '15
+    - 9/15
+    - 2015 Sep
+    - 15-Sep
+  2015-10:
+    period_type: Monthly
+    start_date: '2015-10-01'
+    end_date: '2015-10-31'
     aliases:
-      - "2025-10"
-      - "Oct 2025"
-      - "October 2025"
-      - "10/2025"
-      - "2025/10"
-      - "Oct-2025"
-      - "Oct '25"
-      - "O25"
-
-  # November 2025 → 2025-11
-  "2025-11":
-    canonical: "2025-11"
-    period_type: "Monthly"
-    start_date: "2025-11-01"
-    end_date: "2025-11-30"
+    - 2015-10
+    - 10/2015
+    - '2015.10'
+    - Oct 2015
+    - October 2015
+    - Oct-2015
+    - Oct '15
+    - 10/15
+    - 2015 Oct
+    - 15-Oct
+  2015-11:
+    period_type: Monthly
+    start_date: '2015-11-01'
+    end_date: '2015-11-30'
     aliases:
-      - "2025-11"
-      - "Nov 2025"
-      - "November 2025"
-      - "11/2025"
-      - "2025/11"
-      - "Nov-2025"
-      - "Nov '25"
-      - "N25"
-
-  # December 2025 → 2025-12
-  "2025-12":
-    canonical: "2025-12"
-    period_type: "Monthly"
-    start_date: "2025-12-01"
-    end_date: "2025-12-31"
+    - 2015-11
+    - 11/2015
+    - '2015.11'
+    - Nov 2015
+    - November 2015
+    - Nov-2015
+    - Nov '15
+    - 11/15
+    - 2015 Nov
+    - 15-Nov
+  2015-12:
+    period_type: Monthly
+    start_date: '2015-12-01'
+    end_date: '2015-12-31'
     aliases:
-      - "2025-12"
-      - "Dec 2025"
-      - "December 2025"
-      - "12/2025"
-      - "2025/12"
-      - "Dec-2025"
-      - "Dec '25"
-      - "D25"
-
-  # Q1 2025 canonical mappings → 2025-Q1
-  "2025-Q1":
-    canonical: "2025-Q1"
-    period_type: "Quarterly"
-    start_date: "2025-01-01"
-    end_date: "2025-03-31"
+    - 2015-12
+    - 12/2015
+    - '2015.12'
+    - Dec 2015
+    - December 2015
+    - Dec-2015
+    - Dec '15
+    - 12/15
+    - 2015 Dec
+    - 15-Dec
+  2016-01:
+    period_type: Monthly
+    start_date: '2016-01-01'
+    end_date: '2016-01-31'
     aliases:
-      - "2025-Q1"          # ISO format (direct)
-      - "Q1 2025"          # Business format
-      - "2025 Q1"          # Alternative order
-      - "First Quarter 2025"
-      - "1Q25"             # Short format
-      - "Q1'25"            # Quote format
-      - "Jan-Mar 2025"     # Month range
-      - "2025 Q1 (Jan-Mar)"
-      - "Quarter 1, 2025"
-      - "FY25 Q1"          # Fiscal reference
-      - "2025 First Quarter"
-
-  # Q2 2025 → 2025-Q2
-  "2025-Q2":
-    canonical: "2025-Q2"
-    period_type: "Quarterly"
-    start_date: "2025-04-01"
-    end_date: "2025-06-30"
+    - 2016-01
+    - 1/2016
+    - '2016.01'
+    - Jan 2016
+    - January 2016
+    - Jan-2016
+    - Jan '16
+    - 1/16
+    - 2016 Jan
+    - 16-Jan
+  2016-02:
+    period_type: Monthly
+    start_date: '2016-02-01'
+    end_date: '2016-02-29'
     aliases:
-      - "2025-Q2"
-      - "Q2 2025"
-      - "2025 Q2"
-      - "Second Quarter 2025"
-      - "2Q25"
-      - "Q2'25"
-      - "Apr-Jun 2025"
-      - "Quarter 2, 2025"
-
-  # Q3 2025 → 2025-Q3
-  "2025-Q3":
-    canonical: "2025-Q3"
-    period_type: "Quarterly"
-    start_date: "2025-07-01"
-    end_date: "2025-09-30"
+    - 2016-02
+    - 2/2016
+    - '2016.02'
+    - Feb 2016
+    - February 2016
+    - Feb-2016
+    - Feb '16
+    - 2/16
+    - 2016 Feb
+    - 16-Feb
+  2016-03:
+    period_type: Monthly
+    start_date: '2016-03-01'
+    end_date: '2016-03-31'
     aliases:
-      - "2025-Q3"
-      - "Q3 2025"
-      - "2025 Q3"
-      - "Third Quarter 2025"
-      - "3Q25"
-      - "Q3'25"
-      - "Jul-Sep 2025"
-
-  # Q4 2025 → 2025-Q4
-  "2025-Q4":
-    canonical: "2025-Q4"
-    period_type: "Quarterly"
-    start_date: "2025-10-01"
-    end_date: "2025-12-31"
+    - 2016-03
+    - 3/2016
+    - '2016.03'
+    - Mar 2016
+    - March 2016
+    - Mar-2016
+    - Mar '16
+    - 3/16
+    - 2016 Mar
+    - 16-Mar
+  2016-04:
+    period_type: Monthly
+    start_date: '2016-04-01'
+    end_date: '2016-04-30'
     aliases:
-      - "2025-Q4"
-      - "Q4 2025"
-      - "2025 Q4"
-      - "Fourth Quarter 2025"
-      - "4Q25"
-      - "Q4'25"
-      - "Oct-Dec 2025"
-
-  # 2025 yearly → 2025
-  "2025":
-    canonical: "2025"
-    period_type: "Yearly"
-    start_date: "2025-01-01"
-    end_date: "2025-12-31"
+    - 2016-04
+    - 4/2016
+    - '2016.04'
+    - Apr 2016
+    - April 2016
+    - Apr-2016
+    - Apr '16
+    - 4/16
+    - 2016 Apr
+    - 16-Apr
+  2016-05:
+    period_type: Monthly
+    start_date: '2016-05-01'
+    end_date: '2016-05-31'
     aliases:
-      - "2025"             # ISO format (direct)
-      - "FY25"             # Fiscal year short
-      - "FY 2025"          # Fiscal year full
-      - "Year 2025"        # Descriptive
-      - "CY25"             # Calendar year short
-      - "Calendar 2025"    # Calendar year full
-      - "'25"              # Quote abbreviated
-
-  # 2024 periods for historical data
-  "2024-12":
-    canonical: "2024-12"
-    period_type: "Monthly"
-    start_date: "2024-12-01"
-    end_date: "2024-12-31"
+    - 2016-05
+    - 5/2016
+    - '2016.05'
+    - May 2016
+    - May 2016
+    - May-2016
+    - May '16
+    - 5/16
+    - 2016 May
+    - 16-May
+  2016-06:
+    period_type: Monthly
+    start_date: '2016-06-01'
+    end_date: '2016-06-30'
     aliases:
-      - "2024-12"
-      - "Dec 2024"
-      - "December 2024"
-      - "12/2024"
-      - "2024/12"
-
-  "2024-Q4":
-    canonical: "2024-Q4"
-    period_type: "Quarterly"
-    start_date: "2024-10-01"
-    end_date: "2024-12-31"
+    - 2016-06
+    - 6/2016
+    - '2016.06'
+    - Jun 2016
+    - June 2016
+    - Jun-2016
+    - Jun '16
+    - 6/16
+    - 2016 Jun
+    - 16-Jun
+  2016-07:
+    period_type: Monthly
+    start_date: '2016-07-01'
+    end_date: '2016-07-31'
     aliases:
-      - "2024-Q4"
-      - "Q4 2024"
-      - "2024 Q4"
-      - "4Q24"
-
-  "2024":
-    canonical: "2024"
-    period_type: "Yearly"
-    start_date: "2024-01-01"
-    end_date: "2024-12-31"
+    - 2016-07
+    - 7/2016
+    - '2016.07'
+    - Jul 2016
+    - July 2016
+    - Jul-2016
+    - Jul '16
+    - 7/16
+    - 2016 Jul
+    - 16-Jul
+  2016-08:
+    period_type: Monthly
+    start_date: '2016-08-01'
+    end_date: '2016-08-31'
     aliases:
-      - "2024"
-      - "FY24"
-      - "FY 2024"
-      - "Year 2024"
-      - "CY24"
-      - "'24"
-
-# =============================================================================
-# PARSING CONFIGURATION
-# =============================================================================
+    - 2016-08
+    - 8/2016
+    - '2016.08'
+    - Aug 2016
+    - August 2016
+    - Aug-2016
+    - Aug '16
+    - 8/16
+    - 2016 Aug
+    - 16-Aug
+  2016-09:
+    period_type: Monthly
+    start_date: '2016-09-01'
+    end_date: '2016-09-30'
+    aliases:
+    - 2016-09
+    - 9/2016
+    - '2016.09'
+    - Sep 2016
+    - September 2016
+    - Sep-2016
+    - Sep '16
+    - 9/16
+    - 2016 Sep
+    - 16-Sep
+  2016-10:
+    period_type: Monthly
+    start_date: '2016-10-01'
+    end_date: '2016-10-31'
+    aliases:
+    - 2016-10
+    - 10/2016
+    - '2016.10'
+    - Oct 2016
+    - October 2016
+    - Oct-2016
+    - Oct '16
+    - 10/16
+    - 2016 Oct
+    - 16-Oct
+  2016-11:
+    period_type: Monthly
+    start_date: '2016-11-01'
+    end_date: '2016-11-30'
+    aliases:
+    - 2016-11
+    - 11/2016
+    - '2016.11'
+    - Nov 2016
+    - November 2016
+    - Nov-2016
+    - Nov '16
+    - 11/16
+    - 2016 Nov
+    - 16-Nov
+  2016-12:
+    period_type: Monthly
+    start_date: '2016-12-01'
+    end_date: '2016-12-31'
+    aliases:
+    - 2016-12
+    - 12/2016
+    - '2016.12'
+    - Dec 2016
+    - December 2016
+    - Dec-2016
+    - Dec '16
+    - 12/16
+    - 2016 Dec
+    - 16-Dec
+  2017-01:
+    period_type: Monthly
+    start_date: '2017-01-01'
+    end_date: '2017-01-31'
+    aliases:
+    - 2017-01
+    - 1/2017
+    - '2017.01'
+    - Jan 2017
+    - January 2017
+    - Jan-2017
+    - Jan '17
+    - 1/17
+    - 2017 Jan
+    - 17-Jan
+  2017-02:
+    period_type: Monthly
+    start_date: '2017-02-01'
+    end_date: '2017-02-28'
+    aliases:
+    - 2017-02
+    - 2/2017
+    - '2017.02'
+    - Feb 2017
+    - February 2017
+    - Feb-2017
+    - Feb '17
+    - 2/17
+    - 2017 Feb
+    - 17-Feb
+  2017-03:
+    period_type: Monthly
+    start_date: '2017-03-01'
+    end_date: '2017-03-31'
+    aliases:
+    - 2017-03
+    - 3/2017
+    - '2017.03'
+    - Mar 2017
+    - March 2017
+    - Mar-2017
+    - Mar '17
+    - 3/17
+    - 2017 Mar
+    - 17-Mar
+  2017-04:
+    period_type: Monthly
+    start_date: '2017-04-01'
+    end_date: '2017-04-30'
+    aliases:
+    - 2017-04
+    - 4/2017
+    - '2017.04'
+    - Apr 2017
+    - April 2017
+    - Apr-2017
+    - Apr '17
+    - 4/17
+    - 2017 Apr
+    - 17-Apr
+  2017-05:
+    period_type: Monthly
+    start_date: '2017-05-01'
+    end_date: '2017-05-31'
+    aliases:
+    - 2017-05
+    - 5/2017
+    - '2017.05'
+    - May 2017
+    - May 2017
+    - May-2017
+    - May '17
+    - 5/17
+    - 2017 May
+    - 17-May
+  2017-06:
+    period_type: Monthly
+    start_date: '2017-06-01'
+    end_date: '2017-06-30'
+    aliases:
+    - 2017-06
+    - 6/2017
+    - '2017.06'
+    - Jun 2017
+    - June 2017
+    - Jun-2017
+    - Jun '17
+    - 6/17
+    - 2017 Jun
+    - 17-Jun
+  2017-07:
+    period_type: Monthly
+    start_date: '2017-07-01'
+    end_date: '2017-07-31'
+    aliases:
+    - 2017-07
+    - 7/2017
+    - '2017.07'
+    - Jul 2017
+    - July 2017
+    - Jul-2017
+    - Jul '17
+    - 7/17
+    - 2017 Jul
+    - 17-Jul
+  2017-08:
+    period_type: Monthly
+    start_date: '2017-08-01'
+    end_date: '2017-08-31'
+    aliases:
+    - 2017-08
+    - 8/2017
+    - '2017.08'
+    - Aug 2017
+    - August 2017
+    - Aug-2017
+    - Aug '17
+    - 8/17
+    - 2017 Aug
+    - 17-Aug
+  2017-09:
+    period_type: Monthly
+    start_date: '2017-09-01'
+    end_date: '2017-09-30'
+    aliases:
+    - 2017-09
+    - 9/2017
+    - '2017.09'
+    - Sep 2017
+    - September 2017
+    - Sep-2017
+    - Sep '17
+    - 9/17
+    - 2017 Sep
+    - 17-Sep
+  2017-10:
+    period_type: Monthly
+    start_date: '2017-10-01'
+    end_date: '2017-10-31'
+    aliases:
+    - 2017-10
+    - 10/2017
+    - '2017.10'
+    - Oct 2017
+    - October 2017
+    - Oct-2017
+    - Oct '17
+    - 10/17
+    - 2017 Oct
+    - 17-Oct
+  2017-11:
+    period_type: Monthly
+    start_date: '2017-11-01'
+    end_date: '2017-11-30'
+    aliases:
+    - 2017-11
+    - 11/2017
+    - '2017.11'
+    - Nov 2017
+    - November 2017
+    - Nov-2017
+    - Nov '17
+    - 11/17
+    - 2017 Nov
+    - 17-Nov
+  2017-12:
+    period_type: Monthly
+    start_date: '2017-12-01'
+    end_date: '2017-12-31'
+    aliases:
+    - 2017-12
+    - 12/2017
+    - '2017.12'
+    - Dec 2017
+    - December 2017
+    - Dec-2017
+    - Dec '17
+    - 12/17
+    - 2017 Dec
+    - 17-Dec
+  2018-01:
+    period_type: Monthly
+    start_date: '2018-01-01'
+    end_date: '2018-01-31'
+    aliases:
+    - 2018-01
+    - 1/2018
+    - '2018.01'
+    - Jan 2018
+    - January 2018
+    - Jan-2018
+    - Jan '18
+    - 1/18
+    - 2018 Jan
+    - 18-Jan
+  2018-02:
+    period_type: Monthly
+    start_date: '2018-02-01'
+    end_date: '2018-02-28'
+    aliases:
+    - 2018-02
+    - 2/2018
+    - '2018.02'
+    - Feb 2018
+    - February 2018
+    - Feb-2018
+    - Feb '18
+    - 2/18
+    - 2018 Feb
+    - 18-Feb
+  2018-03:
+    period_type: Monthly
+    start_date: '2018-03-01'
+    end_date: '2018-03-31'
+    aliases:
+    - 2018-03
+    - 3/2018
+    - '2018.03'
+    - Mar 2018
+    - March 2018
+    - Mar-2018
+    - Mar '18
+    - 3/18
+    - 2018 Mar
+    - 18-Mar
+  2018-04:
+    period_type: Monthly
+    start_date: '2018-04-01'
+    end_date: '2018-04-30'
+    aliases:
+    - 2018-04
+    - 4/2018
+    - '2018.04'
+    - Apr 2018
+    - April 2018
+    - Apr-2018
+    - Apr '18
+    - 4/18
+    - 2018 Apr
+    - 18-Apr
+  2018-05:
+    period_type: Monthly
+    start_date: '2018-05-01'
+    end_date: '2018-05-31'
+    aliases:
+    - 2018-05
+    - 5/2018
+    - '2018.05'
+    - May 2018
+    - May 2018
+    - May-2018
+    - May '18
+    - 5/18
+    - 2018 May
+    - 18-May
+  2018-06:
+    period_type: Monthly
+    start_date: '2018-06-01'
+    end_date: '2018-06-30'
+    aliases:
+    - 2018-06
+    - 6/2018
+    - '2018.06'
+    - Jun 2018
+    - June 2018
+    - Jun-2018
+    - Jun '18
+    - 6/18
+    - 2018 Jun
+    - 18-Jun
+  2018-07:
+    period_type: Monthly
+    start_date: '2018-07-01'
+    end_date: '2018-07-31'
+    aliases:
+    - 2018-07
+    - 7/2018
+    - '2018.07'
+    - Jul 2018
+    - July 2018
+    - Jul-2018
+    - Jul '18
+    - 7/18
+    - 2018 Jul
+    - 18-Jul
+  2018-08:
+    period_type: Monthly
+    start_date: '2018-08-01'
+    end_date: '2018-08-31'
+    aliases:
+    - 2018-08
+    - 8/2018
+    - '2018.08'
+    - Aug 2018
+    - August 2018
+    - Aug-2018
+    - Aug '18
+    - 8/18
+    - 2018 Aug
+    - 18-Aug
+  2018-09:
+    period_type: Monthly
+    start_date: '2018-09-01'
+    end_date: '2018-09-30'
+    aliases:
+    - 2018-09
+    - 9/2018
+    - '2018.09'
+    - Sep 2018
+    - September 2018
+    - Sep-2018
+    - Sep '18
+    - 9/18
+    - 2018 Sep
+    - 18-Sep
+  2018-10:
+    period_type: Monthly
+    start_date: '2018-10-01'
+    end_date: '2018-10-31'
+    aliases:
+    - 2018-10
+    - 10/2018
+    - '2018.10'
+    - Oct 2018
+    - October 2018
+    - Oct-2018
+    - Oct '18
+    - 10/18
+    - 2018 Oct
+    - 18-Oct
+  2018-11:
+    period_type: Monthly
+    start_date: '2018-11-01'
+    end_date: '2018-11-30'
+    aliases:
+    - 2018-11
+    - 11/2018
+    - '2018.11'
+    - Nov 2018
+    - November 2018
+    - Nov-2018
+    - Nov '18
+    - 11/18
+    - 2018 Nov
+    - 18-Nov
+  2018-12:
+    period_type: Monthly
+    start_date: '2018-12-01'
+    end_date: '2018-12-31'
+    aliases:
+    - 2018-12
+    - 12/2018
+    - '2018.12'
+    - Dec 2018
+    - December 2018
+    - Dec-2018
+    - Dec '18
+    - 12/18
+    - 2018 Dec
+    - 18-Dec
+  2019-01:
+    period_type: Monthly
+    start_date: '2019-01-01'
+    end_date: '2019-01-31'
+    aliases:
+    - 2019-01
+    - 1/2019
+    - '2019.01'
+    - Jan 2019
+    - January 2019
+    - Jan-2019
+    - Jan '19
+    - 1/19
+    - 2019 Jan
+    - 19-Jan
+  2019-02:
+    period_type: Monthly
+    start_date: '2019-02-01'
+    end_date: '2019-02-28'
+    aliases:
+    - 2019-02
+    - 2/2019
+    - '2019.02'
+    - Feb 2019
+    - February 2019
+    - Feb-2019
+    - Feb '19
+    - 2/19
+    - 2019 Feb
+    - 19-Feb
+  2019-03:
+    period_type: Monthly
+    start_date: '2019-03-01'
+    end_date: '2019-03-31'
+    aliases:
+    - 2019-03
+    - 3/2019
+    - '2019.03'
+    - Mar 2019
+    - March 2019
+    - Mar-2019
+    - Mar '19
+    - 3/19
+    - 2019 Mar
+    - 19-Mar
+  2019-04:
+    period_type: Monthly
+    start_date: '2019-04-01'
+    end_date: '2019-04-30'
+    aliases:
+    - 2019-04
+    - 4/2019
+    - '2019.04'
+    - Apr 2019
+    - April 2019
+    - Apr-2019
+    - Apr '19
+    - 4/19
+    - 2019 Apr
+    - 19-Apr
+  2019-05:
+    period_type: Monthly
+    start_date: '2019-05-01'
+    end_date: '2019-05-31'
+    aliases:
+    - 2019-05
+    - 5/2019
+    - '2019.05'
+    - May 2019
+    - May 2019
+    - May-2019
+    - May '19
+    - 5/19
+    - 2019 May
+    - 19-May
+  2019-06:
+    period_type: Monthly
+    start_date: '2019-06-01'
+    end_date: '2019-06-30'
+    aliases:
+    - 2019-06
+    - 6/2019
+    - '2019.06'
+    - Jun 2019
+    - June 2019
+    - Jun-2019
+    - Jun '19
+    - 6/19
+    - 2019 Jun
+    - 19-Jun
+  2019-07:
+    period_type: Monthly
+    start_date: '2019-07-01'
+    end_date: '2019-07-31'
+    aliases:
+    - 2019-07
+    - 7/2019
+    - '2019.07'
+    - Jul 2019
+    - July 2019
+    - Jul-2019
+    - Jul '19
+    - 7/19
+    - 2019 Jul
+    - 19-Jul
+  2019-08:
+    period_type: Monthly
+    start_date: '2019-08-01'
+    end_date: '2019-08-31'
+    aliases:
+    - 2019-08
+    - 8/2019
+    - '2019.08'
+    - Aug 2019
+    - August 2019
+    - Aug-2019
+    - Aug '19
+    - 8/19
+    - 2019 Aug
+    - 19-Aug
+  2019-09:
+    period_type: Monthly
+    start_date: '2019-09-01'
+    end_date: '2019-09-30'
+    aliases:
+    - 2019-09
+    - 9/2019
+    - '2019.09'
+    - Sep 2019
+    - September 2019
+    - Sep-2019
+    - Sep '19
+    - 9/19
+    - 2019 Sep
+    - 19-Sep
+  2019-10:
+    period_type: Monthly
+    start_date: '2019-10-01'
+    end_date: '2019-10-31'
+    aliases:
+    - 2019-10
+    - 10/2019
+    - '2019.10'
+    - Oct 2019
+    - October 2019
+    - Oct-2019
+    - Oct '19
+    - 10/19
+    - 2019 Oct
+    - 19-Oct
+  2019-11:
+    period_type: Monthly
+    start_date: '2019-11-01'
+    end_date: '2019-11-30'
+    aliases:
+    - 2019-11
+    - 11/2019
+    - '2019.11'
+    - Nov 2019
+    - November 2019
+    - Nov-2019
+    - Nov '19
+    - 11/19
+    - 2019 Nov
+    - 19-Nov
+  2019-12:
+    period_type: Monthly
+    start_date: '2019-12-01'
+    end_date: '2019-12-31'
+    aliases:
+    - 2019-12
+    - 12/2019
+    - '2019.12'
+    - Dec 2019
+    - December 2019
+    - Dec-2019
+    - Dec '19
+    - 12/19
+    - 2019 Dec
+    - 19-Dec
+  2020-01:
+    period_type: Monthly
+    start_date: '2020-01-01'
+    end_date: '2020-01-31'
+    aliases:
+    - 2020-01
+    - 1/2020
+    - '2020.01'
+    - Jan 2020
+    - January 2020
+    - Jan-2020
+    - Jan '20
+    - 1/20
+    - 2020 Jan
+    - 20-Jan
+  2020-02:
+    period_type: Monthly
+    start_date: '2020-02-01'
+    end_date: '2020-02-29'
+    aliases:
+    - 2020-02
+    - 2/2020
+    - '2020.02'
+    - Feb 2020
+    - February 2020
+    - Feb-2020
+    - Feb '20
+    - 2/20
+    - 2020 Feb
+    - 20-Feb
+  2020-03:
+    period_type: Monthly
+    start_date: '2020-03-01'
+    end_date: '2020-03-31'
+    aliases:
+    - 2020-03
+    - 3/2020
+    - '2020.03'
+    - Mar 2020
+    - March 2020
+    - Mar-2020
+    - Mar '20
+    - 3/20
+    - 2020 Mar
+    - 20-Mar
+  2020-04:
+    period_type: Monthly
+    start_date: '2020-04-01'
+    end_date: '2020-04-30'
+    aliases:
+    - 2020-04
+    - 4/2020
+    - '2020.04'
+    - Apr 2020
+    - April 2020
+    - Apr-2020
+    - Apr '20
+    - 4/20
+    - 2020 Apr
+    - 20-Apr
+  2020-05:
+    period_type: Monthly
+    start_date: '2020-05-01'
+    end_date: '2020-05-31'
+    aliases:
+    - 2020-05
+    - 5/2020
+    - '2020.05'
+    - May 2020
+    - May 2020
+    - May-2020
+    - May '20
+    - 5/20
+    - 2020 May
+    - 20-May
+  2020-06:
+    period_type: Monthly
+    start_date: '2020-06-01'
+    end_date: '2020-06-30'
+    aliases:
+    - 2020-06
+    - 6/2020
+    - '2020.06'
+    - Jun 2020
+    - June 2020
+    - Jun-2020
+    - Jun '20
+    - 6/20
+    - 2020 Jun
+    - 20-Jun
+  2020-07:
+    period_type: Monthly
+    start_date: '2020-07-01'
+    end_date: '2020-07-31'
+    aliases:
+    - 2020-07
+    - 7/2020
+    - '2020.07'
+    - Jul 2020
+    - July 2020
+    - Jul-2020
+    - Jul '20
+    - 7/20
+    - 2020 Jul
+    - 20-Jul
+  2020-08:
+    period_type: Monthly
+    start_date: '2020-08-01'
+    end_date: '2020-08-31'
+    aliases:
+    - 2020-08
+    - 8/2020
+    - '2020.08'
+    - Aug 2020
+    - August 2020
+    - Aug-2020
+    - Aug '20
+    - 8/20
+    - 2020 Aug
+    - 20-Aug
+  2020-09:
+    period_type: Monthly
+    start_date: '2020-09-01'
+    end_date: '2020-09-30'
+    aliases:
+    - 2020-09
+    - 9/2020
+    - '2020.09'
+    - Sep 2020
+    - September 2020
+    - Sep-2020
+    - Sep '20
+    - 9/20
+    - 2020 Sep
+    - 20-Sep
+  2020-10:
+    period_type: Monthly
+    start_date: '2020-10-01'
+    end_date: '2020-10-31'
+    aliases:
+    - 2020-10
+    - 10/2020
+    - '2020.10'
+    - Oct 2020
+    - October 2020
+    - Oct-2020
+    - Oct '20
+    - 10/20
+    - 2020 Oct
+    - 20-Oct
+  2020-11:
+    period_type: Monthly
+    start_date: '2020-11-01'
+    end_date: '2020-11-30'
+    aliases:
+    - 2020-11
+    - 11/2020
+    - '2020.11'
+    - Nov 2020
+    - November 2020
+    - Nov-2020
+    - Nov '20
+    - 11/20
+    - 2020 Nov
+    - 20-Nov
+  2020-12:
+    period_type: Monthly
+    start_date: '2020-12-01'
+    end_date: '2020-12-31'
+    aliases:
+    - 2020-12
+    - 12/2020
+    - '2020.12'
+    - Dec 2020
+    - December 2020
+    - Dec-2020
+    - Dec '20
+    - 12/20
+    - 2020 Dec
+    - 20-Dec
+  2021-01:
+    period_type: Monthly
+    start_date: '2021-01-01'
+    end_date: '2021-01-31'
+    aliases:
+    - 2021-01
+    - 1/2021
+    - '2021.01'
+    - Jan 2021
+    - January 2021
+    - Jan-2021
+    - Jan '21
+    - 1/21
+    - 2021 Jan
+    - 21-Jan
+  2021-02:
+    period_type: Monthly
+    start_date: '2021-02-01'
+    end_date: '2021-02-28'
+    aliases:
+    - 2021-02
+    - 2/2021
+    - '2021.02'
+    - Feb 2021
+    - February 2021
+    - Feb-2021
+    - Feb '21
+    - 2/21
+    - 2021 Feb
+    - 21-Feb
+  2021-03:
+    period_type: Monthly
+    start_date: '2021-03-01'
+    end_date: '2021-03-31'
+    aliases:
+    - 2021-03
+    - 3/2021
+    - '2021.03'
+    - Mar 2021
+    - March 2021
+    - Mar-2021
+    - Mar '21
+    - 3/21
+    - 2021 Mar
+    - 21-Mar
+  2021-04:
+    period_type: Monthly
+    start_date: '2021-04-01'
+    end_date: '2021-04-30'
+    aliases:
+    - 2021-04
+    - 4/2021
+    - '2021.04'
+    - Apr 2021
+    - April 2021
+    - Apr-2021
+    - Apr '21
+    - 4/21
+    - 2021 Apr
+    - 21-Apr
+  2021-05:
+    period_type: Monthly
+    start_date: '2021-05-01'
+    end_date: '2021-05-31'
+    aliases:
+    - 2021-05
+    - 5/2021
+    - '2021.05'
+    - May 2021
+    - May 2021
+    - May-2021
+    - May '21
+    - 5/21
+    - 2021 May
+    - 21-May
+  2021-06:
+    period_type: Monthly
+    start_date: '2021-06-01'
+    end_date: '2021-06-30'
+    aliases:
+    - 2021-06
+    - 6/2021
+    - '2021.06'
+    - Jun 2021
+    - June 2021
+    - Jun-2021
+    - Jun '21
+    - 6/21
+    - 2021 Jun
+    - 21-Jun
+  2021-07:
+    period_type: Monthly
+    start_date: '2021-07-01'
+    end_date: '2021-07-31'
+    aliases:
+    - 2021-07
+    - 7/2021
+    - '2021.07'
+    - Jul 2021
+    - July 2021
+    - Jul-2021
+    - Jul '21
+    - 7/21
+    - 2021 Jul
+    - 21-Jul
+  2021-08:
+    period_type: Monthly
+    start_date: '2021-08-01'
+    end_date: '2021-08-31'
+    aliases:
+    - 2021-08
+    - 8/2021
+    - '2021.08'
+    - Aug 2021
+    - August 2021
+    - Aug-2021
+    - Aug '21
+    - 8/21
+    - 2021 Aug
+    - 21-Aug
+  2021-09:
+    period_type: Monthly
+    start_date: '2021-09-01'
+    end_date: '2021-09-30'
+    aliases:
+    - 2021-09
+    - 9/2021
+    - '2021.09'
+    - Sep 2021
+    - September 2021
+    - Sep-2021
+    - Sep '21
+    - 9/21
+    - 2021 Sep
+    - 21-Sep
+  2021-10:
+    period_type: Monthly
+    start_date: '2021-10-01'
+    end_date: '2021-10-31'
+    aliases:
+    - 2021-10
+    - 10/2021
+    - '2021.10'
+    - Oct 2021
+    - October 2021
+    - Oct-2021
+    - Oct '21
+    - 10/21
+    - 2021 Oct
+    - 21-Oct
+  2021-11:
+    period_type: Monthly
+    start_date: '2021-11-01'
+    end_date: '2021-11-30'
+    aliases:
+    - 2021-11
+    - 11/2021
+    - '2021.11'
+    - Nov 2021
+    - November 2021
+    - Nov-2021
+    - Nov '21
+    - 11/21
+    - 2021 Nov
+    - 21-Nov
+  2021-12:
+    period_type: Monthly
+    start_date: '2021-12-01'
+    end_date: '2021-12-31'
+    aliases:
+    - 2021-12
+    - 12/2021
+    - '2021.12'
+    - Dec 2021
+    - December 2021
+    - Dec-2021
+    - Dec '21
+    - 12/21
+    - 2021 Dec
+    - 21-Dec
+  2022-01:
+    period_type: Monthly
+    start_date: '2022-01-01'
+    end_date: '2022-01-31'
+    aliases:
+    - 2022-01
+    - 1/2022
+    - '2022.01'
+    - Jan 2022
+    - January 2022
+    - Jan-2022
+    - Jan '22
+    - 1/22
+    - 2022 Jan
+    - 22-Jan
+  2022-02:
+    period_type: Monthly
+    start_date: '2022-02-01'
+    end_date: '2022-02-28'
+    aliases:
+    - 2022-02
+    - 2/2022
+    - '2022.02'
+    - Feb 2022
+    - February 2022
+    - Feb-2022
+    - Feb '22
+    - 2/22
+    - 2022 Feb
+    - 22-Feb
+  2022-03:
+    period_type: Monthly
+    start_date: '2022-03-01'
+    end_date: '2022-03-31'
+    aliases:
+    - 2022-03
+    - 3/2022
+    - '2022.03'
+    - Mar 2022
+    - March 2022
+    - Mar-2022
+    - Mar '22
+    - 3/22
+    - 2022 Mar
+    - 22-Mar
+  2022-04:
+    period_type: Monthly
+    start_date: '2022-04-01'
+    end_date: '2022-04-30'
+    aliases:
+    - 2022-04
+    - 4/2022
+    - '2022.04'
+    - Apr 2022
+    - April 2022
+    - Apr-2022
+    - Apr '22
+    - 4/22
+    - 2022 Apr
+    - 22-Apr
+  2022-05:
+    period_type: Monthly
+    start_date: '2022-05-01'
+    end_date: '2022-05-31'
+    aliases:
+    - 2022-05
+    - 5/2022
+    - '2022.05'
+    - May 2022
+    - May 2022
+    - May-2022
+    - May '22
+    - 5/22
+    - 2022 May
+    - 22-May
+  2022-06:
+    period_type: Monthly
+    start_date: '2022-06-01'
+    end_date: '2022-06-30'
+    aliases:
+    - 2022-06
+    - 6/2022
+    - '2022.06'
+    - Jun 2022
+    - June 2022
+    - Jun-2022
+    - Jun '22
+    - 6/22
+    - 2022 Jun
+    - 22-Jun
+  2022-07:
+    period_type: Monthly
+    start_date: '2022-07-01'
+    end_date: '2022-07-31'
+    aliases:
+    - 2022-07
+    - 7/2022
+    - '2022.07'
+    - Jul 2022
+    - July 2022
+    - Jul-2022
+    - Jul '22
+    - 7/22
+    - 2022 Jul
+    - 22-Jul
+  2022-08:
+    period_type: Monthly
+    start_date: '2022-08-01'
+    end_date: '2022-08-31'
+    aliases:
+    - 2022-08
+    - 8/2022
+    - '2022.08'
+    - Aug 2022
+    - August 2022
+    - Aug-2022
+    - Aug '22
+    - 8/22
+    - 2022 Aug
+    - 22-Aug
+  2022-09:
+    period_type: Monthly
+    start_date: '2022-09-01'
+    end_date: '2022-09-30'
+    aliases:
+    - 2022-09
+    - 9/2022
+    - '2022.09'
+    - Sep 2022
+    - September 2022
+    - Sep-2022
+    - Sep '22
+    - 9/22
+    - 2022 Sep
+    - 22-Sep
+  2022-10:
+    period_type: Monthly
+    start_date: '2022-10-01'
+    end_date: '2022-10-31'
+    aliases:
+    - 2022-10
+    - 10/2022
+    - '2022.10'
+    - Oct 2022
+    - October 2022
+    - Oct-2022
+    - Oct '22
+    - 10/22
+    - 2022 Oct
+    - 22-Oct
+  2022-11:
+    period_type: Monthly
+    start_date: '2022-11-01'
+    end_date: '2022-11-30'
+    aliases:
+    - 2022-11
+    - 11/2022
+    - '2022.11'
+    - Nov 2022
+    - November 2022
+    - Nov-2022
+    - Nov '22
+    - 11/22
+    - 2022 Nov
+    - 22-Nov
+  2022-12:
+    period_type: Monthly
+    start_date: '2022-12-01'
+    end_date: '2022-12-31'
+    aliases:
+    - 2022-12
+    - 12/2022
+    - '2022.12'
+    - Dec 2022
+    - December 2022
+    - Dec-2022
+    - Dec '22
+    - 12/22
+    - 2022 Dec
+    - 22-Dec
+  2023-01:
+    period_type: Monthly
+    start_date: '2023-01-01'
+    end_date: '2023-01-31'
+    aliases:
+    - 2023-01
+    - 1/2023
+    - '2023.01'
+    - Jan 2023
+    - January 2023
+    - Jan-2023
+    - Jan '23
+    - 1/23
+    - 2023 Jan
+    - 23-Jan
+  2023-02:
+    period_type: Monthly
+    start_date: '2023-02-01'
+    end_date: '2023-02-28'
+    aliases:
+    - 2023-02
+    - 2/2023
+    - '2023.02'
+    - Feb 2023
+    - February 2023
+    - Feb-2023
+    - Feb '23
+    - 2/23
+    - 2023 Feb
+    - 23-Feb
+  2023-03:
+    period_type: Monthly
+    start_date: '2023-03-01'
+    end_date: '2023-03-31'
+    aliases:
+    - 2023-03
+    - 3/2023
+    - '2023.03'
+    - Mar 2023
+    - March 2023
+    - Mar-2023
+    - Mar '23
+    - 3/23
+    - 2023 Mar
+    - 23-Mar
+  2023-04:
+    period_type: Monthly
+    start_date: '2023-04-01'
+    end_date: '2023-04-30'
+    aliases:
+    - 2023-04
+    - 4/2023
+    - '2023.04'
+    - Apr 2023
+    - April 2023
+    - Apr-2023
+    - Apr '23
+    - 4/23
+    - 2023 Apr
+    - 23-Apr
+  2023-05:
+    period_type: Monthly
+    start_date: '2023-05-01'
+    end_date: '2023-05-31'
+    aliases:
+    - 2023-05
+    - 5/2023
+    - '2023.05'
+    - May 2023
+    - May 2023
+    - May-2023
+    - May '23
+    - 5/23
+    - 2023 May
+    - 23-May
+  2023-06:
+    period_type: Monthly
+    start_date: '2023-06-01'
+    end_date: '2023-06-30'
+    aliases:
+    - 2023-06
+    - 6/2023
+    - '2023.06'
+    - Jun 2023
+    - June 2023
+    - Jun-2023
+    - Jun '23
+    - 6/23
+    - 2023 Jun
+    - 23-Jun
+  2023-07:
+    period_type: Monthly
+    start_date: '2023-07-01'
+    end_date: '2023-07-31'
+    aliases:
+    - 2023-07
+    - 7/2023
+    - '2023.07'
+    - Jul 2023
+    - July 2023
+    - Jul-2023
+    - Jul '23
+    - 7/23
+    - 2023 Jul
+    - 23-Jul
+  2023-08:
+    period_type: Monthly
+    start_date: '2023-08-01'
+    end_date: '2023-08-31'
+    aliases:
+    - 2023-08
+    - 8/2023
+    - '2023.08'
+    - Aug 2023
+    - August 2023
+    - Aug-2023
+    - Aug '23
+    - 8/23
+    - 2023 Aug
+    - 23-Aug
+  2023-09:
+    period_type: Monthly
+    start_date: '2023-09-01'
+    end_date: '2023-09-30'
+    aliases:
+    - 2023-09
+    - 9/2023
+    - '2023.09'
+    - Sep 2023
+    - September 2023
+    - Sep-2023
+    - Sep '23
+    - 9/23
+    - 2023 Sep
+    - 23-Sep
+  2023-10:
+    period_type: Monthly
+    start_date: '2023-10-01'
+    end_date: '2023-10-31'
+    aliases:
+    - 2023-10
+    - 10/2023
+    - '2023.10'
+    - Oct 2023
+    - October 2023
+    - Oct-2023
+    - Oct '23
+    - 10/23
+    - 2023 Oct
+    - 23-Oct
+  2023-11:
+    period_type: Monthly
+    start_date: '2023-11-01'
+    end_date: '2023-11-30'
+    aliases:
+    - 2023-11
+    - 11/2023
+    - '2023.11'
+    - Nov 2023
+    - November 2023
+    - Nov-2023
+    - Nov '23
+    - 11/23
+    - 2023 Nov
+    - 23-Nov
+  2023-12:
+    period_type: Monthly
+    start_date: '2023-12-01'
+    end_date: '2023-12-31'
+    aliases:
+    - 2023-12
+    - 12/2023
+    - '2023.12'
+    - Dec 2023
+    - December 2023
+    - Dec-2023
+    - Dec '23
+    - 12/23
+    - 2023 Dec
+    - 23-Dec
+  2024-01:
+    period_type: Monthly
+    start_date: '2024-01-01'
+    end_date: '2024-01-31'
+    aliases:
+    - 2024-01
+    - 1/2024
+    - '2024.01'
+    - Jan 2024
+    - January 2024
+    - Jan-2024
+    - Jan '24
+    - 1/24
+    - 2024 Jan
+    - 24-Jan
+  2024-02:
+    period_type: Monthly
+    start_date: '2024-02-01'
+    end_date: '2024-02-29'
+    aliases:
+    - 2024-02
+    - 2/2024
+    - '2024.02'
+    - Feb 2024
+    - February 2024
+    - Feb-2024
+    - Feb '24
+    - 2/24
+    - 2024 Feb
+    - 24-Feb
+  2024-03:
+    period_type: Monthly
+    start_date: '2024-03-01'
+    end_date: '2024-03-31'
+    aliases:
+    - 2024-03
+    - 3/2024
+    - '2024.03'
+    - Mar 2024
+    - March 2024
+    - Mar-2024
+    - Mar '24
+    - 3/24
+    - 2024 Mar
+    - 24-Mar
+  2024-04:
+    period_type: Monthly
+    start_date: '2024-04-01'
+    end_date: '2024-04-30'
+    aliases:
+    - 2024-04
+    - 4/2024
+    - '2024.04'
+    - Apr 2024
+    - April 2024
+    - Apr-2024
+    - Apr '24
+    - 4/24
+    - 2024 Apr
+    - 24-Apr
+  2024-05:
+    period_type: Monthly
+    start_date: '2024-05-01'
+    end_date: '2024-05-31'
+    aliases:
+    - 2024-05
+    - 5/2024
+    - '2024.05'
+    - May 2024
+    - May 2024
+    - May-2024
+    - May '24
+    - 5/24
+    - 2024 May
+    - 24-May
+  2024-06:
+    period_type: Monthly
+    start_date: '2024-06-01'
+    end_date: '2024-06-30'
+    aliases:
+    - 2024-06
+    - 6/2024
+    - '2024.06'
+    - Jun 2024
+    - June 2024
+    - Jun-2024
+    - Jun '24
+    - 6/24
+    - 2024 Jun
+    - 24-Jun
+  2024-07:
+    period_type: Monthly
+    start_date: '2024-07-01'
+    end_date: '2024-07-31'
+    aliases:
+    - 2024-07
+    - 7/2024
+    - '2024.07'
+    - Jul 2024
+    - July 2024
+    - Jul-2024
+    - Jul '24
+    - 7/24
+    - 2024 Jul
+    - 24-Jul
+  2024-08:
+    period_type: Monthly
+    start_date: '2024-08-01'
+    end_date: '2024-08-31'
+    aliases:
+    - 2024-08
+    - 8/2024
+    - '2024.08'
+    - Aug 2024
+    - August 2024
+    - Aug-2024
+    - Aug '24
+    - 8/24
+    - 2024 Aug
+    - 24-Aug
+  2024-09:
+    period_type: Monthly
+    start_date: '2024-09-01'
+    end_date: '2024-09-30'
+    aliases:
+    - 2024-09
+    - 9/2024
+    - '2024.09'
+    - Sep 2024
+    - September 2024
+    - Sep-2024
+    - Sep '24
+    - 9/24
+    - 2024 Sep
+    - 24-Sep
+  2024-10:
+    period_type: Monthly
+    start_date: '2024-10-01'
+    end_date: '2024-10-31'
+    aliases:
+    - 2024-10
+    - 10/2024
+    - '2024.10'
+    - Oct 2024
+    - October 2024
+    - Oct-2024
+    - Oct '24
+    - 10/24
+    - 2024 Oct
+    - 24-Oct
+  2024-11:
+    period_type: Monthly
+    start_date: '2024-11-01'
+    end_date: '2024-11-30'
+    aliases:
+    - 2024-11
+    - 11/2024
+    - '2024.11'
+    - Nov 2024
+    - November 2024
+    - Nov-2024
+    - Nov '24
+    - 11/24
+    - 2024 Nov
+    - 24-Nov
+  2024-12:
+    period_type: Monthly
+    start_date: '2024-12-01'
+    end_date: '2024-12-31'
+    aliases:
+    - 2024-12
+    - 12/2024
+    - '2024.12'
+    - Dec 2024
+    - December 2024
+    - Dec-2024
+    - Dec '24
+    - 12/24
+    - 2024 Dec
+    - 24-Dec
+  2025-01:
+    period_type: Monthly
+    start_date: '2025-01-01'
+    end_date: '2025-01-31'
+    aliases:
+    - 2025-01
+    - 1/2025
+    - '2025.01'
+    - Jan 2025
+    - January 2025
+    - Jan-2025
+    - Jan '25
+    - 1/25
+    - 2025 Jan
+    - 25-Jan
+  2025-02:
+    period_type: Monthly
+    start_date: '2025-02-01'
+    end_date: '2025-02-28'
+    aliases:
+    - 2025-02
+    - 2/2025
+    - '2025.02'
+    - Feb 2025
+    - February 2025
+    - Feb-2025
+    - Feb '25
+    - 2/25
+    - 2025 Feb
+    - 25-Feb
+  2025-03:
+    period_type: Monthly
+    start_date: '2025-03-01'
+    end_date: '2025-03-31'
+    aliases:
+    - 2025-03
+    - 3/2025
+    - '2025.03'
+    - Mar 2025
+    - March 2025
+    - Mar-2025
+    - Mar '25
+    - 3/25
+    - 2025 Mar
+    - 25-Mar
+  2025-04:
+    period_type: Monthly
+    start_date: '2025-04-01'
+    end_date: '2025-04-30'
+    aliases:
+    - 2025-04
+    - 4/2025
+    - '2025.04'
+    - Apr 2025
+    - April 2025
+    - Apr-2025
+    - Apr '25
+    - 4/25
+    - 2025 Apr
+    - 25-Apr
+  2025-05:
+    period_type: Monthly
+    start_date: '2025-05-01'
+    end_date: '2025-05-31'
+    aliases:
+    - 2025-05
+    - 5/2025
+    - '2025.05'
+    - May 2025
+    - May 2025
+    - May-2025
+    - May '25
+    - 5/25
+    - 2025 May
+    - 25-May
+  2025-06:
+    period_type: Monthly
+    start_date: '2025-06-01'
+    end_date: '2025-06-30'
+    aliases:
+    - 2025-06
+    - 6/2025
+    - '2025.06'
+    - Jun 2025
+    - June 2025
+    - Jun-2025
+    - Jun '25
+    - 6/25
+    - 2025 Jun
+    - 25-Jun
+  2025-07:
+    period_type: Monthly
+    start_date: '2025-07-01'
+    end_date: '2025-07-31'
+    aliases:
+    - 2025-07
+    - 7/2025
+    - '2025.07'
+    - Jul 2025
+    - July 2025
+    - Jul-2025
+    - Jul '25
+    - 7/25
+    - 2025 Jul
+    - 25-Jul
+  2025-08:
+    period_type: Monthly
+    start_date: '2025-08-01'
+    end_date: '2025-08-31'
+    aliases:
+    - 2025-08
+    - 8/2025
+    - '2025.08'
+    - Aug 2025
+    - August 2025
+    - Aug-2025
+    - Aug '25
+    - 8/25
+    - 2025 Aug
+    - 25-Aug
+  2025-09:
+    period_type: Monthly
+    start_date: '2025-09-01'
+    end_date: '2025-09-30'
+    aliases:
+    - 2025-09
+    - 9/2025
+    - '2025.09'
+    - Sep 2025
+    - September 2025
+    - Sep-2025
+    - Sep '25
+    - 9/25
+    - 2025 Sep
+    - 25-Sep
+  2025-10:
+    period_type: Monthly
+    start_date: '2025-10-01'
+    end_date: '2025-10-31'
+    aliases:
+    - 2025-10
+    - 10/2025
+    - '2025.10'
+    - Oct 2025
+    - October 2025
+    - Oct-2025
+    - Oct '25
+    - 10/25
+    - 2025 Oct
+    - 25-Oct
+  2025-11:
+    period_type: Monthly
+    start_date: '2025-11-01'
+    end_date: '2025-11-30'
+    aliases:
+    - 2025-11
+    - 11/2025
+    - '2025.11'
+    - Nov 2025
+    - November 2025
+    - Nov-2025
+    - Nov '25
+    - 11/25
+    - 2025 Nov
+    - 25-Nov
+  2025-12:
+    period_type: Monthly
+    start_date: '2025-12-01'
+    end_date: '2025-12-31'
+    aliases:
+    - 2025-12
+    - 12/2025
+    - '2025.12'
+    - Dec 2025
+    - December 2025
+    - Dec-2025
+    - Dec '25
+    - 12/25
+    - 2025 Dec
+    - 25-Dec
+  2026-01:
+    period_type: Monthly
+    start_date: '2026-01-01'
+    end_date: '2026-01-31'
+    aliases:
+    - 2026-01
+    - 1/2026
+    - '2026.01'
+    - Jan 2026
+    - January 2026
+    - Jan-2026
+    - Jan '26
+    - 1/26
+    - 2026 Jan
+    - 26-Jan
+  2026-02:
+    period_type: Monthly
+    start_date: '2026-02-01'
+    end_date: '2026-02-28'
+    aliases:
+    - 2026-02
+    - 2/2026
+    - '2026.02'
+    - Feb 2026
+    - February 2026
+    - Feb-2026
+    - Feb '26
+    - 2/26
+    - 2026 Feb
+    - 26-Feb
+  2026-03:
+    period_type: Monthly
+    start_date: '2026-03-01'
+    end_date: '2026-03-31'
+    aliases:
+    - 2026-03
+    - 3/2026
+    - '2026.03'
+    - Mar 2026
+    - March 2026
+    - Mar-2026
+    - Mar '26
+    - 3/26
+    - 2026 Mar
+    - 26-Mar
+  2026-04:
+    period_type: Monthly
+    start_date: '2026-04-01'
+    end_date: '2026-04-30'
+    aliases:
+    - 2026-04
+    - 4/2026
+    - '2026.04'
+    - Apr 2026
+    - April 2026
+    - Apr-2026
+    - Apr '26
+    - 4/26
+    - 2026 Apr
+    - 26-Apr
+  2026-05:
+    period_type: Monthly
+    start_date: '2026-05-01'
+    end_date: '2026-05-31'
+    aliases:
+    - 2026-05
+    - 5/2026
+    - '2026.05'
+    - May 2026
+    - May 2026
+    - May-2026
+    - May '26
+    - 5/26
+    - 2026 May
+    - 26-May
+  2026-06:
+    period_type: Monthly
+    start_date: '2026-06-01'
+    end_date: '2026-06-30'
+    aliases:
+    - 2026-06
+    - 6/2026
+    - '2026.06'
+    - Jun 2026
+    - June 2026
+    - Jun-2026
+    - Jun '26
+    - 6/26
+    - 2026 Jun
+    - 26-Jun
+  2026-07:
+    period_type: Monthly
+    start_date: '2026-07-01'
+    end_date: '2026-07-31'
+    aliases:
+    - 2026-07
+    - 7/2026
+    - '2026.07'
+    - Jul 2026
+    - July 2026
+    - Jul-2026
+    - Jul '26
+    - 7/26
+    - 2026 Jul
+    - 26-Jul
+  2026-08:
+    period_type: Monthly
+    start_date: '2026-08-01'
+    end_date: '2026-08-31'
+    aliases:
+    - 2026-08
+    - 8/2026
+    - '2026.08'
+    - Aug 2026
+    - August 2026
+    - Aug-2026
+    - Aug '26
+    - 8/26
+    - 2026 Aug
+    - 26-Aug
+  2026-09:
+    period_type: Monthly
+    start_date: '2026-09-01'
+    end_date: '2026-09-30'
+    aliases:
+    - 2026-09
+    - 9/2026
+    - '2026.09'
+    - Sep 2026
+    - September 2026
+    - Sep-2026
+    - Sep '26
+    - 9/26
+    - 2026 Sep
+    - 26-Sep
+  2026-10:
+    period_type: Monthly
+    start_date: '2026-10-01'
+    end_date: '2026-10-31'
+    aliases:
+    - 2026-10
+    - 10/2026
+    - '2026.10'
+    - Oct 2026
+    - October 2026
+    - Oct-2026
+    - Oct '26
+    - 10/26
+    - 2026 Oct
+    - 26-Oct
+  2026-11:
+    period_type: Monthly
+    start_date: '2026-11-01'
+    end_date: '2026-11-30'
+    aliases:
+    - 2026-11
+    - 11/2026
+    - '2026.11'
+    - Nov 2026
+    - November 2026
+    - Nov-2026
+    - Nov '26
+    - 11/26
+    - 2026 Nov
+    - 26-Nov
+  2026-12:
+    period_type: Monthly
+    start_date: '2026-12-01'
+    end_date: '2026-12-31'
+    aliases:
+    - 2026-12
+    - 12/2026
+    - '2026.12'
+    - Dec 2026
+    - December 2026
+    - Dec-2026
+    - Dec '26
+    - 12/26
+    - 2026 Dec
+    - 26-Dec
+  2027-01:
+    period_type: Monthly
+    start_date: '2027-01-01'
+    end_date: '2027-01-31'
+    aliases:
+    - 2027-01
+    - 1/2027
+    - '2027.01'
+    - Jan 2027
+    - January 2027
+    - Jan-2027
+    - Jan '27
+    - 1/27
+    - 2027 Jan
+    - 27-Jan
+  2027-02:
+    period_type: Monthly
+    start_date: '2027-02-01'
+    end_date: '2027-02-28'
+    aliases:
+    - 2027-02
+    - 2/2027
+    - '2027.02'
+    - Feb 2027
+    - February 2027
+    - Feb-2027
+    - Feb '27
+    - 2/27
+    - 2027 Feb
+    - 27-Feb
+  2027-03:
+    period_type: Monthly
+    start_date: '2027-03-01'
+    end_date: '2027-03-31'
+    aliases:
+    - 2027-03
+    - 3/2027
+    - '2027.03'
+    - Mar 2027
+    - March 2027
+    - Mar-2027
+    - Mar '27
+    - 3/27
+    - 2027 Mar
+    - 27-Mar
+  2027-04:
+    period_type: Monthly
+    start_date: '2027-04-01'
+    end_date: '2027-04-30'
+    aliases:
+    - 2027-04
+    - 4/2027
+    - '2027.04'
+    - Apr 2027
+    - April 2027
+    - Apr-2027
+    - Apr '27
+    - 4/27
+    - 2027 Apr
+    - 27-Apr
+  2027-05:
+    period_type: Monthly
+    start_date: '2027-05-01'
+    end_date: '2027-05-31'
+    aliases:
+    - 2027-05
+    - 5/2027
+    - '2027.05'
+    - May 2027
+    - May 2027
+    - May-2027
+    - May '27
+    - 5/27
+    - 2027 May
+    - 27-May
+  2027-06:
+    period_type: Monthly
+    start_date: '2027-06-01'
+    end_date: '2027-06-30'
+    aliases:
+    - 2027-06
+    - 6/2027
+    - '2027.06'
+    - Jun 2027
+    - June 2027
+    - Jun-2027
+    - Jun '27
+    - 6/27
+    - 2027 Jun
+    - 27-Jun
+  2027-07:
+    period_type: Monthly
+    start_date: '2027-07-01'
+    end_date: '2027-07-31'
+    aliases:
+    - 2027-07
+    - 7/2027
+    - '2027.07'
+    - Jul 2027
+    - July 2027
+    - Jul-2027
+    - Jul '27
+    - 7/27
+    - 2027 Jul
+    - 27-Jul
+  2027-08:
+    period_type: Monthly
+    start_date: '2027-08-01'
+    end_date: '2027-08-31'
+    aliases:
+    - 2027-08
+    - 8/2027
+    - '2027.08'
+    - Aug 2027
+    - August 2027
+    - Aug-2027
+    - Aug '27
+    - 8/27
+    - 2027 Aug
+    - 27-Aug
+  2027-09:
+    period_type: Monthly
+    start_date: '2027-09-01'
+    end_date: '2027-09-30'
+    aliases:
+    - 2027-09
+    - 9/2027
+    - '2027.09'
+    - Sep 2027
+    - September 2027
+    - Sep-2027
+    - Sep '27
+    - 9/27
+    - 2027 Sep
+    - 27-Sep
+  2027-10:
+    period_type: Monthly
+    start_date: '2027-10-01'
+    end_date: '2027-10-31'
+    aliases:
+    - 2027-10
+    - 10/2027
+    - '2027.10'
+    - Oct 2027
+    - October 2027
+    - Oct-2027
+    - Oct '27
+    - 10/27
+    - 2027 Oct
+    - 27-Oct
+  2027-11:
+    period_type: Monthly
+    start_date: '2027-11-01'
+    end_date: '2027-11-30'
+    aliases:
+    - 2027-11
+    - 11/2027
+    - '2027.11'
+    - Nov 2027
+    - November 2027
+    - Nov-2027
+    - Nov '27
+    - 11/27
+    - 2027 Nov
+    - 27-Nov
+  2027-12:
+    period_type: Monthly
+    start_date: '2027-12-01'
+    end_date: '2027-12-31'
+    aliases:
+    - 2027-12
+    - 12/2027
+    - '2027.12'
+    - Dec 2027
+    - December 2027
+    - Dec-2027
+    - Dec '27
+    - 12/27
+    - 2027 Dec
+    - 27-Dec
+  2028-01:
+    period_type: Monthly
+    start_date: '2028-01-01'
+    end_date: '2028-01-31'
+    aliases:
+    - 2028-01
+    - 1/2028
+    - '2028.01'
+    - Jan 2028
+    - January 2028
+    - Jan-2028
+    - Jan '28
+    - 1/28
+    - 2028 Jan
+    - 28-Jan
+  2028-02:
+    period_type: Monthly
+    start_date: '2028-02-01'
+    end_date: '2028-02-29'
+    aliases:
+    - 2028-02
+    - 2/2028
+    - '2028.02'
+    - Feb 2028
+    - February 2028
+    - Feb-2028
+    - Feb '28
+    - 2/28
+    - 2028 Feb
+    - 28-Feb
+  2028-03:
+    period_type: Monthly
+    start_date: '2028-03-01'
+    end_date: '2028-03-31'
+    aliases:
+    - 2028-03
+    - 3/2028
+    - '2028.03'
+    - Mar 2028
+    - March 2028
+    - Mar-2028
+    - Mar '28
+    - 3/28
+    - 2028 Mar
+    - 28-Mar
+  2028-04:
+    period_type: Monthly
+    start_date: '2028-04-01'
+    end_date: '2028-04-30'
+    aliases:
+    - 2028-04
+    - 4/2028
+    - '2028.04'
+    - Apr 2028
+    - April 2028
+    - Apr-2028
+    - Apr '28
+    - 4/28
+    - 2028 Apr
+    - 28-Apr
+  2028-05:
+    period_type: Monthly
+    start_date: '2028-05-01'
+    end_date: '2028-05-31'
+    aliases:
+    - 2028-05
+    - 5/2028
+    - '2028.05'
+    - May 2028
+    - May 2028
+    - May-2028
+    - May '28
+    - 5/28
+    - 2028 May
+    - 28-May
+  2028-06:
+    period_type: Monthly
+    start_date: '2028-06-01'
+    end_date: '2028-06-30'
+    aliases:
+    - 2028-06
+    - 6/2028
+    - '2028.06'
+    - Jun 2028
+    - June 2028
+    - Jun-2028
+    - Jun '28
+    - 6/28
+    - 2028 Jun
+    - 28-Jun
+  2028-07:
+    period_type: Monthly
+    start_date: '2028-07-01'
+    end_date: '2028-07-31'
+    aliases:
+    - 2028-07
+    - 7/2028
+    - '2028.07'
+    - Jul 2028
+    - July 2028
+    - Jul-2028
+    - Jul '28
+    - 7/28
+    - 2028 Jul
+    - 28-Jul
+  2028-08:
+    period_type: Monthly
+    start_date: '2028-08-01'
+    end_date: '2028-08-31'
+    aliases:
+    - 2028-08
+    - 8/2028
+    - '2028.08'
+    - Aug 2028
+    - August 2028
+    - Aug-2028
+    - Aug '28
+    - 8/28
+    - 2028 Aug
+    - 28-Aug
+  2028-09:
+    period_type: Monthly
+    start_date: '2028-09-01'
+    end_date: '2028-09-30'
+    aliases:
+    - 2028-09
+    - 9/2028
+    - '2028.09'
+    - Sep 2028
+    - September 2028
+    - Sep-2028
+    - Sep '28
+    - 9/28
+    - 2028 Sep
+    - 28-Sep
+  2028-10:
+    period_type: Monthly
+    start_date: '2028-10-01'
+    end_date: '2028-10-31'
+    aliases:
+    - 2028-10
+    - 10/2028
+    - '2028.10'
+    - Oct 2028
+    - October 2028
+    - Oct-2028
+    - Oct '28
+    - 10/28
+    - 2028 Oct
+    - 28-Oct
+  2028-11:
+    period_type: Monthly
+    start_date: '2028-11-01'
+    end_date: '2028-11-30'
+    aliases:
+    - 2028-11
+    - 11/2028
+    - '2028.11'
+    - Nov 2028
+    - November 2028
+    - Nov-2028
+    - Nov '28
+    - 11/28
+    - 2028 Nov
+    - 28-Nov
+  2028-12:
+    period_type: Monthly
+    start_date: '2028-12-01'
+    end_date: '2028-12-31'
+    aliases:
+    - 2028-12
+    - 12/2028
+    - '2028.12'
+    - Dec 2028
+    - December 2028
+    - Dec-2028
+    - Dec '28
+    - 12/28
+    - 2028 Dec
+    - 28-Dec
+  2029-01:
+    period_type: Monthly
+    start_date: '2029-01-01'
+    end_date: '2029-01-31'
+    aliases:
+    - 2029-01
+    - 1/2029
+    - '2029.01'
+    - Jan 2029
+    - January 2029
+    - Jan-2029
+    - Jan '29
+    - 1/29
+    - 2029 Jan
+    - 29-Jan
+  2029-02:
+    period_type: Monthly
+    start_date: '2029-02-01'
+    end_date: '2029-02-28'
+    aliases:
+    - 2029-02
+    - 2/2029
+    - '2029.02'
+    - Feb 2029
+    - February 2029
+    - Feb-2029
+    - Feb '29
+    - 2/29
+    - 2029 Feb
+    - 29-Feb
+  2029-03:
+    period_type: Monthly
+    start_date: '2029-03-01'
+    end_date: '2029-03-31'
+    aliases:
+    - 2029-03
+    - 3/2029
+    - '2029.03'
+    - Mar 2029
+    - March 2029
+    - Mar-2029
+    - Mar '29
+    - 3/29
+    - 2029 Mar
+    - 29-Mar
+  2029-04:
+    period_type: Monthly
+    start_date: '2029-04-01'
+    end_date: '2029-04-30'
+    aliases:
+    - 2029-04
+    - 4/2029
+    - '2029.04'
+    - Apr 2029
+    - April 2029
+    - Apr-2029
+    - Apr '29
+    - 4/29
+    - 2029 Apr
+    - 29-Apr
+  2029-05:
+    period_type: Monthly
+    start_date: '2029-05-01'
+    end_date: '2029-05-31'
+    aliases:
+    - 2029-05
+    - 5/2029
+    - '2029.05'
+    - May 2029
+    - May 2029
+    - May-2029
+    - May '29
+    - 5/29
+    - 2029 May
+    - 29-May
+  2029-06:
+    period_type: Monthly
+    start_date: '2029-06-01'
+    end_date: '2029-06-30'
+    aliases:
+    - 2029-06
+    - 6/2029
+    - '2029.06'
+    - Jun 2029
+    - June 2029
+    - Jun-2029
+    - Jun '29
+    - 6/29
+    - 2029 Jun
+    - 29-Jun
+  2029-07:
+    period_type: Monthly
+    start_date: '2029-07-01'
+    end_date: '2029-07-31'
+    aliases:
+    - 2029-07
+    - 7/2029
+    - '2029.07'
+    - Jul 2029
+    - July 2029
+    - Jul-2029
+    - Jul '29
+    - 7/29
+    - 2029 Jul
+    - 29-Jul
+  2029-08:
+    period_type: Monthly
+    start_date: '2029-08-01'
+    end_date: '2029-08-31'
+    aliases:
+    - 2029-08
+    - 8/2029
+    - '2029.08'
+    - Aug 2029
+    - August 2029
+    - Aug-2029
+    - Aug '29
+    - 8/29
+    - 2029 Aug
+    - 29-Aug
+  2029-09:
+    period_type: Monthly
+    start_date: '2029-09-01'
+    end_date: '2029-09-30'
+    aliases:
+    - 2029-09
+    - 9/2029
+    - '2029.09'
+    - Sep 2029
+    - September 2029
+    - Sep-2029
+    - Sep '29
+    - 9/29
+    - 2029 Sep
+    - 29-Sep
+  2029-10:
+    period_type: Monthly
+    start_date: '2029-10-01'
+    end_date: '2029-10-31'
+    aliases:
+    - 2029-10
+    - 10/2029
+    - '2029.10'
+    - Oct 2029
+    - October 2029
+    - Oct-2029
+    - Oct '29
+    - 10/29
+    - 2029 Oct
+    - 29-Oct
+  2029-11:
+    period_type: Monthly
+    start_date: '2029-11-01'
+    end_date: '2029-11-30'
+    aliases:
+    - 2029-11
+    - 11/2029
+    - '2029.11'
+    - Nov 2029
+    - November 2029
+    - Nov-2029
+    - Nov '29
+    - 11/29
+    - 2029 Nov
+    - 29-Nov
+  2029-12:
+    period_type: Monthly
+    start_date: '2029-12-01'
+    end_date: '2029-12-31'
+    aliases:
+    - 2029-12
+    - 12/2029
+    - '2029.12'
+    - Dec 2029
+    - December 2029
+    - Dec-2029
+    - Dec '29
+    - 12/29
+    - 2029 Dec
+    - 29-Dec
+  2030-01:
+    period_type: Monthly
+    start_date: '2030-01-01'
+    end_date: '2030-01-31'
+    aliases:
+    - 2030-01
+    - 1/2030
+    - '2030.01'
+    - Jan 2030
+    - January 2030
+    - Jan-2030
+    - Jan '30
+    - 1/30
+    - 2030 Jan
+    - 30-Jan
+  2030-02:
+    period_type: Monthly
+    start_date: '2030-02-01'
+    end_date: '2030-02-28'
+    aliases:
+    - 2030-02
+    - 2/2030
+    - '2030.02'
+    - Feb 2030
+    - February 2030
+    - Feb-2030
+    - Feb '30
+    - 2/30
+    - 2030 Feb
+    - 30-Feb
+  2030-03:
+    period_type: Monthly
+    start_date: '2030-03-01'
+    end_date: '2030-03-31'
+    aliases:
+    - 2030-03
+    - 3/2030
+    - '2030.03'
+    - Mar 2030
+    - March 2030
+    - Mar-2030
+    - Mar '30
+    - 3/30
+    - 2030 Mar
+    - 30-Mar
+  2030-04:
+    period_type: Monthly
+    start_date: '2030-04-01'
+    end_date: '2030-04-30'
+    aliases:
+    - 2030-04
+    - 4/2030
+    - '2030.04'
+    - Apr 2030
+    - April 2030
+    - Apr-2030
+    - Apr '30
+    - 4/30
+    - 2030 Apr
+    - 30-Apr
+  2030-05:
+    period_type: Monthly
+    start_date: '2030-05-01'
+    end_date: '2030-05-31'
+    aliases:
+    - 2030-05
+    - 5/2030
+    - '2030.05'
+    - May 2030
+    - May 2030
+    - May-2030
+    - May '30
+    - 5/30
+    - 2030 May
+    - 30-May
+  2030-06:
+    period_type: Monthly
+    start_date: '2030-06-01'
+    end_date: '2030-06-30'
+    aliases:
+    - 2030-06
+    - 6/2030
+    - '2030.06'
+    - Jun 2030
+    - June 2030
+    - Jun-2030
+    - Jun '30
+    - 6/30
+    - 2030 Jun
+    - 30-Jun
+  2030-07:
+    period_type: Monthly
+    start_date: '2030-07-01'
+    end_date: '2030-07-31'
+    aliases:
+    - 2030-07
+    - 7/2030
+    - '2030.07'
+    - Jul 2030
+    - July 2030
+    - Jul-2030
+    - Jul '30
+    - 7/30
+    - 2030 Jul
+    - 30-Jul
+  2030-08:
+    period_type: Monthly
+    start_date: '2030-08-01'
+    end_date: '2030-08-31'
+    aliases:
+    - 2030-08
+    - 8/2030
+    - '2030.08'
+    - Aug 2030
+    - August 2030
+    - Aug-2030
+    - Aug '30
+    - 8/30
+    - 2030 Aug
+    - 30-Aug
+  2030-09:
+    period_type: Monthly
+    start_date: '2030-09-01'
+    end_date: '2030-09-30'
+    aliases:
+    - 2030-09
+    - 9/2030
+    - '2030.09'
+    - Sep 2030
+    - September 2030
+    - Sep-2030
+    - Sep '30
+    - 9/30
+    - 2030 Sep
+    - 30-Sep
+  2030-10:
+    period_type: Monthly
+    start_date: '2030-10-01'
+    end_date: '2030-10-31'
+    aliases:
+    - 2030-10
+    - 10/2030
+    - '2030.10'
+    - Oct 2030
+    - October 2030
+    - Oct-2030
+    - Oct '30
+    - 10/30
+    - 2030 Oct
+    - 30-Oct
+  2030-11:
+    period_type: Monthly
+    start_date: '2030-11-01'
+    end_date: '2030-11-30'
+    aliases:
+    - 2030-11
+    - 11/2030
+    - '2030.11'
+    - Nov 2030
+    - November 2030
+    - Nov-2030
+    - Nov '30
+    - 11/30
+    - 2030 Nov
+    - 30-Nov
+  2030-12:
+    period_type: Monthly
+    start_date: '2030-12-01'
+    end_date: '2030-12-31'
+    aliases:
+    - 2030-12
+    - 12/2030
+    - '2030.12'
+    - Dec 2030
+    - December 2030
+    - Dec-2030
+    - Dec '30
+    - 12/30
+    - 2030 Dec
+    - 30-Dec
+  2015-Q1:
+    period_type: Quarterly
+    start_date: '2015-01-01'
+    end_date: '2015-03-31'
+    aliases:
+    - 2015-Q1
+    - Q1 2015
+    - 2015 Q1
+    - 1Q15
+    - Jan-Mar 2015
+  2015-Q2:
+    period_type: Quarterly
+    start_date: '2015-04-01'
+    end_date: '2015-06-30'
+    aliases:
+    - 2015-Q2
+    - Q2 2015
+    - 2015 Q2
+    - 2Q15
+    - Apr-Jun 2015
+  2015-Q3:
+    period_type: Quarterly
+    start_date: '2015-07-01'
+    end_date: '2015-09-30'
+    aliases:
+    - 2015-Q3
+    - Q3 2015
+    - 2015 Q3
+    - 3Q15
+    - Jul-Sep 2015
+  2015-Q4:
+    period_type: Quarterly
+    start_date: '2015-10-01'
+    end_date: '2015-12-31'
+    aliases:
+    - 2015-Q4
+    - Q4 2015
+    - 2015 Q4
+    - 4Q15
+    - Oct-Dec 2015
+  2016-Q1:
+    period_type: Quarterly
+    start_date: '2016-01-01'
+    end_date: '2016-03-31'
+    aliases:
+    - 2016-Q1
+    - Q1 2016
+    - 2016 Q1
+    - 1Q16
+    - Jan-Mar 2016
+  2016-Q2:
+    period_type: Quarterly
+    start_date: '2016-04-01'
+    end_date: '2016-06-30'
+    aliases:
+    - 2016-Q2
+    - Q2 2016
+    - 2016 Q2
+    - 2Q16
+    - Apr-Jun 2016
+  2016-Q3:
+    period_type: Quarterly
+    start_date: '2016-07-01'
+    end_date: '2016-09-30'
+    aliases:
+    - 2016-Q3
+    - Q3 2016
+    - 2016 Q3
+    - 3Q16
+    - Jul-Sep 2016
+  2016-Q4:
+    period_type: Quarterly
+    start_date: '2016-10-01'
+    end_date: '2016-12-31'
+    aliases:
+    - 2016-Q4
+    - Q4 2016
+    - 2016 Q4
+    - 4Q16
+    - Oct-Dec 2016
+  2017-Q1:
+    period_type: Quarterly
+    start_date: '2017-01-01'
+    end_date: '2017-03-31'
+    aliases:
+    - 2017-Q1
+    - Q1 2017
+    - 2017 Q1
+    - 1Q17
+    - Jan-Mar 2017
+  2017-Q2:
+    period_type: Quarterly
+    start_date: '2017-04-01'
+    end_date: '2017-06-30'
+    aliases:
+    - 2017-Q2
+    - Q2 2017
+    - 2017 Q2
+    - 2Q17
+    - Apr-Jun 2017
+  2017-Q3:
+    period_type: Quarterly
+    start_date: '2017-07-01'
+    end_date: '2017-09-30'
+    aliases:
+    - 2017-Q3
+    - Q3 2017
+    - 2017 Q3
+    - 3Q17
+    - Jul-Sep 2017
+  2017-Q4:
+    period_type: Quarterly
+    start_date: '2017-10-01'
+    end_date: '2017-12-31'
+    aliases:
+    - 2017-Q4
+    - Q4 2017
+    - 2017 Q4
+    - 4Q17
+    - Oct-Dec 2017
+  2018-Q1:
+    period_type: Quarterly
+    start_date: '2018-01-01'
+    end_date: '2018-03-31'
+    aliases:
+    - 2018-Q1
+    - Q1 2018
+    - 2018 Q1
+    - 1Q18
+    - Jan-Mar 2018
+  2018-Q2:
+    period_type: Quarterly
+    start_date: '2018-04-01'
+    end_date: '2018-06-30'
+    aliases:
+    - 2018-Q2
+    - Q2 2018
+    - 2018 Q2
+    - 2Q18
+    - Apr-Jun 2018
+  2018-Q3:
+    period_type: Quarterly
+    start_date: '2018-07-01'
+    end_date: '2018-09-30'
+    aliases:
+    - 2018-Q3
+    - Q3 2018
+    - 2018 Q3
+    - 3Q18
+    - Jul-Sep 2018
+  2018-Q4:
+    period_type: Quarterly
+    start_date: '2018-10-01'
+    end_date: '2018-12-31'
+    aliases:
+    - 2018-Q4
+    - Q4 2018
+    - 2018 Q4
+    - 4Q18
+    - Oct-Dec 2018
+  2019-Q1:
+    period_type: Quarterly
+    start_date: '2019-01-01'
+    end_date: '2019-03-31'
+    aliases:
+    - 2019-Q1
+    - Q1 2019
+    - 2019 Q1
+    - 1Q19
+    - Jan-Mar 2019
+  2019-Q2:
+    period_type: Quarterly
+    start_date: '2019-04-01'
+    end_date: '2019-06-30'
+    aliases:
+    - 2019-Q2
+    - Q2 2019
+    - 2019 Q2
+    - 2Q19
+    - Apr-Jun 2019
+  2019-Q3:
+    period_type: Quarterly
+    start_date: '2019-07-01'
+    end_date: '2019-09-30'
+    aliases:
+    - 2019-Q3
+    - Q3 2019
+    - 2019 Q3
+    - 3Q19
+    - Jul-Sep 2019
+  2019-Q4:
+    period_type: Quarterly
+    start_date: '2019-10-01'
+    end_date: '2019-12-31'
+    aliases:
+    - 2019-Q4
+    - Q4 2019
+    - 2019 Q4
+    - 4Q19
+    - Oct-Dec 2019
+  2020-Q1:
+    period_type: Quarterly
+    start_date: '2020-01-01'
+    end_date: '2020-03-31'
+    aliases:
+    - 2020-Q1
+    - Q1 2020
+    - 2020 Q1
+    - 1Q20
+    - Jan-Mar 2020
+  2020-Q2:
+    period_type: Quarterly
+    start_date: '2020-04-01'
+    end_date: '2020-06-30'
+    aliases:
+    - 2020-Q2
+    - Q2 2020
+    - 2020 Q2
+    - 2Q20
+    - Apr-Jun 2020
+  2020-Q3:
+    period_type: Quarterly
+    start_date: '2020-07-01'
+    end_date: '2020-09-30'
+    aliases:
+    - 2020-Q3
+    - Q3 2020
+    - 2020 Q3
+    - 3Q20
+    - Jul-Sep 2020
+  2020-Q4:
+    period_type: Quarterly
+    start_date: '2020-10-01'
+    end_date: '2020-12-31'
+    aliases:
+    - 2020-Q4
+    - Q4 2020
+    - 2020 Q4
+    - 4Q20
+    - Oct-Dec 2020
+  2021-Q1:
+    period_type: Quarterly
+    start_date: '2021-01-01'
+    end_date: '2021-03-31'
+    aliases:
+    - 2021-Q1
+    - Q1 2021
+    - 2021 Q1
+    - 1Q21
+    - Jan-Mar 2021
+  2021-Q2:
+    period_type: Quarterly
+    start_date: '2021-04-01'
+    end_date: '2021-06-30'
+    aliases:
+    - 2021-Q2
+    - Q2 2021
+    - 2021 Q2
+    - 2Q21
+    - Apr-Jun 2021
+  2021-Q3:
+    period_type: Quarterly
+    start_date: '2021-07-01'
+    end_date: '2021-09-30'
+    aliases:
+    - 2021-Q3
+    - Q3 2021
+    - 2021 Q3
+    - 3Q21
+    - Jul-Sep 2021
+  2021-Q4:
+    period_type: Quarterly
+    start_date: '2021-10-01'
+    end_date: '2021-12-31'
+    aliases:
+    - 2021-Q4
+    - Q4 2021
+    - 2021 Q4
+    - 4Q21
+    - Oct-Dec 2021
+  2022-Q1:
+    period_type: Quarterly
+    start_date: '2022-01-01'
+    end_date: '2022-03-31'
+    aliases:
+    - 2022-Q1
+    - Q1 2022
+    - 2022 Q1
+    - 1Q22
+    - Jan-Mar 2022
+  2022-Q2:
+    period_type: Quarterly
+    start_date: '2022-04-01'
+    end_date: '2022-06-30'
+    aliases:
+    - 2022-Q2
+    - Q2 2022
+    - 2022 Q2
+    - 2Q22
+    - Apr-Jun 2022
+  2022-Q3:
+    period_type: Quarterly
+    start_date: '2022-07-01'
+    end_date: '2022-09-30'
+    aliases:
+    - 2022-Q3
+    - Q3 2022
+    - 2022 Q3
+    - 3Q22
+    - Jul-Sep 2022
+  2022-Q4:
+    period_type: Quarterly
+    start_date: '2022-10-01'
+    end_date: '2022-12-31'
+    aliases:
+    - 2022-Q4
+    - Q4 2022
+    - 2022 Q4
+    - 4Q22
+    - Oct-Dec 2022
+  2023-Q1:
+    period_type: Quarterly
+    start_date: '2023-01-01'
+    end_date: '2023-03-31'
+    aliases:
+    - 2023-Q1
+    - Q1 2023
+    - 2023 Q1
+    - 1Q23
+    - Jan-Mar 2023
+  2023-Q2:
+    period_type: Quarterly
+    start_date: '2023-04-01'
+    end_date: '2023-06-30'
+    aliases:
+    - 2023-Q2
+    - Q2 2023
+    - 2023 Q2
+    - 2Q23
+    - Apr-Jun 2023
+  2023-Q3:
+    period_type: Quarterly
+    start_date: '2023-07-01'
+    end_date: '2023-09-30'
+    aliases:
+    - 2023-Q3
+    - Q3 2023
+    - 2023 Q3
+    - 3Q23
+    - Jul-Sep 2023
+  2023-Q4:
+    period_type: Quarterly
+    start_date: '2023-10-01'
+    end_date: '2023-12-31'
+    aliases:
+    - 2023-Q4
+    - Q4 2023
+    - 2023 Q4
+    - 4Q23
+    - Oct-Dec 2023
+  2024-Q1:
+    period_type: Quarterly
+    start_date: '2024-01-01'
+    end_date: '2024-03-31'
+    aliases:
+    - 2024-Q1
+    - Q1 2024
+    - 2024 Q1
+    - 1Q24
+    - Jan-Mar 2024
+  2024-Q2:
+    period_type: Quarterly
+    start_date: '2024-04-01'
+    end_date: '2024-06-30'
+    aliases:
+    - 2024-Q2
+    - Q2 2024
+    - 2024 Q2
+    - 2Q24
+    - Apr-Jun 2024
+  2024-Q3:
+    period_type: Quarterly
+    start_date: '2024-07-01'
+    end_date: '2024-09-30'
+    aliases:
+    - 2024-Q3
+    - Q3 2024
+    - 2024 Q3
+    - 3Q24
+    - Jul-Sep 2024
+  2024-Q4:
+    period_type: Quarterly
+    start_date: '2024-10-01'
+    end_date: '2024-12-31'
+    aliases:
+    - 2024-Q4
+    - Q4 2024
+    - 2024 Q4
+    - 4Q24
+    - Oct-Dec 2024
+  2025-Q1:
+    period_type: Quarterly
+    start_date: '2025-01-01'
+    end_date: '2025-03-31'
+    aliases:
+    - 2025-Q1
+    - Q1 2025
+    - 2025 Q1
+    - 1Q25
+    - Jan-Mar 2025
+  2025-Q2:
+    period_type: Quarterly
+    start_date: '2025-04-01'
+    end_date: '2025-06-30'
+    aliases:
+    - 2025-Q2
+    - Q2 2025
+    - 2025 Q2
+    - 2Q25
+    - Apr-Jun 2025
+  2025-Q3:
+    period_type: Quarterly
+    start_date: '2025-07-01'
+    end_date: '2025-09-30'
+    aliases:
+    - 2025-Q3
+    - Q3 2025
+    - 2025 Q3
+    - 3Q25
+    - Jul-Sep 2025
+  2025-Q4:
+    period_type: Quarterly
+    start_date: '2025-10-01'
+    end_date: '2025-12-31'
+    aliases:
+    - 2025-Q4
+    - Q4 2025
+    - 2025 Q4
+    - 4Q25
+    - Oct-Dec 2025
+  2026-Q1:
+    period_type: Quarterly
+    start_date: '2026-01-01'
+    end_date: '2026-03-31'
+    aliases:
+    - 2026-Q1
+    - Q1 2026
+    - 2026 Q1
+    - 1Q26
+    - Jan-Mar 2026
+  2026-Q2:
+    period_type: Quarterly
+    start_date: '2026-04-01'
+    end_date: '2026-06-30'
+    aliases:
+    - 2026-Q2
+    - Q2 2026
+    - 2026 Q2
+    - 2Q26
+    - Apr-Jun 2026
+  2026-Q3:
+    period_type: Quarterly
+    start_date: '2026-07-01'
+    end_date: '2026-09-30'
+    aliases:
+    - 2026-Q3
+    - Q3 2026
+    - 2026 Q3
+    - 3Q26
+    - Jul-Sep 2026
+  2026-Q4:
+    period_type: Quarterly
+    start_date: '2026-10-01'
+    end_date: '2026-12-31'
+    aliases:
+    - 2026-Q4
+    - Q4 2026
+    - 2026 Q4
+    - 4Q26
+    - Oct-Dec 2026
+  2027-Q1:
+    period_type: Quarterly
+    start_date: '2027-01-01'
+    end_date: '2027-03-31'
+    aliases:
+    - 2027-Q1
+    - Q1 2027
+    - 2027 Q1
+    - 1Q27
+    - Jan-Mar 2027
+  2027-Q2:
+    period_type: Quarterly
+    start_date: '2027-04-01'
+    end_date: '2027-06-30'
+    aliases:
+    - 2027-Q2
+    - Q2 2027
+    - 2027 Q2
+    - 2Q27
+    - Apr-Jun 2027
+  2027-Q3:
+    period_type: Quarterly
+    start_date: '2027-07-01'
+    end_date: '2027-09-30'
+    aliases:
+    - 2027-Q3
+    - Q3 2027
+    - 2027 Q3
+    - 3Q27
+    - Jul-Sep 2027
+  2027-Q4:
+    period_type: Quarterly
+    start_date: '2027-10-01'
+    end_date: '2027-12-31'
+    aliases:
+    - 2027-Q4
+    - Q4 2027
+    - 2027 Q4
+    - 4Q27
+    - Oct-Dec 2027
+  2028-Q1:
+    period_type: Quarterly
+    start_date: '2028-01-01'
+    end_date: '2028-03-31'
+    aliases:
+    - 2028-Q1
+    - Q1 2028
+    - 2028 Q1
+    - 1Q28
+    - Jan-Mar 2028
+  2028-Q2:
+    period_type: Quarterly
+    start_date: '2028-04-01'
+    end_date: '2028-06-30'
+    aliases:
+    - 2028-Q2
+    - Q2 2028
+    - 2028 Q2
+    - 2Q28
+    - Apr-Jun 2028
+  2028-Q3:
+    period_type: Quarterly
+    start_date: '2028-07-01'
+    end_date: '2028-09-30'
+    aliases:
+    - 2028-Q3
+    - Q3 2028
+    - 2028 Q3
+    - 3Q28
+    - Jul-Sep 2028
+  2028-Q4:
+    period_type: Quarterly
+    start_date: '2028-10-01'
+    end_date: '2028-12-31'
+    aliases:
+    - 2028-Q4
+    - Q4 2028
+    - 2028 Q4
+    - 4Q28
+    - Oct-Dec 2028
+  2029-Q1:
+    period_type: Quarterly
+    start_date: '2029-01-01'
+    end_date: '2029-03-31'
+    aliases:
+    - 2029-Q1
+    - Q1 2029
+    - 2029 Q1
+    - 1Q29
+    - Jan-Mar 2029
+  2029-Q2:
+    period_type: Quarterly
+    start_date: '2029-04-01'
+    end_date: '2029-06-30'
+    aliases:
+    - 2029-Q2
+    - Q2 2029
+    - 2029 Q2
+    - 2Q29
+    - Apr-Jun 2029
+  2029-Q3:
+    period_type: Quarterly
+    start_date: '2029-07-01'
+    end_date: '2029-09-30'
+    aliases:
+    - 2029-Q3
+    - Q3 2029
+    - 2029 Q3
+    - 3Q29
+    - Jul-Sep 2029
+  2029-Q4:
+    period_type: Quarterly
+    start_date: '2029-10-01'
+    end_date: '2029-12-31'
+    aliases:
+    - 2029-Q4
+    - Q4 2029
+    - 2029 Q4
+    - 4Q29
+    - Oct-Dec 2029
+  2030-Q1:
+    period_type: Quarterly
+    start_date: '2030-01-01'
+    end_date: '2030-03-31'
+    aliases:
+    - 2030-Q1
+    - Q1 2030
+    - 2030 Q1
+    - 1Q30
+    - Jan-Mar 2030
+  2030-Q2:
+    period_type: Quarterly
+    start_date: '2030-04-01'
+    end_date: '2030-06-30'
+    aliases:
+    - 2030-Q2
+    - Q2 2030
+    - 2030 Q2
+    - 2Q30
+    - Apr-Jun 2030
+  2030-Q3:
+    period_type: Quarterly
+    start_date: '2030-07-01'
+    end_date: '2030-09-30'
+    aliases:
+    - 2030-Q3
+    - Q3 2030
+    - 2030 Q3
+    - 3Q30
+    - Jul-Sep 2030
+  2030-Q4:
+    period_type: Quarterly
+    start_date: '2030-10-01'
+    end_date: '2030-12-31'
+    aliases:
+    - 2030-Q4
+    - Q4 2030
+    - 2030 Q4
+    - 4Q30
+    - Oct-Dec 2030
+  '2015':
+    period_type: Yearly
+    start_date: '2015-01-01'
+    end_date: '2015-12-31'
+    aliases:
+    - '2015'
+    - FY15
+    - FY 2015
+    - CY15
+    - Year 2015
+  '2016':
+    period_type: Yearly
+    start_date: '2016-01-01'
+    end_date: '2016-12-31'
+    aliases:
+    - '2016'
+    - FY16
+    - FY 2016
+    - CY16
+    - Year 2016
+  '2017':
+    period_type: Yearly
+    start_date: '2017-01-01'
+    end_date: '2017-12-31'
+    aliases:
+    - '2017'
+    - FY17
+    - FY 2017
+    - CY17
+    - Year 2017
+  '2018':
+    period_type: Yearly
+    start_date: '2018-01-01'
+    end_date: '2018-12-31'
+    aliases:
+    - '2018'
+    - FY18
+    - FY 2018
+    - CY18
+    - Year 2018
+  '2019':
+    period_type: Yearly
+    start_date: '2019-01-01'
+    end_date: '2019-12-31'
+    aliases:
+    - '2019'
+    - FY19
+    - FY 2019
+    - CY19
+    - Year 2019
+  '2020':
+    period_type: Yearly
+    start_date: '2020-01-01'
+    end_date: '2020-12-31'
+    aliases:
+    - '2020'
+    - FY20
+    - FY 2020
+    - CY20
+    - Year 2020
+  '2021':
+    period_type: Yearly
+    start_date: '2021-01-01'
+    end_date: '2021-12-31'
+    aliases:
+    - '2021'
+    - FY21
+    - FY 2021
+    - CY21
+    - Year 2021
+  '2022':
+    period_type: Yearly
+    start_date: '2022-01-01'
+    end_date: '2022-12-31'
+    aliases:
+    - '2022'
+    - FY22
+    - FY 2022
+    - CY22
+    - Year 2022
+  '2023':
+    period_type: Yearly
+    start_date: '2023-01-01'
+    end_date: '2023-12-31'
+    aliases:
+    - '2023'
+    - FY23
+    - FY 2023
+    - CY23
+    - Year 2023
+  '2024':
+    period_type: Yearly
+    start_date: '2024-01-01'
+    end_date: '2024-12-31'
+    aliases:
+    - '2024'
+    - FY24
+    - FY 2024
+    - CY24
+    - Year 2024
+  '2025':
+    period_type: Yearly
+    start_date: '2025-01-01'
+    end_date: '2025-12-31'
+    aliases:
+    - '2025'
+    - FY25
+    - FY 2025
+    - CY25
+    - Year 2025
+  '2026':
+    period_type: Yearly
+    start_date: '2026-01-01'
+    end_date: '2026-12-31'
+    aliases:
+    - '2026'
+    - FY26
+    - FY 2026
+    - CY26
+    - Year 2026
+  '2027':
+    period_type: Yearly
+    start_date: '2027-01-01'
+    end_date: '2027-12-31'
+    aliases:
+    - '2027'
+    - FY27
+    - FY 2027
+    - CY27
+    - Year 2027
+  '2028':
+    period_type: Yearly
+    start_date: '2028-01-01'
+    end_date: '2028-12-31'
+    aliases:
+    - '2028'
+    - FY28
+    - FY 2028
+    - CY28
+    - Year 2028
+  '2029':
+    period_type: Yearly
+    start_date: '2029-01-01'
+    end_date: '2029-12-31'
+    aliases:
+    - '2029'
+    - FY29
+    - FY 2029
+    - CY29
+    - Year 2029
+  '2030':
+    period_type: Yearly
+    start_date: '2030-01-01'
+    end_date: '2030-12-31'
+    aliases:
+    - '2030'
+    - FY30
+    - FY 2030
+    - CY30
+    - Year 2030
 parsing:
-  # Multi-stage normalization pipeline
-  cleaning_rules:
-    - remove_prefixes: ["period:", "pd:", "time:"]
-    - normalize_whitespace: true
-    - normalize_punctuation: {"–": "-", "—": "-"}
-    - case_sensitivity: false
-    
-  # Regex patterns for fuzzy matching (fallback when direct alias fails)
   patterns:
-    monthly_patterns:
-      - pattern: "(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|january|february|march|april|may|june|july|august|september|october|november|december)\\s*[\\-\\s]*(\\d{2,4})"
-        canonical_format: "YYYY-MM"
-      - pattern: "(\\d{1,2})/(\\d{4})"
-        canonical_format: "YYYY-MM"
-        
-    quarterly_patterns:
-      - pattern: "(q[1-4]|quarter\\s*[1-4]|[1-4]q)\\s*[\\-\\s]*(\\d{2,4})"
-        canonical_format: "YYYY-QN"
-        
-    yearly_patterns:
-      - pattern: "(fy|fiscal\\s*year)\\s*(\\d{2,4})"
-        canonical_format: "YYYY"
-      - pattern: "^(\\d{4})$"
-        canonical_format: "YYYY"
-
-# =============================================================================
-# VALIDATION & ERROR HANDLING
-# =============================================================================
-validation:
-  max_future_years: 20
-  max_past_years: 50
-  require_year: true
-  strict_mode: false  # If true, unknown periods cause errors vs warnings
-
-error_handling:
-  unknown_period_action: "log_and_continue"  # vs "raise_error"
-  default_fallback:
-    type: "Monthly"
-    label: "Unknown Period"
-    use_current_date: true
-
-# =============================================================================
-# DATABASE INTEGRATION (matches tables.yaml seed output exactly)
-# =============================================================================
-database_mapping:
-  # Expected database period_label formats from tables.yaml seed
-  expected_db_formats:
-    monthly: "YYYY-MM"        # 2025-02
-    quarterly: "YYYY-QN"      # 2025-Q1  
-    yearly: "YYYY"            # 2025
-
-  # Period creation template for missing periods
-  period_creation_template:
     monthly:
-      period_label_format: "YYYY-MM"
-      start_date_calc: "date_trunc('month', '{year}-{month:02d}-01'::date)"
-      end_date_calc: "date_trunc('month', '{year}-{month:02d}-01'::date) + INTERVAL '1 month' - INTERVAL '1 day'"
+    - ^\d{4}[-/]\d{2}$
+    - ^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{4}$
     quarterly:
-      period_label_format: "YYYY-QN"
-      start_date_calc: "date_trunc('quarter', '{year}-{quarter_start_month:02d}-01'::date)"
-      end_date_calc: "date_trunc('quarter', '{year}-{quarter_start_month:02d}-01'::date) + INTERVAL '3 months' - INTERVAL '1 day'"
+    - ^\d{4}-Q[1-4]$
+    - ^(Q[1-4]|[1-4]Q)\s*\d{4}$
     yearly:
-      period_label_format: "YYYY"
-      start_date_calc: "'{year}-01-01'::date"
-      end_date_calc: "'{year}-12-31'::date"
-
-# =============================================================================
-# FISCAL YEAR CONFIGURATION
-# =============================================================================
-fiscal_settings:
-  fiscal_year_end: "12-31"  # December 31st
-  fiscal_quarter_start: "01-01"  # Q1 starts January 1st
-  
-# =============================================================================
-# INGESTION PIPELINE INTEGRATION
-# =============================================================================
-ingestion_hooks:
-  # How this config integrates with your ingester
-  pre_normalization: "apply_cleaning_rules"
-  lookup_strategy: "direct_alias_first_then_pattern_match"
-  post_resolution: "validate_canonical_exists_in_db"
-  error_logging: "log_unresolved_periods_for_review"
-  period_creation: "upsert_missing_periods_with_iso_format"
-
-# =============================================================================
-# AUTO-GENERATION RULES (for programmatic alias creation)
-# =============================================================================
-generation_rules:
-  # Automatically generate common variants for new canonical periods
-  auto_generate_variants:
-    enabled: true
-    patterns:
-      monthly:
-        - "{year}-{month:02d}"          # 2025-02 (ISO)
-        - "{month_name} {year}"         # February 2025
-        - "{month_abbr} {year}"         # Feb 2025
-        - "{month:02d}/{year}"          # 02/2025
-        - "{year}/{month:02d}"          # 2025/02
-        - "{month_abbr}-{year_short}"   # Feb-25
-      quarterly:
-        - "{year}-Q{quarter}"           # 2025-Q1 (ISO)
-        - "Q{quarter} {year}"           # Q1 2025
-        - "{year} Q{quarter}"           # 2025 Q1
-        - "{quarter}Q{year_short}"      # 1Q25
-      yearly:
-        - "{year}"                      # 2025 (ISO)
-        - "FY{year_short}"             # FY25
-        - "FY {year}"                  # FY 2025
-
-# =============================================================================
-# MIGRATION NOTES
-# =============================================================================
-migration_notes:
-  from_business_format: |
-    If migrating from business formats ("Feb 2025", "Q1 2025"):
-    1. Update tables.yaml seed SQL to use ISO formats
-    2. Run schema regeneration to create ISO periods
-    3. Update existing data with migration script
-    4. All new ingestion will use ISO canonical format
-  
-  breaking_changes:
-    - "period_label format changed from 'Feb 2025' to '2025-02'"
-    - "period_label format changed from 'Q1 2025' to '2025-Q1'"
-    - "Existing queries referencing old format will break"
-    - "Analytics and reports need period_label updates"
-
-# =============================================================================
-# CLEANUP INSTRUCTIONS
-# =============================================================================
-cleanup_required:
-  remove_from_files:
-    fields_yaml:
-      - "date_formats section (lines 245-252)"
-      - "period_types section (lines 254-258)"
-      - "auto_create_periods section (lines 260-263)"
-    periods_yaml:
-      - "Replace entire file with this consolidated version"
-  
-  reason: "Eliminates duplication and centralizes all period logic"
+    - ^\d{4}$
+    - ^(FY|CY)\d{2,4}$
+validation:
+  strict_alias_uniqueness: true
+  unknown_period_action: log
+cleaning:
+  remove_prefixes:
+  - 'period:'
+  - 'pd:'
+  - 'time:'
+  normalize_whitespace: true
+  normalize_punctuation:
+    "\u2013": '-'
+    "\u2014": '-'
+  case_insensitive: true
