@@ -123,7 +123,7 @@ module.exports = async (req, res) => {
               metrics: pipelineResult.results.metrics,
               questions: pipelineResult.results.questions
             },
-            errors: pipelineResult.errors.length > 0 ? pipelineResult.errors : undefined,
+            errors: pipelineResult.errors && pipelineResult.errors.length > 0 ? pipelineResult.errors : undefined,
             environment: {
               vercel: false,
               python_processing: true

@@ -4,6 +4,15 @@ const BLOB_TOKEN = process.env.VERCEL_BLOB_TOKEN;
 const path = require('path');
 const fs = require('fs');
 
+// Python configuration - use virtual environment
+const ROOT_DIR = path.resolve(__dirname, '..', '..');
+const PYTHON_PATH = path.join(ROOT_DIR, '.venv', 'bin', 'python3');
+const PYTHON_ENV = {
+    ...process.env,
+    PYTHONPATH: path.join(ROOT_DIR, 'server', 'scripts'),
+    PYTHONUNBUFFERED: '1'
+};
+
 module.exports = async (req, res) => {
     /**
      * Fixed Report Generation - Phase 1 Critical Fix
@@ -37,12 +46,12 @@ module.exports = async (req, res) => {
         
         // Step 2: Run metric calculations (ensure latest calculations)
         console.log('Running metric calculations...');
-        await runPythonScript('calc_metrics.py', []);
+        await runPythonScript('calc_metrics.py', [companyIdNum]);
         console.log('✓ Metric calculations completed');
         
         // Step 3: Generate questions (ensure latest questions)
         console.log('Generating questions...');
-        await runPythonScript('questions_engine.py', []);
+        await runPythonScript('questions_engine.py', [companyIdNum]);
         console.log('✓ Question generation completed');
         
         // Step 4: Generate the report
@@ -66,35 +75,59 @@ module.exports = async (req, res) => {
             throw new Error('Report file was not created successfully');
         }
         
-        // Step 6: Upload to Vercel Blob
-        const reportData = fs.readFileSync(outputPath);
-        const blob = await put(reportFileName, reportData, { 
-            access: 'public',
-            contentType: 'application/pdf',
-            token: BLOB_TOKEN
-        });
-        
-        // Step 7: Clean up local report file
-        if (fs.existsSync(outputPath)) {
-            fs.unlinkSync(outputPath);
+        // Step 6: Handle file storage based on environment
+        if (BLOB_TOKEN && process.env.NODE_ENV === 'production') {
+            // Production: Upload to Vercel Blob
+            const reportData = fs.readFileSync(outputPath);
+            const blob = await put(reportFileName, reportData, { 
+                access: 'public',
+                contentType: 'application/pdf',
+                token: BLOB_TOKEN
+            });
+            
+            // Clean up local report file
+            if (fs.existsSync(outputPath)) {
+                fs.unlinkSync(outputPath);
+            }
+            
+            console.log('✓ Report uploaded to blob storage');
+            
+            res.json({ 
+                message: 'Report generated successfully',
+                company_id: companyIdNum,
+                report_filename: reportFileName,
+                reportPath: blob.url,
+                processing_steps: [
+                    '✓ Data availability verified',
+                    '✓ Metrics calculated',
+                    '✓ Questions generated', 
+                    '✓ PDF report created',
+                    '✓ Report uploaded to storage'
+                ],
+                generated_at: new Date().toISOString()
+            });
+        } else {
+            // Local development: Keep file locally and return local path
+            const relativePath = path.relative(ROOT_DIR, outputPath);
+            
+            console.log('✓ Report kept locally (no blob token configured)');
+            
+            res.json({ 
+                message: 'Report generated successfully',
+                company_id: companyIdNum,
+                report_filename: reportFileName,
+                reportPath: `/reports/${reportFileName}`, // Will be served by express static
+                localPath: relativePath,
+                processing_steps: [
+                    '✓ Data availability verified',
+                    '✓ Metrics calculated',
+                    '✓ Questions generated', 
+                    '✓ PDF report created',
+                    '✓ Report saved locally'
+                ],
+                generated_at: new Date().toISOString()
+            });
         }
-        
-        console.log('✓ Report uploaded to blob storage');
-        
-        res.json({ 
-            message: 'Report generated successfully',
-            company_id: companyIdNum,
-            report_filename: reportFileName,
-            reportPath: blob.url,
-            processing_steps: [
-                '✓ Data availability verified',
-                '✓ Metrics calculated',
-                '✓ Questions generated', 
-                '✓ PDF report created',
-                '✓ Report uploaded to storage'
-            ],
-            generated_at: new Date().toISOString()
-        });
         
     } catch (err) {
         console.error('Report generation failed:', err);
@@ -124,8 +157,9 @@ function runPythonScript(scriptName, args) {
         }
         
         // Spawn Python process with arguments
-        const python = spawn('python3', [scriptPath, ...args], {
-            cwd: path.resolve(__dirname, '..', '..'),
+        const python = spawn(PYTHON_PATH, [scriptPath, ...args], {
+            cwd: ROOT_DIR,
+            env: PYTHON_ENV,
             stdio: ['pipe', 'pipe', 'pipe']
         });
         
@@ -197,8 +231,9 @@ if __name__ == "__main__":
     verify_data(${companyId})
 `;
         
-        const python = spawn('python3', ['-c', verifyScript], {
-            cwd: path.resolve(__dirname, '..', '..'),
+        const python = spawn(PYTHON_PATH, ['-c', verifyScript], {
+            cwd: ROOT_DIR,
+            env: PYTHON_ENV,
             stdio: ['pipe', 'pipe', 'pipe']
         });
         

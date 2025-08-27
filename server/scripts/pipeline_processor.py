@@ -99,17 +99,29 @@ class FinancialDataProcessor:
             # Stage 4: Persistence
             if normalized_data:
                 self.logger.info("Stage 4: Database persistence")
-                persisted_count = persist_data(normalized_data, company_id)
-                self.logger.info(f"✅ Persisted {persisted_count} rows")
+                
+                # Group rows by period_id since persist_data expects single period
+                from collections import defaultdict
+                grouped_by_period = defaultdict(list)
+                for row in normalized_data:
+                    period_id = row['period_id']
+                    grouped_by_period[period_id].append(row)
+                
+                total_persisted = 0
+                for period_id, period_rows in grouped_by_period.items():
+                    persisted_count = persist_data(period_rows, company_id, period_id)
+                    total_persisted += persisted_count
+                    
+                self.logger.info(f"✅ Persisted {total_persisted} rows across {len(grouped_by_period)} periods")
                 
                 return PipelineResult(
                     success=True,
-                    message=f"Successfully processed {persisted_count} rows",
+                    message=f"Successfully processed {total_persisted} rows",
                     data={
                         "rows_extracted": rows_extracted,
                         "rows_mapped": len(mapped_rows),
                         "rows_normalized": len(normalized_data),
-                        "rows_persisted": persisted_count
+                        "rows_persisted": total_persisted
                     },
                     errors=mapping_errors + [f"{normalization_error_count} normalization errors"]
                 )
@@ -134,23 +146,18 @@ class FinancialDataProcessor:
         try:
             self.logger.info(f"Calculating metrics for company {company_id}")
             
-            # Import and run the calc_metrics main function
-            if hasattr(calc_metrics, 'main'):
-                result = calc_metrics.main(company_id)
-                return PipelineResult(True, "Metrics calculated successfully", data=result)
+            # Use subprocess to call the script with command line arguments
+            import subprocess
+            result = subprocess.run([
+                sys.executable, 
+                str(current_dir / 'calc_metrics.py'), 
+                str(company_id)
+            ], capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                return PipelineResult(True, "Metrics calculated successfully", data={"output": result.stdout})
             else:
-                # Fallback: call the module directly
-                import subprocess
-                result = subprocess.run([
-                    sys.executable, 
-                    str(current_dir / 'calc_metrics.py'), 
-                    str(company_id)
-                ], capture_output=True, text=True)
-                
-                if result.returncode == 0:
-                    return PipelineResult(True, "Metrics calculated successfully")
-                else:
-                    return PipelineResult(False, "Metrics calculation failed", errors=[result.stderr])
+                return PipelineResult(False, "Metrics calculation failed", errors=[result.stderr])
                     
         except Exception as e:
             error_msg = f"Metrics calculation failed: {str(e)}"
@@ -165,22 +172,18 @@ class FinancialDataProcessor:
         try:
             self.logger.info(f"Generating questions for company {company_id}")
             
-            if hasattr(questions_engine, 'main'):
-                result = questions_engine.main(company_id)
-                return PipelineResult(True, "Questions generated successfully", data=result)
+            # Use subprocess to call the script with command line arguments
+            import subprocess
+            result = subprocess.run([
+                sys.executable,
+                str(current_dir / 'questions_engine.py'),
+                str(company_id)
+            ], capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                return PipelineResult(True, "Questions generated successfully", data={"output": result.stdout})
             else:
-                # Fallback to subprocess for now
-                import subprocess
-                result = subprocess.run([
-                    sys.executable,
-                    str(current_dir / 'questions_engine.py'),
-                    str(company_id)
-                ], capture_output=True, text=True)
-                
-                if result.returncode == 0:
-                    return PipelineResult(True, "Questions generated successfully")
-                else:
-                    return PipelineResult(False, "Question generation failed", errors=[result.stderr])
+                return PipelineResult(False, "Question generation failed", errors=[result.stderr])
                     
         except Exception as e:
             error_msg = f"Question generation failed: {str(e)}"

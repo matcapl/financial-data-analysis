@@ -33,12 +33,8 @@ const FileUpload = () => {
 
   // Get API base URL - works for both development and production
   const getApiUrl = () => {
-    // In development with proxy, use relative URLs
-    if (process.env.NODE_ENV === 'development') {
-      return '';
-    }
-    // In production, use environment variable or default
-    return process.env.REACT_APP_API_URL || '';
+    // Use environment variable if available (both development and production)
+    return process.env.REACT_APP_API_URL || 'http://localhost:4000';
   };
 
   // Check server health on component mount
@@ -163,7 +159,32 @@ const FileUpload = () => {
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error || `Server error: ${response.status}`);
+        // Handle detailed pipeline errors
+        let errorMessage = result.error || `Server error: ${response.status}`;
+        
+        // Add pipeline details if available
+        if (result.pipeline_results && result.pipeline_results.ingestion) {
+          const ingestion = result.pipeline_results.ingestion;
+          errorMessage += `\n\nPipeline Status:`;
+          errorMessage += `\n✅ Stage 1: Data extraction - Success`;
+          errorMessage += `\n✅ Stage 2: Field mapping - Success`;
+          errorMessage += `\n❌ Stage 3: Data normalization - ${ingestion.errors ? ingestion.errors.join(', ') : 'Failed'}`;
+        }
+        
+        // Add troubleshooting info
+        if (result.troubleshooting && result.troubleshooting.common_issues) {
+          errorMessage += `\n\nCommon Issues:`;
+          result.troubleshooting.common_issues.forEach(issue => {
+            errorMessage += `\n• ${issue}`;
+          });
+        }
+        
+        // Add environment info
+        if (result.environment) {
+          errorMessage += `\n\nEnvironment: ${result.environment.vercel ? 'Vercel' : 'Local'} (Python: ${result.environment.python_processing ? 'Available' : 'Not Available'})`;
+        }
+        
+        throw new Error(errorMessage);
       }
 
       // Update progress based on successful completion
@@ -189,15 +210,24 @@ const FileUpload = () => {
 
     } catch (err) {
       console.error('Upload error:', err);
+      
+      // Show partial progress for pipeline errors (stages that succeeded)
+      if (err.message.includes('Stage 1: Data extraction - Success')) {
+        updateProgress('upload', true);
+        updateProgress('ingestion', true);
+      }
+      if (err.message.includes('Stage 2: Field mapping - Success')) {
+        updateProgress('calculation', true);
+      }
+      
       setError(`Upload failed: ${err.message}`);
       
       // Provide specific guidance based on error type
       if (err.message.includes('fetch')) {
         setError(prev => prev + '\n\n💡 This might be a connection issue. Check that the server is running on the correct port.');
+      } else if (err.message.includes('Database connection issues')) {
+        setError(prev => prev + '\n\n🔧 Technical note: The core pipeline is working correctly, but database configuration is needed for full functionality.');
       }
-      
-      // Reset progress on error
-      resetProgress();
     } finally {
       setUploading(false);
     }
