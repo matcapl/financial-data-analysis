@@ -3,6 +3,7 @@ from utils import log_event, get_db_connection
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
+# If this doesn't work, we turn off perplexity
 def persist_data(normalized_rows: List[Dict[str, Any]], company_id: int = 1) -> Dict[str, int]:
     """
     Persist normalized data to the database.
