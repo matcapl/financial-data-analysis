@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 """
-Validate config/fields.yaml, config/observations.yaml, and config/questions.yaml
-against predefined schemas using Pydantic V2.
+Validate all YAML configs in config/:
+ - fields.yaml against FieldsYaml model
+ - observations.yaml against ObservationsYaml model
+ - questions.yaml against QuestionsYaml model
+ - periods.yaml, taxonomy.yaml, tables.yaml for syntax
 """
-
 import sys
-import yaml
 from pathlib import Path
-from pydantic import BaseModel, field_validator, model_validator, ValidationError
+import yaml
+from pydantic import BaseModel, field_validator, ValidationError
 from typing import List, Dict, Optional, Any, Union
 
-# ------------ Pydantic Models ------------
+# --- Pydantic Models for strict validation ---
 
 class FieldConfig(BaseModel):
     id: int
@@ -68,44 +70,58 @@ class ObservationsYaml(BaseModel):
 class QuestionsYaml(BaseModel):
     questions: List[QuestionTemplate]
 
-# ------------ Validation Logic ------------
+# --- Helper to load any YAML file ---
 
 def load_yaml(path: Path) -> Any:
     try:
         return yaml.safe_load(path.read_text())
     except Exception as e:
-        print(f"Error loading YAML {path}: {e}", file=sys.stderr)
+        print(f"❌ Error loading YAML {path.name}: {e}", file=sys.stderr)
         sys.exit(1)
 
-def validate():
-    base = Path(__file__).parent.parent / 'config'
+# --- Validation steps ---
 
-    # Validate fields.yaml
-    fdata = load_yaml(base / 'fields.yaml')
+def main():
+    cfg = Path(__file__).parent.parent / 'config'
+
+    # 1. fields.yaml
+    data = load_yaml(cfg / 'fields.yaml')
     try:
-        FieldsYaml.model_validate(fdata)
-        print("fields.yaml OK")
+        FieldsYaml.model_validate(data)
+        print("✅ fields.yaml OK")
     except ValidationError as e:
-        print("fields.yaml validation errors:", e, file=sys.stderr)
+        print("❌ fields.yaml errors:\n", e, file=sys.stderr)
         sys.exit(1)
 
-    # Validate observations.yaml
-    odata = load_yaml(base / 'observations.yaml')
+    # 2. observations.yaml
+    data = load_yaml(cfg / 'observations.yaml')
     try:
-        ObservationsYaml.model_validate(odata)
-        print("observations.yaml OK")
+        ObservationsYaml.model_validate(data)
+        print("✅ observations.yaml OK")
     except ValidationError as e:
-        print("observations.yaml validation errors:", e, file=sys.stderr)
+        print("❌ observations.yaml errors:\n", e, file=sys.stderr)
         sys.exit(1)
 
-    # Validate questions.yaml
-    qdata = load_yaml(base / 'questions.yaml')
+    # 3. questions.yaml
+    data = load_yaml(cfg / 'questions.yaml')
     try:
-        QuestionsYaml.model_validate(qdata)
-        print("questions.yaml OK")
+        QuestionsYaml.model_validate(data)
+        print("✅ questions.yaml OK")
     except ValidationError as e:
-        print("questions.yaml validation errors:", e, file=sys.stderr)
+        print("❌ questions.yaml errors:\n", e, file=sys.stderr)
         sys.exit(1)
+
+    # 4. periods.yaml syntax only
+    _ = load_yaml(cfg / 'periods.yaml')
+    print("✅ periods.yaml syntactically valid")
+
+    # 5. taxonomy.yaml syntax only
+    _ = load_yaml(cfg / 'taxonomy.yaml')
+    print("✅ taxonomy.yaml syntactically valid")
+
+    # 6. tables.yaml syntax only
+    _ = load_yaml(cfg / 'tables.yaml')
+    print("✅ tables.yaml syntactically valid")
 
 if __name__ == '__main__':
-    validate()
+    main()
