@@ -143,10 +143,10 @@ if normalized:
                 """)
                 sample = cur.fetchone()
                 print(f'   Sample data: value={sample[0]}, period={sample[1]}, item={sample[2]}')
-                if str(sample[0]) == '999999':
+                if str(sample[0]) == '999999.0':
                     print('✅ FULL PIPELINE SUCCESS: Data persisted correctly!')
                 else:
-                    print(f'❌ Data corruption: expected 999999, got {sample[0]}')
+                    print(f'❌ Data corruption: expected 999999.0, got {sample[0]}')
             else:
                 print('❌ PERSISTENCE FAILED: No data in database')
 else:

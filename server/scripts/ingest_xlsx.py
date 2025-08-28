@@ -188,6 +188,11 @@ def ingest_file_three_layer(file_path: Union[str, Path]) -> Dict[str, Any]:
         
         # STAGE 4: PERSISTENCE
         logger.info(f"Stage 4: Persisting {len(normalized_rows)} rows")
+        if not normalized_rows:
+            logger.error("No rows normalized—skipping persistence")
+            results['success'] = False
+            results['error'] = "No valid rows after normalization"
+            return results
         company_id = normalized_rows[0]["company_id"]
         period_id  = normalized_rows[0]["period_id"]
         persistence_results = persist_data(normalized_rows, company_id, period_id)

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -xeuo pipefail
+set -euo pipefail
 
 # Comprehensive Three-Layer Ingestion Testing Suite
 # Tests each component individually to isolate problems
@@ -278,7 +278,9 @@ try:
     print(f'✅ Ready to persist {len(normalized_rows)} rows')
     
     # Test persistence
-    result = persist_data(normalized_rows)
+    company_id = normalized_rows[0]["company_id"]
+    period_id = normalized_rows[0]["period_id"] 
+    result = persist_data(normalized_rows, company_id, period_id)
     
     print(f'✅ Persistence result:')
     print(f'   Inserted: {result["inserted"]}')
@@ -348,10 +350,10 @@ test_database_verification() {
         LIMIT 1
     " | tr -d ' ')
     
-    if [[ "$revenue_actual" == "1000000" ]]; then
+    if [[ "$revenue_actual" == "1000000.0" ]]; then
         print_pass "Revenue data correctly stored: $revenue_actual"
     else
-        print_fail "Revenue data incorrect: expected 1000000, got '$revenue_actual'"
+        print_fail "Revenue data incorrect: expected 1000000.0, got '$revenue_actual'"
         return 1
     fi
 }

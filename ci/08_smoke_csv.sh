@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -xeuo pipefail
+set -euo pipefail
 
 # Enhanced CSV Smoke Test with comprehensive error handling and debugging
 # This script validates the complete three-layer ingestion pipeline end-to-end
@@ -17,7 +17,7 @@ fi
 PORT=${PORT:-4000}
 CONTAINER_NAME="finance-server_ci"
 SMOKE_FILE="data/smoke.csv"
-EXPECTED_REVENUE="2390873"
+EXPECTED_REVENUE="2390873.0"
 
 echo "=== 03 | Enhanced CSV Smoke Test ==="
 echo "Database URL: ${DATABASE_URL:0:50}..."
