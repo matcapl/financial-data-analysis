@@ -157,17 +157,41 @@ npm install package-name
 
 ### Database Commands
 
+The system uses **database migrations** with full CI/CD integration and rollback capability.
+
 ```bash
-# Check migration status
+# Basic Migration Commands
 source .venv/bin/activate
+
+# Check migration status
 python database/migrate.py status
 
 # Apply all pending migrations
 python database/migrate.py up
 
+# Rollback last migration
+python database/migrate.py down
+
 # Create new migration
 python database/migrate.py create "Add new feature"
 
+# Update rollback SQL from migration files
+python database/migrate.py update-rollback
+
+# CI/CD Integration Commands
+# Run migration system check
+bash ci/00_migration_check.sh
+
+# Apply migrations in CI/CD mode
+bash ci/03_apply_schema.sh
+
+# Run comprehensive integration test (includes migrations)
+bash ci/12_comprehensive_check.sh
+
+# Check deployment health
+bash scripts/health-check.sh
+
+# Database Testing
 # Test database connection
 python -c "
 import sys
@@ -184,6 +208,20 @@ psql "$DATABASE_URL" -c "SELECT name FROM line_item_definitions;"
 
 # See database/README.md for complete migration documentation
 ```
+
+#### CI/CD Migration Features
+
+**Production Deployment:**
+- `railway.json` uses `scripts/deploy-start.sh` - automatically runs migrations before app startup
+- Docker includes all migration files via `COPY database ./database`
+- GitHub Actions `.github/workflows/ci-cd.yml` provides comprehensive CI/CD pipeline
+
+**Safety Features:**
+- Pre-deployment migration system verification
+- All migrations include rollback SQL for safe rollbacks
+- Health checks verify migration status post-deployment
+- Environment isolation with separate test databases
+- Atomic migrations with transaction consistency
 
 ## File Structure
 

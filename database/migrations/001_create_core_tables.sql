@@ -51,3 +51,17 @@ CREATE INDEX IF NOT EXISTS idx_companies_name ON companies(name);
 CREATE INDEX IF NOT EXISTS idx_periods_type_label ON periods(period_type, period_label);
 CREATE INDEX IF NOT EXISTS idx_periods_dates ON periods(start_date, end_date);
 CREATE INDEX IF NOT EXISTS idx_line_items_name ON line_item_definitions(name);
+
+-- ROLLBACK SQL (automatically extracted by migration system)
+/*ROLLBACK_START
+-- Drop indexes first
+DROP INDEX IF EXISTS idx_companies_name;
+DROP INDEX IF EXISTS idx_periods_type_label;
+DROP INDEX IF EXISTS idx_periods_dates;
+DROP INDEX IF EXISTS idx_line_items_name;
+
+-- Drop tables (in reverse order due to potential dependencies)
+DROP TABLE IF EXISTS line_item_definitions;
+DROP TABLE IF EXISTS periods;
+DROP TABLE IF EXISTS companies;
+ROLLBACK_END*/

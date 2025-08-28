@@ -86,3 +86,22 @@ CREATE INDEX IF NOT EXISTS idx_live_questions_company_status ON live_questions(c
 CREATE INDEX IF NOT EXISTS idx_question_logs_company_action ON question_logs(company_id, action);
 CREATE INDEX IF NOT EXISTS idx_generated_reports_company ON generated_reports(company_id);
 CREATE INDEX IF NOT EXISTS idx_generated_reports_created ON generated_reports(created_at);
+
+-- ROLLBACK SQL (automatically extracted by migration system)
+/*ROLLBACK_START
+-- Drop indexes first
+DROP INDEX IF EXISTS idx_question_templates_category;
+DROP INDEX IF EXISTS idx_questions_company;
+DROP INDEX IF EXISTS idx_questions_category;
+DROP INDEX IF EXISTS idx_live_questions_company_status;
+DROP INDEX IF EXISTS idx_question_logs_company_action;
+DROP INDEX IF EXISTS idx_generated_reports_company;
+DROP INDEX IF EXISTS idx_generated_reports_created;
+
+-- Drop tables (in reverse order due to potential dependencies)
+DROP TABLE IF EXISTS generated_reports;
+DROP TABLE IF EXISTS question_logs;
+DROP TABLE IF EXISTS live_questions;
+DROP TABLE IF EXISTS questions;
+DROP TABLE IF EXISTS question_templates;
+ROLLBACK_END*/

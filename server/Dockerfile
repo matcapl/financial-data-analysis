@@ -52,6 +52,7 @@ COPY server/api ./server/api
 COPY server/scripts ./server/scripts
 COPY config ./config
 COPY data ./data
+COPY database ./database
 COPY .env ./
 
 # Expose and start

@@ -81,8 +81,8 @@ def setup_logger(service_name: str = 'python-script', level: str = 'INFO') -> lo
     if logger.handlers:
         logger.handlers.clear()
     
-    # Console handler for development
-    console_handler = logging.StreamHandler(sys.stdout)
+    # Console handler for development - use stderr to avoid JSON parsing conflicts
+    console_handler = logging.StreamHandler(sys.stderr)
     console_handler.setLevel(logging.INFO)
     console_handler.setFormatter(ColoredConsoleFormatter())
     logger.addHandler(console_handler)

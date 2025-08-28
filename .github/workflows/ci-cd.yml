@@ -1,0 +1,176 @@
+name: CI/CD Pipeline with Database Migrations
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  PYTHON_VERSION: '3.11'
+  NODE_VERSION: '18'
+
+jobs:
+  migration-check:
+    name: Database Migration Verification
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: financial_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Install Node.js dependencies
+      run: |
+        cd server
+        npm ci
+
+    - name: Set up test environment
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/financial_test
+        LOCAL_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/financial_test
+      run: |
+        echo "DATABASE_URL=$DATABASE_URL" >> .env
+        echo "LOCAL_DATABASE_URL=$LOCAL_DATABASE_URL" >> .env
+        echo "PYTHON_PATH=$(which python3)" >> .env
+
+    - name: Run migration system check
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/financial_test
+      run: |
+        chmod +x ci/00_migration_check.sh
+        bash ci/00_migration_check.sh
+
+    - name: Run database migrations
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/financial_test
+      run: |
+        chmod +x ci/03_apply_schema.sh
+        bash ci/03_apply_schema.sh
+
+    - name: Test migration rollback functionality
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/financial_test
+      run: |
+        echo "Testing rollback functionality..."
+        python3 database/migrate.py status
+        python3 database/migrate.py down || echo "No migrations to rollback"
+        python3 database/migrate.py up
+        python3 database/migrate.py status
+
+    - name: Test database seeding
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/financial_test
+      run: |
+        chmod +x ci/04_seed_database.sh
+        bash ci/04_seed_database.sh
+
+  full-integration:
+    name: Full Integration Test
+    runs-on: ubuntu-latest
+    needs: migration-check
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: financial_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        cd server && npm ci
+
+    - name: Set up test environment
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/financial_test
+      run: |
+        echo "DATABASE_URL=$DATABASE_URL" >> .env
+        echo "LOCAL_DATABASE_URL=$DATABASE_URL" >> .env
+        echo "PYTHON_PATH=$(which python3)" >> .env
+
+    - name: Run comprehensive integration test
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/financial_test
+      run: |
+        chmod +x ci/12_comprehensive_check.sh
+        bash ci/12_comprehensive_check.sh
+
+  docker-build:
+    name: Docker Build Test
+    runs-on: ubuntu-latest
+    needs: [migration-check, full-integration]
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build Docker image
+      run: |
+        docker build -t financial-data-analysis:test -f server/Dockerfile .
+
+    - name: Test Docker image structure
+      run: |
+        # Verify the image contains migration files
+        docker run --rm financial-data-analysis:test ls -la database/migrations/
+        
+        # Verify Python and migration system are accessible
+        docker run --rm financial-data-analysis:test python3 --version
+        docker run --rm financial-data-analysis:test python3 database/migrate.py --help

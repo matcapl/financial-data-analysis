@@ -14,6 +14,15 @@ fi
 echo "🔧 COMPREHENSIVE CI VALIDATION - Testing Complete Pipeline"
 echo "============================================================"
 
+# Step 0: Migration System Check
+echo "📋 Step 0: Migration system verification..."
+if bash ci/00_migration_check.sh; then
+    echo "✅ Migration system verified"
+else
+    echo "❌ Migration system check failed"
+    exit 1
+fi
+
 # Step 1: Validate YAML Configuration Files
 echo "📋 Step 1: Validating YAML files..."
 if [ ! -f "config/fields.yaml" ]; then
@@ -59,8 +68,17 @@ done
 
 echo "✅ All required Python scripts present"
 
-# Step 3: Test Database Schema Compatibility
-echo "📋 Step 3: Testing database schema..."
+# Step 3: Database Seeding
+echo "📋 Step 3: Testing database seeding..."
+if bash ci/04_seed_database.sh; then
+    echo "✅ Database seeding successful"
+else
+    echo "❌ Database seeding failed"
+    exit 1
+fi
+
+# Step 4: Test Database Schema Compatibility
+echo "📋 Step 4: Testing database schema..."
 
 # Check if derived_metrics table has correct structure
 DERIVED_METRICS_STRUCTURE=$(psql "$DATABASE_URL" -t -c "
@@ -83,8 +101,8 @@ if echo "$DERIVED_METRICS_STRUCTURE" | grep -q "period_label"; then
     exit 1
 fi
 
-# Step 4: Test Data Ingestion Flow
-echo "📋 Step 4: Testing data ingestion flow..."
+# Step 5: Test Data Ingestion Flow
+echo "📋 Step 5: Testing data ingestion flow..."
 
 # Create test CSV with proper structure
 mkdir -p data
@@ -115,8 +133,8 @@ else
     exit 1
 fi
 
-# Step 5: Test Metrics Calculation
-echo "📋 Step 5: Testing metrics calculation..."
+# Step 6: Test Metrics Calculation
+echo "📋 Step 6: Testing metrics calculation..."
 
 echo "🔄 Running calc_metrics.py..."
 python server/scripts/calc_metrics.py 1
@@ -135,8 +153,8 @@ else
     exit 1
 fi
 
-# Step 6: Test Question Generation (if observations.yaml exists)
-echo "📋 Step 6: Testing question generation..."
+# Step 7: Test Question Generation (if observations.yaml exists)
+echo "📋 Step 7: Testing question generation..."
 
 if [ -f "config/observations.yaml" ]; then
     echo "🔄 Running questions_engine.py..."
@@ -146,8 +164,8 @@ else
     echo "⚠️  Skipping question generation - observations.yaml missing"
 fi
 
-# Step 7: Database Integrity Check
-echo "📋 Step 7: Database integrity check..."
+# Step 8: Database Integrity Check
+echo "📋 Step 8: Database integrity check..."
 
 echo "🔍 Checking table relationships..."
 INTEGRITY_CHECK=$(psql "$DATABASE_URL" -t -c "
@@ -161,8 +179,8 @@ INTEGRITY_CHECK=$(psql "$DATABASE_URL" -t -c "
 
 echo "📊 Database contents: $INTEGRITY_CHECK"
 
-# Step 8: Performance and Data Quality Check
-echo "📋 Step 8: Data quality validation..."
+# Step 9: Performance and Data Quality Check
+echo "📋 Step 9: Data quality validation..."
 
 # Check for orphaned records
 ORPHANED_METRICS=$(psql "$DATABASE_URL" -t -c "

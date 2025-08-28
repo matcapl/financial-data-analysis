@@ -75,3 +75,19 @@ INSERT INTO line_item_definitions (name, aliases, description) VALUES
   ('Total Liabilities', '{liabilities,"total liabilities",debt}'::TEXT[], 'Sum of all company liabilities'),
   ('Shareholders Equity', '{equity,"shareholders equity","stockholders equity",owners_equity}'::TEXT[], 'Owner/shareholder equity in the company')
 ON CONFLICT (name) DO NOTHING;
+
+-- ROLLBACK SQL (automatically extracted by migration system)
+/*ROLLBACK_START
+-- Delete seeded data (in reverse order)
+DELETE FROM line_item_definitions WHERE name IN (
+  'Revenue', 'Gross Profit', 'EBITDA', 'Net Income', 
+  'Total Assets', 'Total Liabilities', 'Shareholders Equity'
+);
+
+-- Delete generated periods (careful: this will remove ALL generated periods)
+-- Note: This is a destructive rollback - only run if you're sure
+DELETE FROM periods WHERE period_type IN ('Monthly', 'Quarterly', 'Yearly');
+
+-- Delete example company
+DELETE FROM companies WHERE name = 'Example Company';
+ROLLBACK_END*/

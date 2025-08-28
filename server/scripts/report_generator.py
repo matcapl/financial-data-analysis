@@ -95,10 +95,10 @@ def generate_report(company_id: int, output_path: str):
         try:
             cur.execute(
                 """
-                SELECT q.id, q.company_id, q.generated_at
+                SELECT q.id, q.company_id, q.created_at, q.question_text, q.category, q.priority
                   FROM questions q
                  WHERE q.company_id = %s
-                 ORDER BY q.generated_at DESC
+                 ORDER BY q.created_at DESC
                  LIMIT 10
                 """, (company_id,)
             )
@@ -128,8 +128,8 @@ def generate_report(company_id: int, output_path: str):
 
         # Record metadata
         cur.execute(
-            "INSERT INTO generated_reports (generated_on, filter_type, report_file_path, company_id) VALUES (%s, %s, %s, %s)",
-            (datetime.datetime.now(), f"company_id_{company_id}", output_path, company_id)
+            "INSERT INTO generated_reports (company_id, report_type, file_path, created_at) VALUES (%s, %s, %s, %s)",
+            (company_id, 'financial_analysis', output_path, datetime.datetime.now())
         )
         conn.commit()
         logger.info("Metadata recorded in generated_reports")

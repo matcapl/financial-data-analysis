@@ -4,6 +4,6 @@
     "dockerfilePath": "server/Dockerfile"
   },
   "deploy": {
-    "startCommand": "cd server && node api/index.js"
+    "startCommand": "bash scripts/deploy-start.sh"
   }
 }

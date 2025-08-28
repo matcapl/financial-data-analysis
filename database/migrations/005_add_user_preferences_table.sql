@@ -21,5 +21,11 @@ COMMENT ON COLUMN user_preferences.preference_value IS 'JSON value for flexible 
 -- Create index for performance
 CREATE INDEX IF NOT EXISTS idx_user_preferences_user_id ON user_preferences(user_id);
 
--- Migration Down (Rollback changes - update schema_migrations.rollback_sql manually if needed)
--- This migration does not support automatic rollback
+-- ROLLBACK SQL (automatically extracted by migration system)
+/*ROLLBACK_START
+-- Drop index first
+DROP INDEX IF EXISTS idx_user_preferences_user_id;
+
+-- Drop the user preferences table
+DROP TABLE IF EXISTS user_preferences;
+ROLLBACK_END*/

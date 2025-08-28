@@ -129,8 +129,8 @@ class FinancialDataProcessor:
                 
                 total_persisted = 0
                 for period_id, period_rows in grouped_by_period.items():
-                    persisted_count = persist_data(period_rows, company_id, period_id)
-                    total_persisted += persisted_count
+                    persist_result = persist_data(period_rows, company_id, period_id)
+                    total_persisted += persist_result.get('inserted', 0)
                     
                 log_with_context(
                     self.logger, 'info', 'Database persistence completed',

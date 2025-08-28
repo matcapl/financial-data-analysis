@@ -107,8 +107,8 @@ class MigrationManager:
         with open(file_path, 'rb') as f:
             return hashlib.sha256(f.read()).hexdigest()
     
-    def parse_migration_file(self, file_path: Path) -> Tuple[str, str, str]:
-        """Parse migration file to extract metadata"""
+    def parse_migration_file(self, file_path: Path) -> Tuple[str, str, str, str]:
+        """Parse migration file to extract metadata and rollback SQL"""
         content = file_path.read_text()
         lines = content.split('\n')
         
@@ -121,27 +121,63 @@ class MigrationManager:
                 description = line.replace('-- Description:', '').strip()
                 break
         
-        return version, description, content
+        # Extract rollback SQL from ROLLBACK_START/ROLLBACK_END markers
+        rollback_sql = None
+        in_rollback = False
+        rollback_lines = []
+        
+        for line in lines:
+            if '/*ROLLBACK_START' in line:
+                in_rollback = True
+                continue
+            elif 'ROLLBACK_END*/' in line:
+                in_rollback = False
+                continue
+            elif in_rollback:
+                # Skip comment lines and empty lines in rollback section
+                line = line.strip()
+                if line and not line.startswith('--'):
+                    rollback_lines.append(line)
+        
+        if rollback_lines:
+            rollback_sql = '\n'.join(rollback_lines)
+        
+        # Remove rollback section from main SQL content
+        main_sql_lines = []
+        skip_rollback = False
+        for line in lines:
+            if '/*ROLLBACK_START' in line:
+                skip_rollback = True
+                continue
+            elif 'ROLLBACK_END*/' in line:
+                skip_rollback = False
+                continue
+            elif not skip_rollback:
+                main_sql_lines.append(line)
+        
+        main_content = '\n'.join(main_sql_lines).strip()
+        
+        return version, description, main_content, rollback_sql
     
     def apply_migration(self, file_path: Path) -> bool:
         """Apply a single migration"""
         try:
-            version, description, content = self.parse_migration_file(file_path)
+            version, description, content, rollback_sql = self.parse_migration_file(file_path)
             checksum = self.calculate_checksum(file_path)
             
             log_with_context(logger, 'info', f'Applying migration {version}', 
-                           version=version, description=description)
+                           version=version, description=description, has_rollback=rollback_sql is not None)
             
             with self.get_connection() as conn:
                 with conn.cursor() as cur:
                     # Execute migration
                     cur.execute(content)
                     
-                    # Record migration
+                    # Record migration with rollback SQL
                     cur.execute("""
-                        INSERT INTO schema_migrations (version, description, checksum) 
-                        VALUES (%s, %s, %s)
-                    """, (version, description, checksum))
+                        INSERT INTO schema_migrations (version, description, rollback_sql, checksum) 
+                        VALUES (%s, %s, %s, %s)
+                    """, (version, description, rollback_sql, checksum))
                     
                     conn.commit()
             
@@ -214,6 +250,45 @@ class MigrationManager:
         latest_version = applied[-1]
         return self.rollback_migration(latest_version)
     
+    def update_rollback_sql(self) -> bool:
+        """Update existing migrations with rollback SQL from migration files"""
+        try:
+            migration_files = self.get_migration_files()
+            updated_count = 0
+            
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    for file in migration_files:
+                        try:
+                            version, description, content, rollback_sql = self.parse_migration_file(file)
+                            
+                            if rollback_sql:
+                                # Update existing migration with rollback SQL
+                                cur.execute("""
+                                    UPDATE schema_migrations 
+                                    SET rollback_sql = %s 
+                                    WHERE version = %s AND rollback_sql IS NULL
+                                """, (rollback_sql, version))
+                                
+                                if cur.rowcount > 0:
+                                    updated_count += 1
+                                    log_with_context(logger, 'info', f'Updated rollback SQL for migration {version}',
+                                                   version=version)
+                        
+                        except Exception as e:
+                            log_with_context(logger, 'warn', f'Failed to update rollback SQL for {file.name}',
+                                           error=str(e))
+                    
+                    conn.commit()
+            
+            log_with_context(logger, 'info', f'Updated rollback SQL for {updated_count} migrations',
+                           count=updated_count)
+            return True
+            
+        except Exception as e:
+            logger.error(f'Failed to update rollback SQL: {e}')
+            return False
+    
     def show_status(self):
         """Show current migration status"""
         try:
@@ -281,7 +356,7 @@ class MigrationManager:
 
 def main():
     parser = argparse.ArgumentParser(description='Database Migration Manager')
-    parser.add_argument('command', choices=['up', 'down', 'status', 'create', 'reset'])
+    parser.add_argument('command', choices=['up', 'down', 'status', 'create', 'reset', 'update-rollback'])
     parser.add_argument('description', nargs='?', help='Description for new migration')
     
     args = parser.parse_args()
@@ -317,6 +392,10 @@ def main():
                 print("All migrations rolled back.")
             else:
                 print("Reset cancelled.")
+                
+        elif args.command == 'update-rollback':
+            success = manager.update_rollback_sql()
+            sys.exit(0 if success else 1)
     
     except KeyboardInterrupt:
         print("\\nOperation cancelled.")

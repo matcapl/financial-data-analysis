@@ -86,3 +86,17 @@ CREATE INDEX IF NOT EXISTS idx_financial_metrics_line_item ON financial_metrics(
 CREATE INDEX IF NOT EXISTS idx_financial_metrics_source ON financial_metrics(source_file);
 CREATE INDEX IF NOT EXISTS idx_derived_metrics_company_period ON derived_metrics(company_id, period_id);
 CREATE INDEX IF NOT EXISTS idx_derived_metrics_name ON derived_metrics(metric_name);
+
+-- ROLLBACK SQL (automatically extracted by migration system)
+/*ROLLBACK_START
+-- Drop indexes first
+DROP INDEX IF EXISTS idx_financial_metrics_company_period;
+DROP INDEX IF EXISTS idx_financial_metrics_line_item;
+DROP INDEX IF EXISTS idx_financial_metrics_source;
+DROP INDEX IF EXISTS idx_derived_metrics_company_period;
+DROP INDEX IF EXISTS idx_derived_metrics_name;
+
+-- Drop tables (derived_metrics first due to potential references)
+DROP TABLE IF EXISTS derived_metrics;
+DROP TABLE IF EXISTS financial_metrics;
+ROLLBACK_END*/

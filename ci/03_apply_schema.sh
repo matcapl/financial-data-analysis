@@ -1,27 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "=== Database Migration System ==="
-echo "Schema generation has been replaced with database migrations."
-echo ""
-echo "To apply database migrations:"
-echo "  python database/migrate.py up"
-echo ""
-echo "To check migration status:"
-echo "  python database/migrate.py status"
-echo ""
-echo "To create new migrations:"
-echo "  python database/migrate.py create 'Description'"
-echo ""
-echo "See database/README.md for full documentation."
+# CI/CD Database Migration Runner
+# This script is used in CI/CD pipelines to apply database migrations safely
+echo "=== CI/CD Database Migration System ==="
+echo "Applying database migrations in CI/CD environment..."
 
 # Load env
-if [[ -f .env ]]; then
-  set -a; source .env; set +a
+ENV_FILE="${ENV_FILE:-.env}"
+if [[ -f "$ENV_FILE" ]]; then
+  set -a; source "$ENV_FILE"; set +a
+  echo "Loaded environment from $ENV_FILE"
+else
+  echo "Warning: $ENV_FILE not found. Using environment variables."
 fi
 
-# Run migrations using the new system
-echo "Applying database migrations..."
+# Verify required environment variables
+: "${DATABASE_URL:?DATABASE_URL must be set for migrations}"
 
 # Use virtual environment Python if available, otherwise system python
 if [ -f .venv/bin/python3 ]; then
@@ -33,6 +28,29 @@ else
 fi
 
 echo "Using Python: $PYTHON_CMD"
-$PYTHON_CMD database/migrate.py up
 
-echo "Database migrations completed successfully."
+# Check migration status before applying
+echo "Checking current migration status..."
+$PYTHON_CMD database/migrate.py status || {
+    echo "❌ Migration status check failed"
+    exit 1
+}
+
+# Apply pending migrations
+echo "Applying pending migrations..."
+if $PYTHON_CMD database/migrate.py up; then
+    echo "✅ Database migrations completed successfully"
+    
+    # Show final migration status
+    echo "Final migration status:"
+    $PYTHON_CMD database/migrate.py status
+else
+    echo "❌ Migration failed"
+    exit 1
+fi
+
+# Optional: Update rollback SQL for new migrations
+echo "Updating rollback SQL for migrations..."
+$PYTHON_CMD database/migrate.py update-rollback || {
+    echo "⚠️  Warning: Failed to update rollback SQL (non-critical)"
+}
