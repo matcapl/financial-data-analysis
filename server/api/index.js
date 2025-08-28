@@ -9,7 +9,7 @@ const path = require('path');
 const fs = require('fs');
 const isVercel = process.env.VERCEL === '1';
 
-const uploadRouter = require('./upload');
+const uploadRouter = require('./upload-improved');
 const reportRouter = require('./generate-report');
 
 const app = express();

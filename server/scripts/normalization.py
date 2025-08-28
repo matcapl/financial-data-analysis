@@ -78,6 +78,34 @@ def normalize_text(raw: Any) -> Optional[str]:
     t = str(raw).strip()
     return t if t and t.lower() not in {"nan","none","null"} else None
 
+def normalize_page_number(raw: Any) -> Optional[int]:
+    """Convert source page to integer, return None if not a valid number"""
+    if raw is None or pd.isna(raw):
+        return None
+    
+    # Try to extract number from string like "Sheet1", "Page 2", etc.
+    import re
+    s = str(raw).strip()
+    if s.lower() in {"nan", "none", "null", ""}:
+        return None
+    
+    # Try direct conversion first
+    try:
+        return int(s)
+    except ValueError:
+        pass
+    
+    # Try to extract first number from string
+    numbers = re.findall(r'\d+', s)
+    if numbers:
+        try:
+            return int(numbers[0])
+        except ValueError:
+            pass
+    
+    # If no valid number found, return None
+    return None
+
 def create_hash(company_id: int, period_id: int, line_item_id: int,
                 value_type: str, source_file: str) -> str:
     """
@@ -186,7 +214,7 @@ def normalize_data(mapped: List[Dict[str, Any]], src: str) -> Tuple[List[Dict[st
             "frequency": normalize_text(row.get("frequency")) or ptype,
             "currency": normalize_text(row.get("currency")) or "USD",
             "source_file": source_file,
-            "source_page": row.get("source_page") or row.get("_sheet_name"),
+            "source_page": normalize_page_number(row.get("source_page")) or normalize_page_number(row.get("_sheet_name")),
             "source_type": source_type,
             "notes": normalize_text(row.get("notes")),
             "hash": hsh,
