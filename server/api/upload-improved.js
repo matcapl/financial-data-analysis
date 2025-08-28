@@ -3,7 +3,9 @@ const path = require('path');
 const fs = require('fs');
 const sanitize = require('sanitize-filename');
 const PythonProcessor = require('./python-processor');
+const { createServiceLogger, logError, logFileOperation } = require('../config/logger');
 
+const logger = createServiceLogger('upload-handler');
 const ROOT_DIR = path.resolve(__dirname, '..', '..');
 
 // CORS headers for cross-origin uploads
@@ -62,7 +64,14 @@ module.exports = async (req, res) => {
     });
   }
 
-  console.log(`🚀 Starting improved upload pipeline for company ${company_id}`);
+  logger.info('Starting upload pipeline', {
+    companyId: company_id,
+    fileName: file.originalname,
+    fileSize: file.size,
+    fileType: ext,
+    isVercel,
+    isProduction
+  });
   
   try {
     // Create safe filename and copy file to permanent location
@@ -79,14 +88,21 @@ module.exports = async (req, res) => {
     
     // Copy uploaded file to permanent location
     fs.copyFileSync(file.path, permanentFilePath);
-    console.log(`✓ File saved permanently: ${permanentFilePath}`);
+    logFileOperation('save', permanentFilePath, true, {
+      originalName: file.originalname,
+      size: file.size,
+      companyId: company_id
+    });
     
     // Initialize Python processor
     const processor = new PythonProcessor();
     
     if (isVercel) {
       // Vercel environment - limited Python support
-      console.log('⚠️ Running in Vercel environment - Python processing disabled');
+      logger.warn('Python processing disabled in Vercel environment', {
+        companyId: company_id,
+        fileName: safeFilename
+      });
       
       // For Vercel, just acknowledge the upload
       return res.json({
@@ -104,8 +120,11 @@ module.exports = async (req, res) => {
       });
       
     } else {
-      // Local/Railway environment - full Python processing
-      console.log('🔄 Running full Python processing pipeline');
+      // Local/Railway environment - full Python processing pipeline
+      logger.info('Starting full Python processing pipeline', {
+        companyId: company_id,
+        filePath: permanentFilePath
+      });
       
       try {
         // Run the complete pipeline using direct Python integration
@@ -156,7 +175,11 @@ module.exports = async (req, res) => {
         }
         
       } catch (processingError) {
-        console.error('Pipeline processing failed:', processingError);
+        logError(processingError, {
+          context: 'python_pipeline',
+          companyId: company_id,
+          filePath: permanentFilePath
+        });
         
         return res.status(500).json({
           error: 'Processing pipeline failed',
@@ -183,7 +206,11 @@ module.exports = async (req, res) => {
     }
     
   } catch (error) {
-    console.error('Upload handler error:', error);
+    logError(error, {
+      context: 'upload_handler',
+      companyId: company_id,
+      fileName: file?.originalname
+    });
     
     return res.status(500).json({
       error: 'Upload processing failed',
@@ -200,7 +227,10 @@ module.exports = async (req, res) => {
         fs.unlinkSync(file.path);
       }
     } catch (cleanupError) {
-      console.warn('Failed to clean up temporary file:', cleanupError);
+      logger.warn('Failed to clean up temporary file', {
+        tempFilePath: file.path,
+        error: cleanupError.message
+      });
     }
   }
 };

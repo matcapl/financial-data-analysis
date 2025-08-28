@@ -7,6 +7,9 @@
 
 const { spawn } = require('child_process');
 const path = require('path');
+const { createServiceLogger, logError } = require('../config/logger');
+
+const logger = createServiceLogger('python-processor');
 
 class PythonProcessor {
     constructor() {
@@ -25,10 +28,13 @@ class PythonProcessor {
         return new Promise((resolve, reject) => {
             const pythonArgs = [this.processorPath, operation, ...args];
             
-            console.log(`🐍 Executing Python operation: ${operation}`);
-            console.log(`📂 Using Python: ${this.pythonPath}`);
-            console.log(`📄 Script: ${this.processorPath}`);
-            console.log(`🔧 Args: ${args.join(' ')}`);
+            logger.info('Executing Python operation', {
+                operation,
+                pythonPath: this.pythonPath,
+                scriptPath: this.processorPath,
+                args: args,
+                processId: process.pid
+            });
             
             const python = spawn(this.pythonPath, pythonArgs, {
                 cwd: this.rootDir,
@@ -56,11 +62,19 @@ class PythonProcessor {
                     if (code === 0) {
                         // Parse JSON response from Python
                         const result = JSON.parse(stdout);
-                        console.log(`✅ Python operation completed: ${operation}`);
+                        logger.info('Python operation completed successfully', {
+                            operation,
+                            success: result.success,
+                            dataKeys: result.data ? Object.keys(result.data) : []
+                        });
                         resolve(result);
                     } else {
-                        console.error(`❌ Python operation failed: ${operation} (code ${code})`);
-                        console.error('STDERR:', stderr);
+                        logger.error('Python operation failed', {
+                            operation,
+                            exitCode: code,
+                            stderr,
+                            stdout: stdout.slice(0, 500) // Limit stdout in logs
+                        });
                         
                         // Try to parse error response
                         let errorResult;
@@ -76,7 +90,12 @@ class PythonProcessor {
                         resolve(errorResult);
                     }
                 } catch (parseError) {
-                    console.error('Failed to parse Python response:', parseError);
+                    logError(parseError, {
+                        operation,
+                        context: 'parse_python_response',
+                        stdout: stdout.slice(0, 200),
+                        stderr: stderr.slice(0, 200)
+                    });
                     resolve({
                         success: false,
                         message: 'Failed to parse Python response',
@@ -86,7 +105,11 @@ class PythonProcessor {
             });
 
             python.on('error', (err) => {
-                console.error(`Python process error:`, err);
+                logError(err, {
+                    operation,
+                    context: 'python_process_spawn',
+                    pythonPath: this.pythonPath
+                });
                 reject({
                     success: false,
                     message: `Python process failed to start: ${err.message}`,
@@ -96,6 +119,10 @@ class PythonProcessor {
 
             // Set timeout
             const timeout = setTimeout(() => {
+                logger.warn('Python process timeout', {
+                    operation,
+                    timeoutMs: 60000
+                });
                 python.kill('SIGKILL');
                 reject({
                     success: false,
@@ -164,7 +191,11 @@ class PythonProcessor {
 
         try {
             // Step 1: Ingest file
-            console.log(`🔄 Step 1: Ingesting file ${filePath}`);
+            logger.info('Starting complete pipeline', {
+                filePath: path.basename(filePath),
+                companyId,
+                step: 'ingestion'
+            });
             results.ingestion = await this.ingestFile(filePath, companyId);
             
             if (!results.ingestion.success) {
@@ -172,20 +203,32 @@ class PythonProcessor {
             }
 
             // Step 2: Calculate metrics
-            console.log(`🔄 Step 2: Calculating metrics for company ${companyId}`);
+            logger.info('Pipeline step: metrics calculation', {
+                companyId,
+                step: 'metrics'
+            });
             results.metrics = await this.calculateMetrics(companyId);
             
             if (!results.metrics.success) {
-                console.warn(`⚠️ Metrics calculation failed: ${results.metrics.message}`);
+                logger.warn('Metrics calculation failed', {
+                    companyId,
+                    error: results.metrics.message
+                });
                 results.errors.push(`Metrics: ${results.metrics.message}`);
             }
 
             // Step 3: Generate questions
-            console.log(`🔄 Step 3: Generating questions for company ${companyId}`);
+            logger.info('Pipeline step: question generation', {
+                companyId,
+                step: 'questions'
+            });
             results.questions = await this.generateQuestions(companyId);
             
             if (!results.questions.success) {
-                console.warn(`⚠️ Question generation failed: ${results.questions.message}`);
+                logger.warn('Question generation failed', {
+                    companyId,
+                    error: results.questions.message
+                });
                 results.errors.push(`Questions: ${results.questions.message}`);
             }
 
@@ -197,11 +240,16 @@ class PythonProcessor {
                     results.ingestion.success ? "✓ File ingested successfully" : "✗ File ingestion failed",
                     results.metrics?.success ? "✓ Metrics calculated" : "⚠ Metrics calculation issues",
                     results.questions?.success ? "✓ Questions generated" : "⚠ Question generation issues"
-                ].filter(Boolean)
+                ].filter(Boolean),
+                errors: results.errors
             };
 
         } catch (error) {
-            console.error('❌ Pipeline failed:', error);
+            logError(error, {
+                context: 'complete_pipeline',
+                companyId,
+                filePath: path.basename(filePath)
+            });
             return {
                 success: false,
                 message: `Pipeline failed: ${error.message}`,

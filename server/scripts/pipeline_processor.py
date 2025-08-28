@@ -15,6 +15,9 @@ import traceback
 current_dir = Path(__file__).resolve().parent
 sys.path.insert(0, str(current_dir))
 
+# Import structured logging
+from logging_config import setup_logger, log_with_context, log_pipeline_step
+
 try:
     # Import all processing modules
     from extraction import extract_data
@@ -32,9 +35,8 @@ except ImportError as e:
     print(f"ERROR: Failed to import required modules: {e}")
     sys.exit(1)
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+# Configure structured logging
+logger = setup_logger('pipeline-processor')
 
 class PipelineResult:
     """Result object for pipeline operations"""
@@ -56,7 +58,7 @@ class FinancialDataProcessor:
     """Main processor class for financial data pipeline operations"""
     
     def __init__(self):
-        self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger = setup_logger('financial-data-processor')
     
     def ingest_file(self, file_path: str, company_id: int) -> PipelineResult:
         """
@@ -64,19 +66,27 @@ class FinancialDataProcessor:
         Replaces: runPythonScript('ingest_xlsx.py', [file_path, company_id])
         """
         try:
-            self.logger.info(f"Starting file ingestion: {file_path} for company {company_id}")
+            log_with_context(
+                self.logger, 'info', 'Starting file ingestion',
+                filePath=Path(file_path).name,
+                companyId=company_id
+            )
             
             # Stage 1: Extract data
-            self.logger.info("Stage 1: Data extraction")
+            log_pipeline_step(self.logger, 'data_extraction', True, stage=1)
             extracted_data = extract_data(file_path)
             if not extracted_data:
                 return PipelineResult(False, "No data extracted from file", errors=["Empty or invalid file"])
             
             rows_extracted = len(extracted_data)
-            self.logger.info(f"✅ Extracted {rows_extracted} rows")
+            log_with_context(
+                self.logger, 'info', 'Data extraction completed',
+                rowsExtracted=rows_extracted,
+                stage=1
+            )
             
             # Stage 2: Field mapping
-            self.logger.info("Stage 2: Field mapping")
+            log_pipeline_step(self.logger, 'field_mapping', True, stage=2)
             mapped_rows = []
             mapping_errors = []
             
@@ -88,17 +98,27 @@ class FinancialDataProcessor:
                 except Exception as e:
                     mapping_errors.append(f"Row mapping error: {str(e)}")
             
-            self.logger.info(f"✅ Mapped {len(mapped_rows)} rows ({len(mapping_errors)} errors)")
+            log_with_context(
+                self.logger, 'info', 'Field mapping completed',
+                rowsMapped=len(mapped_rows),
+                mappingErrors=len(mapping_errors),
+                stage=2
+            )
             
             # Stage 3: Normalization
-            self.logger.info("Stage 3: Data normalization")
+            log_pipeline_step(self.logger, 'data_normalization', True, stage=3)
             normalized_data, normalization_error_count = normalize_data(mapped_rows, file_path)
             
-            self.logger.info(f"✅ Normalized {len(normalized_data)} rows ({normalization_error_count} errors)")
+            log_with_context(
+                self.logger, 'info', 'Data normalization completed',
+                rowsNormalized=len(normalized_data),
+                normalizationErrors=normalization_error_count,
+                stage=3
+            )
             
             # Stage 4: Persistence
             if normalized_data:
-                self.logger.info("Stage 4: Database persistence")
+                log_pipeline_step(self.logger, 'database_persistence', True, stage=4)
                 
                 # Group rows by period_id since persist_data expects single period
                 from collections import defaultdict
@@ -112,7 +132,12 @@ class FinancialDataProcessor:
                     persisted_count = persist_data(period_rows, company_id, period_id)
                     total_persisted += persisted_count
                     
-                self.logger.info(f"✅ Persisted {total_persisted} rows across {len(grouped_by_period)} periods")
+                log_with_context(
+                    self.logger, 'info', 'Database persistence completed',
+                    rowsPersisted=total_persisted,
+                    periodsProcessed=len(grouped_by_period),
+                    stage=4
+                )
                 
                 return PipelineResult(
                     success=True,

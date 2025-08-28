@@ -3,6 +3,9 @@ try {
 } catch(e) {
   console.error('Error loading .env:', e);
 }
+
+// Import structured logging
+const { logger, httpLoggerMiddleware, logError } = require('../config/logger');
 const express = require('express');
 const multer = require('multer');
 const path = require('path');
@@ -17,10 +20,11 @@ const PORT = process.env.PORT || 4000;
 
 app.use(express.json());
 
-// --- Check
-console.log('Environment variables loaded:');
-console.log('VERCEL_BLOB_TOKEN:', process.env.VERCEL_BLOB_TOKEN ? 'SET' : 'NOT SET');
-console.log('BLOB_READ_WRITE_TOKEN:', process.env.BLOB_READ_WRITE_TOKEN ? 'SET' : 'NOT SET');
+// Environment variables check
+logger.info('Environment variables loaded', {
+  VERCEL_BLOB_TOKEN: process.env.VERCEL_BLOB_TOKEN ? 'SET' : 'NOT SET',
+  BLOB_READ_WRITE_TOKEN: process.env.BLOB_READ_WRITE_TOKEN ? 'SET' : 'NOT SET'
+});
 
 
 // ─── Ensure writable folders ────────────────────────────────────────────
@@ -28,7 +32,10 @@ const uploadDir = path.join(__dirname, 'Uploads');
 const reportsDir = path.join(__dirname, 'reports');
 const dataDir = path.join(__dirname, '..', 'data');
 
-[uploadDir, reportsDir, dataDir].forEach(d => fs.mkdirSync(d, { recursive: true }));
+[uploadDir, reportsDir, dataDir].forEach(d => {
+  fs.mkdirSync(d, { recursive: true });
+  logger.debug('Directory created', { path: d });
+});
 
 // ─── Multer setup ───────────────────────────────────────────────────────
 const storage = multer.diskStorage({
@@ -50,6 +57,9 @@ const upload = multer({
     }
   }
 });
+
+// Add HTTP logging middleware
+app.use(httpLoggerMiddleware);
 
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -90,7 +100,7 @@ app.get('/api/reports', (req, res) => {
                     .sort((a, b) => new Date(b.created) - new Date(a.created)); // Most recent first
     res.json(files);
   } catch (error) {
-    console.error('Error reading reports directory:', error);
+    logError(error, { operation: 'read_reports_directory', path: reportsDir });
     res.json([]); // Return empty array if directory doesn't exist
   }
 });
@@ -110,7 +120,7 @@ app.get('/api/data-files', (req, res) => {
                     }));
     res.json(files);
   } catch (error) {
-    console.error('Error reading data directory:', error);
+    logError(error, { operation: 'read_data_directory', path: dataDir });
     res.json([]);
   }
 });
@@ -143,7 +153,7 @@ app.use((error, req, res, next) => {
     });
   }
   
-  console.error('Server error:', error);
+  logError(error, { middleware: 'error_handler', url: req.originalUrl });
   res.status(500).json({ 
     error: 'Internal server error',
     message: process.env.NODE_ENV === 'production' ? 'Something went wrong' : error.message
@@ -168,20 +178,27 @@ app.use('*', (req, res) => {
 
 // ─── Start Server ──────────────────────────────────────────────────────
 app.listen(PORT, () => {
+  logger.info('Server started', {
+    port: PORT,
+    environment: process.env.NODE_ENV || 'development',
+    python_available: process.env.VERCEL !== '1',
+    vercel_blob: !!process.env.VERCEL_BLOB_TOKEN,
+    endpoints: {
+      health: `http://localhost:${PORT}/health`,
+      info: `http://localhost:${PORT}/api/info`
+    }
+  });
+  
+  // Keep console logs for immediate visibility during startup
   console.log(`✅ Server API running on port ${PORT}`);
   console.log(`🔍 Health check: http://localhost:${PORT}/health`);
   console.log(`📊 Server info: http://localhost:${PORT}/api/info`);
-  
-  // Log environment information
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🐍 Python available: ${process.env.VERCEL !== '1'}`);
-  if (process.env.VERCEL_BLOB_TOKEN) {
-    console.log('☁️  Vercel Blob storage configured');
-  }
 });
 
 app.use((err, req, res, next) => {
-  console.error('Unhandled error:', err.stack || err);
+  logError(err, { handler: 'unhandled_error', url: req?.originalUrl });
   res.status(500).send(err.stack || err.toString());
 });
 
