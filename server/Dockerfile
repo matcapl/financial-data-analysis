@@ -6,6 +6,8 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         curl \
         ca-certificates \
+        nodejs \
+        npm \
         gnupg \
         lsb-release \
         tesseract-ocr \
@@ -22,14 +24,24 @@ RUN curl -fsSL https://install.python-poetry.org -o install-poetry.py \
  && python3 install-poetry.py --version $POETRY_VERSION --yes \
  && ln -s /root/.local/bin/poetry /usr/local/bin/poetry \
  && rm install-poetry.py
+ENV PATH="/root/.local/bin:$PATH"
+
+# Setting environment variables
+ENV PYTHON_PATH=/usr/local/bin/python3
+ENV ROOT_DIR=/app
+ENV PYTHONPATH=/app/server/scripts:/app/server
 
 # Set workdir
 WORKDIR /app
 
 # Copy Python project files and install Python dependencies
-COPY pyproject.toml poetry.lock ./
-RUN poetry config virtualenvs.create false && \
-    poetry install --no-root --no-interaction --no-ansi
+
+# COPY pyproject.toml poetry.lock ./
+# RUN poetry config virtualenvs.create false && \
+#     poetry install --no-root --no-interaction --no-ansi
+
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy Node.js package files and install dependencies
 COPY server/package*.json ./server/
@@ -38,9 +50,9 @@ RUN npm install --prefix ./server
 # Copy server code
 COPY server/api ./server/api
 COPY server/scripts ./server/scripts
-
-# ✅ ADD THIS LINE - Copy config directory
 COPY config ./config
+COPY data ./data
+COPY .env ./
 
 # Expose and start
 EXPOSE 4000
