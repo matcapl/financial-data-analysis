@@ -1,27 +1,38 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+echo "=== Database Migration System ==="
+echo "Schema generation has been replaced with database migrations."
+echo ""
+echo "To apply database migrations:"
+echo "  python database/migrate.py up"
+echo ""
+echo "To check migration status:"
+echo "  python database/migrate.py status"
+echo ""
+echo "To create new migrations:"
+echo "  python database/migrate.py create 'Description'"
+echo ""
+echo "See database/README.md for full documentation."
+
 # Load env
 if [[ -f .env ]]; then
   set -a; source .env; set +a
 fi
 
-# Function to apply schema files to a given database URL
-apply_schema() {
-  local url=$1
-  echo "Applying schema to $url"
-  psql "$url" -f schema/001_financial_schema.sql
-  psql "$url" -f schema/002_question_templates.sql
-}
+# Run migrations using the new system
+echo "Applying database migrations..."
 
-# Apply to remote
-apply_schema "$DATABASE_URL"
-
-# Apply to local if set
-if [[ -n "${LOCAL_DATABASE_URL:-}" ]]; then
-  apply_schema "$LOCAL_DATABASE_URL"
+# Use virtual environment Python if available, otherwise system python
+if [ -f .venv/bin/python3 ]; then
+    PYTHON_CMD=".venv/bin/python3"
+elif [ -f .venv/bin/python ]; then
+    PYTHON_CMD=".venv/bin/python"
 else
-  echo "Warning: LOCAL_DATABASE_URL not set, skipping local apply."
+    PYTHON_CMD="python3"
 fi
 
-echo "Schema and seed SQL applied to both remote and local databases."
+echo "Using Python: $PYTHON_CMD"
+$PYTHON_CMD database/migrate.py up
+
+echo "Database migrations completed successfully."

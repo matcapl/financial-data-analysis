@@ -40,27 +40,12 @@ echo "DATABASE_URL=postgresql://username:password@localhost:5432/your_database" 
 echo "NODE_ENV=development" >> .env
 echo "PORT=4000" >> .env
 
-# Apply database schema (with virtual environment active)
+# Apply database schema using the new migration system
 source .venv/bin/activate
-python scripts/generate_schema.py
+python database/migrate.py up
 
-# Apply schema to database
-python -c "
-import sys
-sys.path.append('server/scripts')
-from utils import get_db_connection
-import os
-
-schema_file = 'schema/001_financial_schema.sql'
-with open(schema_file, 'r') as f:
-    schema_sql = f.read()
-
-with get_db_connection() as conn:
-    cur = conn.cursor()
-    cur.execute(schema_sql)
-    conn.commit()
-    print('✅ Database schema applied successfully!')
-"
+# Check migration status
+python database/migrate.py status
 ```
 
 ### 4. Start Backend Server
@@ -173,8 +158,17 @@ npm install package-name
 ### Database Commands
 
 ```bash
-# Connect to database (using .env DATABASE_URL)
+# Check migration status
 source .venv/bin/activate
+python database/migrate.py status
+
+# Apply all pending migrations
+python database/migrate.py up
+
+# Create new migration
+python database/migrate.py create "Add new feature"
+
+# Test database connection
 python -c "
 import sys
 sys.path.append('server/scripts')
@@ -183,12 +177,12 @@ with get_db_connection() as conn:
     print('✅ Database connection successful!')
 "
 
-# Check tables
+# Check tables and data
 psql "$DATABASE_URL" -c "\dt"
-
-# Check data
 psql "$DATABASE_URL" -c "SELECT COUNT(*) FROM financial_metrics;"
 psql "$DATABASE_URL" -c "SELECT name FROM line_item_definitions;"
+
+# See database/README.md for complete migration documentation
 ```
 
 ## File Structure
