@@ -113,7 +113,7 @@ Key linkages & components:
 Everything is orchestrated by CI scripts on the right, which run in lockstep with each stage of the main program flow. This ensures that configuration changes, code updates, and data‐processing improvements are continuously validated—protecting against dropped logic or broken linkages.
 --
 
-I have updated the annotated diagram to reflect only the actual files and correct three-layer ingestion flow:
+Annotated diagram (overview3.png)
 
 -  **Top Inputs**:  
   – smoke.csv (CSV)  
@@ -150,10 +150,7 @@ I have updated the annotated diagram to reflect only the actual files and correc
   – ci/06_metric_validation.sh  
   – ci/test_database_url.sh  
 
--  **Bottom Output**:  
-  – Example PDF: report_1_1722513661225.pdf  
 
-This corrected diagram ensures all referenced files and flows truly exist in the repository.
 
 --
 
@@ -211,108 +208,7 @@ The **handover** points:
 -  question_templates ↔ report_generator: templating  
 -  report_generator ↔ front-end: PDF blob URL  
 
-Use this mapping to craft an integrated, annotated diagram that clearly shows data, control, and dependency flows across all layers.
---
-grok version (outdated file names)
-Left: YAML Channel              | Middle: Functional Scripts & Actions          | Right: CI Files
---------------------------------|-----------------------------------------------|--------------------------------
-1. (Expected but absent:        | 1. scripts/validate_yaml.py                   | 
-   tables.yaml, fields.yaml,    |    -- Validates YAML configs (inferred from   | 
-   taxonomy.yaml, periods.yaml, |      name; likely loads left-channel YAMLs)   | 
-   observations.yaml,           |    → Outputs validation results or errors     | 
-   questions.yaml in config/)   |                                               | 
-   -- No files present;         |                                               | 
-      channel starts empty       |                                               | 
---------------------------------|-----------------------------------------------|--------------------------------
-                                | 2. scripts/generate_schema.py                 | 
-                                |    -- Generates database schema (inferred;   | 
-                                |      uses validated YAMLs like tables.yaml,   | 
-                                |      fields.yaml)                             | 
-                                |    → Outputs to schema/001_financial_schema.sql 
-                                |                                               | 
---------------------------------|-----------------------------------------------|--------------------------------
-                                | 3. scripts/generate_questions.py              | 
-                                |    -- Generates question templates (inferred;| 
-                                |      uses YAMLs like questions.yaml,          | 
-                                |      taxonomy.yaml, observations.yaml)        | 
-                                |    → Outputs to schema/002_question_templates.sql 
-                                |                                               | 
---------------------------------|-----------------------------------------------|--------------------------------
-                                |                                               | 4. ci/migrate.sh
-                                |                                               |    -- Applies schema SQL files
-                                |                                               |      (001_financial_schema.sql,
-                                |                                               |       002_question_templates.sql)
-                                |                                               |    ← Depends on middle generation
-                                |                                               |    → Sets up DB for ingestion
---------------------------------|-----------------------------------------------|--------------------------------
-                                |                                               | 5. ci/01_drop_tables.sh & 
-                                |                                               |    ci/02_reset_db.sh
-                                |                                               |    -- Drops tables and resets DB
-                                |                                               |      (pre-migration or test prep)
-                                |                                               |    → Prepares for fresh runs
---------------------------------|-----------------------------------------------|--------------------------------
-                                | 6. server/scripts/ingest_xlsx.py              | 
-                                |    -- Ingests XLSX data (from data/ files     | 
-                                |      like financial_data_template.csv?        | 
-                                |      but CSV; perhaps handles similar)        | 
-                                |    -- Likely: extract → map (via field_mapper.py) 
-                                |      → normalize → persist to DB              | 
-                                |    ← May load YAMLs (fields.yaml for mapping) | 
---------------------------------|-----------------------------------------------|--------------------------------
-                                | 7. server/scripts/ingest_pdf.py               | 
-                                |    -- Ingests PDF data (e.g., data/test.pdf)  | 
-                                |    -- Similar pipeline: extract → map →       | 
-                                |      normalize → persist                      | 
-                                |    ← YAML linkage for taxonomy/fields         | 
---------------------------------|-----------------------------------------------|--------------------------------
-                                | 8. server/scripts/field_mapper.py             | 
-                                |    -- Maps fields during ingestion (inferred; | 
-                                |      called by ingest_xlsx.py or ingest_pdf.py)| 
-                                |    ← Uses fields.yaml or taxonomy.yaml        | 
---------------------------------|-----------------------------------------------|--------------------------------
-                                | 9. server/scripts/calc_metrics.py             | 
-                                |    -- Calculates financial metrics on         | 
-                                |      ingested data (post-persist)             | 
-                                |    ← DB query; may use periods.yaml           | 
-                                |    → Outputs for reporting                    | 
---------------------------------|-----------------------------------------------|--------------------------------
-                                | 10. server/scripts/questions_engine.py        | 
-                                |     -- Processes questions on data/metrics    | 
-                                |       (uses generated question templates)     | 
-                                |     ← YAML like questions.yaml, observations.yaml
-                                |     → Outputs insights for report             | 
---------------------------------|-----------------------------------------------|--------------------------------
-                                | 11. server/scripts/report_generator.py        | 
-                                |     -- Generates final reports (combines      | 
-                                |       metrics and questions outputs)          | 
-                                |     ← Inputs from calc_metrics.py,            | 
-                                |       questions_engine.py                     | 
---------------------------------|-----------------------------------------------|--------------------------------
-                                |                                               | 12. ci/03_smoke_csv.sh
-                                |                                               |     -- Smoke test on CSV (data/smoke.csv)
-                                |                                               |       likely invokes ingest_xlsx.py or similar
-                                |                                               |       → Verifies basic ingestion/persist
-                                |                                               |     -- Checks DB schema/ data insertion
---------------------------------|-----------------------------------------------|--------------------------------
-                                |                                               | 13. ci/04_integration_xlsx.sh
-                                |                                               |     -- Integration test for XLSX/PDF? (name
-                                |                                               |        suggests XLSX; may call ingest_pdf.py
-                                |                                               |        if shortcut)
-                                |                                               |     → Tests full flow: ingest → calc → report
-                                |                                               |     -- Uses data/financial_data_template.csv
-                                |                                               |        or test.pdf
---------------------------------|-----------------------------------------------|--------------------------------
-                                |                                               | 14. ci/05_full_sample.sh
-                                |                                               |     -- Full sample test (inferred; runs entire
-                                |                                               |        pipeline on sample data)
-                                |                                               |     → Invokes multiple middle scripts
---------------------------------|-----------------------------------------------|--------------------------------
-                                |                                               | 15. ci/smoke_test.sh & 
-                                |                                               |     ci/reset_local_db.sh
-                                |                                               |     -- Orchestrates smoke tests/reset
-                                |                                               |       (calls other sh files like 03_smoke_csv.sh)
-                                |                                               |     → Ensures CI green by verifying linkages
---------------------------------|-----------------------------------------------|--------------------------------
+
 
 
 # Repository File Overview and Interdependencies
@@ -320,7 +216,7 @@ Left: YAML Channel              | Middle: Functional Scripts & Actions          
 This section briefly describes each key file/module in the financial-data-analysis system, its purpose, and how it links to preceding or succeeding components.
 
 ## Configuration (`config/`)
-0. **tables.yaml
+0. **tables.yaml**
 
 1. **fields.yaml**  
    -  Defines column‐header synonyms, field mappings, and data‐type validation rules.  
@@ -356,6 +252,8 @@ This section briefly describes each key file/module in the financial-data-analys
 ***
 
 ## Continuous Integration (`ci/`)
+
+**00_validate_and_generate.sh**  
 1. **validate_yaml.sh**  
    -  Lints and validates all YAML files.  
    -  **Precedes:** schema generation.
@@ -371,8 +269,10 @@ This section briefly describes each key file/module in the financial-data-analys
 4. **02_create_tables.sh**  
    -  Applies `001_financial_schema.sql` and `002_question_templates.sql` to recreate schema.  
    -  **Precedes:** ingestion smoke tests.
-
-5. **03_smoke_csv.sh**, **04_integration_pdf.sh**  
+5.
+6.
+7.
+8. **03_smoke_csv.sh**, **04_integration_pdf.sh**  
    -  Smoke‐tests ingestion of sample CSV/PDF files.  
    -  **Follows:** database recreation; **Precedes:** downstream report generation tests.
 
@@ -433,7 +333,7 @@ This section briefly describes each key file/module in the financial-data-analys
 - **Extraction → Mapping → Normalization → Persistence**: intact if you use the orchestrator scripts (`ingest_xlsx.py`, `ingest_pdf.py`) or the layered `extraction.py` → `field_mapper.py` → `normalization.py` → `persistence.py` flow.
 - **Metrics → Questions → Reports**: intact as long as you run `calc_metrics.py` before `questions_engine.py` and then `report_generator.py`.
 
-If you've been directly editing `ingest_xlsx.py` or `ingest_pdf.py`, ensure you haven’t broken references to:
+If directly editing `ingest_xlsx.py` or `ingest_pdf.py`, ensure haven’t broken references to:
 
 - `utils.parse_period()` and `clean_numeric_value()`  
 - `field_mapper.map_and_filter_row()`  
@@ -610,7 +510,7 @@ curl -X POST http://localhost:4000/api/generate-report \
 docker logs --tail 50 finance-server_ci
 docker logs --tail 250 finance-server_ci
 
-if docker is complaining finance-server_ci is still running, must remove or rename teh existing one first:
+if docker is complaining finance-server_ci is still running, must remove or rename the existing one first:
 
 docker rm -f finance-server_ci
 
@@ -706,9 +606,11 @@ lsof -ti:4000 | xargs kill -9
 
 - **CI (Continuous Integration):** An automated process that builds and tests your code on each commit, ensuring new changes don’t break existing functionality.  
 - **`set -euo pipefail`:**  
+  - '-x' (optional) provide verbose logging
   - `-e` stops the script if any command exits with a non-zero status.  
   - `-u` treats unset variables as errors.  
-  - `-o pipefail` returns failure if any command in a pipeline fails.  
+  - `-o pipefail` returns failure if any command in a pipeline fails. 
+   
 This combination makes your script *fail fast* and avoids hidden errors.
 
 The smoke test automates these core steps end-to-end:
@@ -734,19 +636,10 @@ The smoke test automates these core steps end-to-end:
 
 Running this against **your local database** uses the same commands but skips the Docker build/run steps. Pointing `$DATABASE_URL` at Neon (external) versus `localhost:5432` (local) is the only variable—everything else is identical. Docker simply packages your code and environment so the test works *consistently* for anyone, wherever they run it.
 
-What’s essential now:
-- Confirming that single revenue datapoint flows through ingestion and lands in `financial_metrics`.
-- Automating that check so it fails loudly if anything in the pipeline breaks.
+All other concerns—fully parsing board packs, generating nuanced questions—can proceed once the pipeline’s foundation is verified.
 
-What’s distracting:
-- Deep dives into PDF parsing variants, question‐generation details, or undici/Blob credential errors.  
-- Multiple iterations on decimal‐stripping versus formatting—pick one format (`to_char(..., 'FM9G999G999D00')`) and standardize.  
-
-Focus on solidifying this one smoke test. Once it reliably passes against both your local and your Neon database, you’ll have confidence the core ingestion works. All other concerns—fully parsing board packs, generating nuanced questions—can proceed once the pipeline’s foundation is verified.
-
-
+-- MAY CUT BELOW --
 # Expert Code Review and QA Test Plan for Financial Data Analysis System
-
 
 ## Intended Functionality
 
@@ -791,8 +684,7 @@ The following 20 tests progress from high-level smoke tests through detailed uni
 
 Each test uses existing files under `data/` (e.g., `financial_data_template.csv`, `smoke.csv`) and the provided database schemas. This ensures thorough coverage from high-level pipeline verification to granular unit tests of individual scripts and API endpoints.
 
-
---
+-- MAY DELETE ABOVE
 
 
 # **Complete Terminal Instructions for CI Green**
@@ -871,6 +763,11 @@ curl -s http://localhost:4000/health
 
 # Stop test container
 docker stop finance-server_ci
+
+docker stop finance-server || true
+docker stop finance-server_ci || true
+docker rm finance-server || true
+docker rm finance-server_ci || true
 
 # Extreme: Prune Docker's build cache
 docker builder prune --all
@@ -974,30 +871,3 @@ This is what a bulletproof CI pipeline should do:
 **H. Report**
 - Print out summary results: which step failed, which passed, with links to logs if needed.
 
-
---
-
-## Running the Full CI/Validation Pipeline
-
-**1. Validate configs and generate SQL:**
-./ci/00_config_validation.sh
-
-**2. Drop all tables in the DB:**  
-ci/01_drop_tables.sh
-
-**3. Reset and apply the schema:**  
-ci/02_reset_db.sh
-
-**4. [CLEANUP] Make sure no server containers are running (avoid port conflicts):**  
-docker ps
-docker stop finance-server || true
-docker stop finance-server_ci || true
-docker rm finance-server || true
-docker rm finance-server_ci || true
-
-**5. Smoke test the pipeline:**  
-ci/03_smoke_csv.sh
-
-**6. Run extended integrations (optional, if set up):**  
-ci/04_integration_xlsx.sh
-ci/05_full_sample.sh
