@@ -1,0 +1,20 @@
+company_id,company_name,line_item,period_label,period_type,value,value_type,frequency,currency,source_file,source_page,source_type,notes
+1,Acme Corp,Revenue,2025-01,Monthly,1500000,Actual,Monthly,USD,sample_data.csv,1,CSV,January actual revenue
+1,Acme Corp,Revenue,2025-01,Monthly,1600000,Budget,Monthly,USD,sample_data.csv,1,CSV,January budget revenue
+1,Acme Corp,Gross Profit,2025-01,Monthly,750000,Actual,Monthly,USD,sample_data.csv,1,CSV,January actual gross profit
+1,Acme Corp,EBITDA,2025-01,Monthly,500000,Actual,Monthly,USD,sample_data.csv,1,CSV,January actual EBITDA
+1,Acme Corp,Operating Expenses,2025-01,Monthly,250000,Actual,Monthly,USD,sample_data.csv,1,CSV,January operating expenses
+1,Acme Corp,Revenue,2025-Q1,Quarterly,4500000,Actual,Quarterly,USD,sample_data.csv,1,CSV,Q1 actual revenue
+1,Acme Corp,Revenue,2025-Q1,Quarterly,4800000,Forecast,Quarterly,USD,sample_data.csv,1,CSV,Q1 forecast revenue
+2,Globex Inc,Revenue,2024-12,Monthly,2000000,Actual,Monthly,EUR,sample_data.csv,1,CSV,December actual revenue
+2,Globex Inc,Net Income,2024-12,Monthly,300000,Actual,Monthly,EUR,sample_data.csv,1,CSV,December actual net income
+2,Globex Inc,EBITDA,2024-12,Monthly,400000,Budget,Monthly,EUR,sample_data.csv,1,CSV,December budget EBITDA
+3,Initech,Revenue,2025,Yearly,12000000,Actual,Yearly,USD,sample_data.csv,1,CSV,Yearly actual revenue
+3,Initech,Revenue,2026,Yearly,13000000,Forecast,Yearly,USD,sample_data.csv,1,CSV,Next year forecast revenue
+3,Initech,Gross Profit,2025,Yearly,6000000,Actual,Yearly,USD,sample_data.csv,1,CSV,Yearly actual gross profit
+4,Initrode,Cost of Goods Sold,2025-02,Monthly,300000,Actual,Monthly,USD,sample_data.csv,1,CSV,February COGS
+4,Initrode,Selling General Administrative,2025-02,Monthly,150000,Actual,Monthly,USD,sample_data.csv,1,CSV,February SG&A
+5,Hooli,Revenue,2025-07,Monthly,800000,Actual,Monthly,USD,sample_data.csv,1,CSV,July actual revenue
+5,Hooli,Revenue,2025-07,Monthly,820000,Budget,Monthly,USD,sample_data.csv,1,CSV,July budget revenue
+5,Hooli,EBITDA,2025-07,Monthly,200000,Forecast,Monthly,USD,sample_data.csv,1,CSV,July forecast EBITDA
+5,Hooli,Cash Flow,2025-Q2,Quarterly,500000,Actual,Quarterly,USD,sample_data.csv,1,CSV,Q2 actual cash flow
