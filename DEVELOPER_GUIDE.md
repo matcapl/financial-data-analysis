@@ -355,3 +355,9 @@ For production deployment, see the main README.md file which covers:
 5. `python server/main.py` (FastAPI backend)
 6. `cd client && npm install && npm start` (React frontend)
 7. Open `http://localhost:3000`
+
+**Alternative using Make:**
+1. `make setup` (installs deps + sets up database)
+2. `make server` (FastAPI backend)
+3. `make client` (React frontend)
+4. Open `http://localhost:3000`

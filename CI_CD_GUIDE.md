@@ -1,14 +1,14 @@
-# CI/CD Migration Integration Guide
+# CI/CD Guide - FastAPI Backend
 
-This guide covers the comprehensive CI/CD pipeline integration for the database migration system.
+This guide covers the comprehensive CI/CD pipeline for the unified FastAPI backend architecture.
 
 ## Overview
 
 The financial data analysis system includes a robust CI/CD pipeline that:
-- ✅ Verifies migration system integrity before deployment
+- ✅ Verifies FastAPI server functionality before deployment
 - ✅ Runs database migrations automatically during deployment
 - ✅ Provides rollback capabilities for safe database changes
-- ✅ Includes comprehensive testing with PostgreSQL services
+- ✅ Tests the complete data processing pipeline
 - ✅ Supports multiple deployment targets (Railway, Docker, GitHub Actions)
 
 ## CI/CD Pipeline Components
@@ -62,7 +62,7 @@ Production deployment script that:
 - Runs database migrations before starting the app
 - Updates rollback SQL
 - Shows migration status
-- Starts the Node.js application
+- Starts the FastAPI application
 
 ```bash
 # Used automatically in railway.json
@@ -116,7 +116,7 @@ CMD ["bash", "scripts/deploy-start.sh"]
 
 **Features:**
 - All migration files included in image
-- Production-ready Python and Node.js environment
+- Production-ready Python environment with FastAPI
 - Automatic migration execution on container start
 
 ### GitHub Actions
@@ -130,7 +130,7 @@ CMD ["bash", "scripts/deploy-start.sh"]
 
 #### Features:
 - PostgreSQL 15 service for realistic testing
-- Python 3.11 and Node.js 18 environments
+- Python 3.11+ environment with FastAPI and uvicorn
 - Migration rollback testing
 - Docker image structure validation
 

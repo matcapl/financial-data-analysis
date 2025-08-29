@@ -349,25 +349,32 @@ Confirm CI scripts still apply schema and smoke tests still pass. If any upstrea
 
 ## Prerequisites
 - Git
-- Docker Desktop (optional for containerized deployment)
+- **uv** - Fast Python package manager ([install from uv.sh](https://docs.astral.sh/uv/))
 - Python 3.10+
+- Node.js 18+ (for React frontend)
 - PostgreSQL database or NeonDB account
-- A terminal/command line
+- Docker Desktop (optional for containerized deployment)
 
 ## Step 1: Clone and Setup Repository
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/matcapl/financial-data-analysis.git
+git clone <repository-url>
 cd financial-data-analysis
 
-# 2. Create Python virtual environment
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-pip install --upgrade pip uv
+# 2. Quick setup using Make (recommended)
+make setup
 
-# 3. Install project dependencies using uv for faster package management
+# OR manual setup:
+# Create Python virtual environment
+uv venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install project dependencies
 uv pip install -r requirements.txt
+
+# Alternative: Use simplified requirements for minimal setup
+# uv pip install -r requirements-simple.txt
 ```
 
 ## Step 2: Setup Database (NeonDB - Free Tier)
@@ -399,7 +406,19 @@ echo "DATABASE_URL=postgresql://your_user:your_password@ep-xxx.neon.tech:5432/yo
 
 ## Step 4: Start Development Servers
 
-### Option A: Run FastAPI Directly (Recommended for Development)
+### Option A: Using Make Commands (Recommended)
+```bash
+# Complete setup (installs deps + database setup)
+make setup
+
+# Start FastAPI server (port 4000)
+make server
+
+# In another terminal, start React client (port 3000)
+make client
+```
+
+### Option B: Manual Commands
 ```bash
 # Activate virtual environment
 source .venv/bin/activate
@@ -410,7 +429,7 @@ python server/main.py
 # uvicorn server.main:app --host 0.0.0.0 --port 4000 --reload
 ```
 
-### Option B: Run with Docker (Production-like)
+### Option C: Docker (Production-like)
 ```bash
 # Build FastAPI Docker image
 docker build -t financial-api .
@@ -418,7 +437,7 @@ docker build -t financial-api .
 # Run FastAPI container
 docker run --rm --env-file .env -p 4000:4000 financial-api
 
-### Start React Frontend
+### Start React Frontend (Manual)
 ```bash
 # In a new terminal
 cd client
