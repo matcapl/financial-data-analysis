@@ -16,15 +16,9 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends nodejs && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Install Poetry
-ARG POETRY_VERSION=2.1.4
-ARG POETRY_CHECKSUM=963d56703976ce9cdc6ff460c44a4f8fbad64c110dc447b86eeabb4a47ec2160
-RUN curl -fsSL https://install.python-poetry.org -o install-poetry.py \
- && echo "${POETRY_CHECKSUM}  install-poetry.py" | sha256sum -c - \
- && python3 install-poetry.py --version $POETRY_VERSION --yes \
- && ln -s /root/.local/bin/poetry /usr/local/bin/poetry \
- && rm install-poetry.py
-ENV PATH="/root/.local/bin:$PATH"
+# Install uv
+ARG UV_VERSION=0.7.6
+RUN pip install --no-cache-dir uv==$UV_VERSION
 
 # Setting environment variables
 ENV PYTHON_PATH=/usr/local/bin/python3
@@ -40,8 +34,10 @@ WORKDIR /app
 # RUN poetry config virtualenvs.create false && \
 #     poetry install --no-root --no-interaction --no-ansi
 
-COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt uv.lock ./
+RUN uv venv /app/.venv && \
+    /app/.venv/bin/pip install --no-cache-dir -r requirements.txt
+ENV PATH="/app/.venv/bin:$PATH"
 
 # Copy Node.js package files and install dependencies
 COPY server/package*.json ./server/

@@ -363,16 +363,10 @@ cd financial-data-analysis
 # 2. Create Python virtual environment
 python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-pip install --upgrade pip setuptools wheel
+pip install --upgrade pip uv
 
-# 3.1 IF you already HAVE poetry installed globally: Ensure poetry uses this active venv rather than creating its own
-poetry config virtualenvs.create false --local
-# OR 
-# 3.2. IF you DO NOT have poetry installed: Install the Poetry CLI into this venv 
-pip install poetry
-
-# 4. Install project dependencies as defined in pyproject.toml
-poetry install
+# 3. Install project dependencies using uv for faster package management
+uv pip install -r requirements.txt
 
 # 5. Install Node.js dependencies
 cd server
@@ -693,15 +687,15 @@ Each test uses existing files under `data/` (e.g., `financial_data_template.csv`
 ```bash
 # Validate all YAML files are properly formatted
 echo "=== STEP 1: YAML Validation ==="
-poetry run python scripts/validate_yaml.py
+python scripts/validate_yaml.py
 ```
 
 ## **Step 2: Regenerate Schema Files**
 ```bash
 # Generate fresh schema from your new tables.yaml
 echo "=== STEP 2: Schema Generation ==="
-poetry run python scripts/generate_schema.py
-poetry run python scripts/generate_questions.py
+python scripts/generate_schema.py
+python scripts/generate_questions.py
 
 # Check what was generated
 echo "Generated schema preview:"

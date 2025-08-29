@@ -1,0 +1,5 @@
+company_id,company_name,period_label,period_type,start_date,end_date,statement_type,line_item,category,value_type,frequency,value,currency,source_file,source_page,source_type,notes
+1,Wilson Group,Jan 2025,Monthly,2025-01-01,2025-01-31,Income Statement,Revenue,Revenue,Actual,Monthly,1200000,USD,jan_2025.xlsx,Sheet1,Raw,
+1,Wilson Group,Jan 2025,Monthly,2025-01-01,2025-01-31,Income Statement,Revenue,Revenue,Budget,Monthly,1300000,USD,jan_2025.xlsx,Sheet1,Raw,
+1,Wilson Group,Jan 2025,Monthly,2025-01-01,2025-01-31,Income Statement,EBITDA,Profitability,Actual,Monthly,300000,USD,jan_2025.xlsx,Sheet1,Raw,Missing Feb data
+1,Wilson Group,Q1 2025,Quarterly,2025-01-01,2025-03-31,Income Statement,Revenue,Revenue,Actual,Quarterly,3600000,USD,q1_2025.xlsx,Sheet1,Raw,
