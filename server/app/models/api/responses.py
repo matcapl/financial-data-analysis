@@ -8,6 +8,13 @@ from typing import Optional, List, Dict, Any
 from pydantic import BaseModel
 
 
+class BaseResponse(BaseModel):
+    """Base response model for API responses"""
+    success: bool = True
+    message: Optional[str] = None
+    timestamp: str = datetime.utcnow().isoformat()
+
+
 class HealthResponse(BaseModel):
     """Health check response"""
     status: str

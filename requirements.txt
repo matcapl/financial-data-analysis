@@ -76,6 +76,8 @@ pillow==11.3.0
     #   fpdf2
     #   pdf2image
     #   pytesseract
+psutil==6.1.0
+    # via financial-data-analysis (monitoring)
 psycopg2-binary==2.9.10
     # via financial-data-analysis (pyproject.toml)
 pycparser==2.22

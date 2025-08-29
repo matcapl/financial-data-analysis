@@ -50,7 +50,7 @@ install:
 	@echo "Installing Python dependencies..."
 	@uv pip install -r requirements.txt
 	@echo "📦 Installing React client dependencies..."
-	cd client && npm install
+	cd client && npm install --legacy-peer-deps
 	@echo "✅ All dependencies installed"
 
 # Set up database

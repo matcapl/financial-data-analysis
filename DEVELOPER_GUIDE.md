@@ -154,29 +154,39 @@ make clean        # Clean up generated files
 curl http://localhost:4000/health
 
 # Test file upload
-curl -F "file=@data/sample_data.csv" http://localhost:4000/api/v1/upload
+curl -F "file=@data/sample_data.csv" -F "company_id=1" http://localhost:4000/api/upload
 
 # Test report generation
-curl -X POST http://localhost:4000/api/v1/generate-report \
+curl -X POST http://localhost:4000/api/generate-report \
      -H "Content-Type: application/json" \
      -d '{"company_id":1}'
 ```
 
-### Frontend Development Commands
+### TypeScript React Frontend Commands
 ```bash
 cd client
 
-# Development server
+# Development server with TypeScript compilation and hot reload
 npm start
 
-# Production build
+# TypeScript type checking (no build)
+npx tsc --noEmit
+
+# Production build with TypeScript + Tailwind CSS
 npm run build
 
-# Run tests
+# Run React tests with TypeScript support
 npm test
 
-# Install new React dependency
+# Install new dependency
 npm install package-name
+
+# Install TypeScript types for dependency
+npm install @types/package-name
+
+# Tailwind CSS development
+# Classes are compiled automatically during npm start
+# Custom styles in src/index.css using @layer directives
 ```
 
 ### Database Commands
@@ -257,10 +267,23 @@ financial-data-analysis/
 ├── scripts/               # Consolidated CI/CD scripts
 │   ├── ci_manager.py     # Main CI/CD operations
 │   └── manage.py         # Data management utilities
-├── client/                # React frontend
+├── client/                # Modern TypeScript React frontend
 │   ├── src/
-│   │   ├── App.jsx
-│   │   └── components/
+│   │   ├── App.tsx           # Main app component (TypeScript)
+│   │   ├── index.tsx         # React entry point
+│   │   ├── types/            # TypeScript type definitions
+│   │   │   └── index.ts      # Shared interfaces
+│   │   ├── contexts/         # React Context (TypeScript)
+│   │   │   └── AppContext.tsx
+│   │   └── components/       # TypeScript React components
+│   │       ├── FileUpload.tsx    # Drag & drop upload
+│   │       ├── ReportPreview.tsx # Report management
+│   │       ├── LoadingSpinner.tsx
+│   │       ├── StatusMessage.tsx
+│   │       └── ProgressIndicator.tsx
+│   ├── tsconfig.json     # TypeScript configuration
+│   ├── tailwind.config.js # Tailwind CSS config
+│   ├── postcss.config.js # PostCSS config
 │   └── package.json
 ├── database/              # Database migrations
 │   ├── migrate.py        # Migration management
@@ -275,6 +298,41 @@ financial-data-analysis/
 ├── .venv/                 # Python virtual environment
 ├── .env                   # Environment variables
 └── data/                  # Sample data files
+```
+
+## Modern TypeScript Frontend Guide
+
+### Technologies Used
+- **TypeScript**: Full type safety and enhanced developer experience
+- **React 18**: Modern React with hooks and concurrent features
+- **Tailwind CSS**: Utility-first CSS framework with custom design system
+- **PostCSS**: CSS processing for Tailwind optimizations
+- **Modern Build Tools**: Create React App with TypeScript support
+
+### Key Features
+- **Type-Safe Components**: All React components written in TypeScript
+- **Drag & Drop Upload**: Advanced file upload with visual feedback
+- **Responsive Design**: Mobile-first design with Tailwind CSS
+- **Real-time Progress**: Step-by-step visual progress indicators
+- **Error Handling**: User-friendly error states and messaging
+- **Modern UI**: Gradients, animations, and glassmorphism effects
+
+### Development Workflow
+```bash
+# Frontend development setup
+cd client
+
+# Install all dependencies (TypeScript, React, Tailwind)
+npm install
+
+# Development server with hot reload
+npm start  # Available at http://localhost:3000
+
+# Type checking without build
+npx tsc --noEmit
+
+# Production build
+npm run build
 ```
 
 ## Environment Variables

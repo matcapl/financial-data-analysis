@@ -1,0 +1,113 @@
+version: '3.8'
+
+services:
+  # PostgreSQL database service
+  postgres:
+    image: postgres:15-alpine
+    container_name: financial_postgres
+    environment:
+      POSTGRES_DB: financial_dev
+      POSTGRES_USER: financial_user
+      POSTGRES_PASSWORD: financial_pass
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/migrations:/docker-entrypoint-initdb.d
+    networks:
+      - financial_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U financial_user -d financial_dev"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # FastAPI backend service
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: financial_backend
+    environment:
+      - DATABASE_URL=postgresql://financial_user:financial_pass@postgres:5432/financial_dev
+      - ENVIRONMENT=development
+      - PORT=4000
+      - PYTHONPATH=/app/server:/app
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./uploads:/app/uploads
+      - ./reports:/app/reports
+      - ./logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - financial_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+
+  # React frontend development service (optional - for development only)
+  frontend-dev:
+    build:
+      context: ./client
+      dockerfile: Dockerfile.dev
+    container_name: financial_frontend_dev
+    environment:
+      - REACT_APP_API_URL=http://localhost:4000
+      - CHOKIDAR_USEPOLLING=true
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./client/src:/app/src
+      - ./client/public:/app/public
+      - ./client/package.json:/app/package.json
+      - ./client/package-lock.json:/app/package-lock.json
+      - ./client/tsconfig.json:/app/tsconfig.json
+      - ./client/tailwind.config.js:/app/tailwind.config.js
+      - ./client/postcss.config.js:/app/postcss.config.js
+      - /app/node_modules
+    depends_on:
+      - backend
+    networks:
+      - financial_network
+    command: npm start
+    profiles:
+      - dev
+
+  # Redis cache service (for future scaling)
+  redis:
+    image: redis:7-alpine
+    container_name: financial_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - financial_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    profiles:
+      - cache
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  financial_network:
+    driver: bridge

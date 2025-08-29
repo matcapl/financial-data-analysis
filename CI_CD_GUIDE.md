@@ -149,16 +149,17 @@ CMD ["bash", "scripts/deploy-start.sh"]
 **CI/CD Pipeline (`.github/workflows/ci.yml`):**
 
 #### Jobs:
-1. **Test** - Full test suite with PostgreSQL service using consolidated CI scripts
+1. **Backend Test** - FastAPI backend with PostgreSQL service using consolidated CI scripts
+2. **Frontend Build** - TypeScript + React build and type checking
 
 #### Features:
-- PostgreSQL 15 service for realistic testing
-- Python 3.11+ environment with FastAPI dependencies
+- **Backend**: PostgreSQL 15 service, Python 3.11+, FastAPI testing
+- **Frontend**: Node.js 18+, TypeScript compilation, Tailwind CSS build
 - Uses consolidated CI manager for all operations
 - Streamlined workflow using Make commands
 
 ```yaml
-# Workflow uses consolidated scripts
+# Backend workflow
 - name: Setup Database
   run: make setup
 
@@ -167,6 +168,21 @@ CMD ["bash", "scripts/deploy-start.sh"]
 
 - name: CI Health Check
   run: make ci-check
+
+# Frontend workflow  
+- name: Setup Node.js
+  uses: actions/setup-node@v3
+  with:
+    node-version: '18'
+
+- name: Install Frontend Dependencies
+  run: cd client && npm install
+
+- name: TypeScript Type Check
+  run: cd client && npx tsc --noEmit
+
+- name: Build Frontend
+  run: cd client && npm run build
 
 # PostgreSQL service
 services:
@@ -209,6 +225,8 @@ services:
 ## Usage Examples
 
 ### Local Development Workflow
+
+#### Backend Development
 ```bash
 # Full setup and validation
 make setup
@@ -222,6 +240,28 @@ make ci-check
 # Data management
 .venv/bin/python3 scripts/manage.py validate-yaml
 .venv/bin/python3 scripts/manage.py questions
+```
+
+#### Frontend Development
+```bash
+# TypeScript + React development
+cd client
+
+# Install dependencies
+npm install
+
+# TypeScript type checking
+npx tsc --noEmit
+
+# Development server with hot reload
+npm start
+
+# Production build
+npm run build
+
+# Integrated development (both servers)
+make client  # React dev server (port 3000)
+make server  # FastAPI server (port 4000)
 ```
 
 ### CI/CD Pipeline (GitHub Actions)
@@ -297,10 +337,19 @@ echo $DATABASE_URL
 ## Best Practices
 
 ### Development Workflow
+
+#### Backend Development
 1. **Use Make commands** for consistent operations (`make setup`, `make test`, `make ci-check`)
 2. **Test migrations locally** before committing (`make test-db`)
 3. **Run full CI validation** before pushing (`make ci-check`)
 4. **Validate configurations** regularly (`make validate-yaml`)
+
+#### Frontend Development
+1. **TypeScript-first approach** - ensure type safety with `npx tsc --noEmit`
+2. **Component-driven development** - build reusable TypeScript components
+3. **Responsive design** - test across different screen sizes
+4. **Build validation** - always test `npm run build` before deploying
+5. **API integration testing** - verify all API calls work with backend
 
 ### CI Script Usage
 1. **Use consolidated scripts** instead of individual bash scripts
@@ -315,10 +364,39 @@ echo $DATABASE_URL
 4. **Maintain rollback capabilities** through migration system
 
 ### Testing
+
+#### Backend Testing
 1. **Run unit tests regularly** (`make test-unit`)
 2. **Use integration testing** for pipeline validation
 3. **Test database operations** independently (`make test-db`)
 4. **Validate API endpoints** with health checks (`make health`)
+
+#### Frontend Testing
+1. **TypeScript compilation** - `npx tsc --noEmit` for type safety
+2. **Build testing** - `npm run build` for production readiness
+3. **Component testing** - React Testing Library for UI components
+4. **API integration testing** - Test all API calls against running backend
+5. **Cross-browser testing** - Test drag & drop functionality across browsers
+
+## Frontend-Specific CI/CD Considerations
+
+### TypeScript Build Pipeline
+- **Type Safety**: All components are TypeScript with strict type checking
+- **Build Optimization**: Webpack bundling with code splitting
+- **Asset Optimization**: Tailwind CSS purging for minimal bundle size
+- **Error Handling**: TypeScript compilation errors fail the build
+
+### Modern UI Architecture
+- **Component Library**: Reusable TypeScript components with Tailwind CSS
+- **State Management**: Type-safe React Context with TypeScript interfaces
+- **API Layer**: Strongly typed API calls with error handling
+- **Responsive Design**: Mobile-first Tailwind CSS approach
+
+### Deployment Considerations
+- **Build Assets**: Static files generated in `client/build/`
+- **Environment Variables**: `REACT_APP_API_URL` for API endpoint configuration
+- **CDN Optimization**: Serve static assets from CDN for production
+- **Browser Compatibility**: Modern browsers with ES6+ support
 
 ---
 

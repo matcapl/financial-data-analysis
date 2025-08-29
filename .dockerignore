@@ -1,0 +1,118 @@
+# Version control
+.git
+.gitignore
+
+# Dependencies
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs and temporary files
+logs/
+*.log
+*.tmp
+.tmp/
+temp/
+
+# Environment files (will be set via environment variables)
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Testing
+.coverage
+.pytest_cache/
+.tox/
+coverage.xml
+*.cover
+.hypothesis/
+
+# Documentation and images
+*.md
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+
+# Development and CI files
+Makefile
+pytest.ini
+tox.ini
+.travis.yml
+.github/
+ci/
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+uploads/
+reports/
+data/*.csv
+data/*.xlsx
+!data/sample_data.csv
+
+# Frontend build artifacts (will be copied from build stage)
+client/build/
+client/node_modules/
+client/.env*
+client/coverage/
+
+# Scripts not needed in container
+scripts/generate_*
+scripts/validate_*
+scripts/manage_*
+scripts/health-check.sh
+
+# Test files
+tests/
+**/test_*
+**/*_test.py
+
+# Backup files
+*.bak
+*.backup
+
+# Railway and deployment configs (handled via environment)
+railway.json
+vercel.json
