@@ -78,12 +78,23 @@ const FileUpload: React.FC = () => {
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>): void => {
     e.preventDefault();
+    e.stopPropagation();
     setDragOver(true);
   };
 
   const handleDragLeave = (e: React.DragEvent<HTMLDivElement>): void => {
     e.preventDefault();
-    setDragOver(false);
+    e.stopPropagation();
+    // Only set dragOver to false if we're leaving the drop zone itself
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      setDragOver(false);
+    }
+  };
+
+  const handleDragEnter = (e: React.DragEvent<HTMLDivElement>): void => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(true);
   };
 
   const handleCompanyIdChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
@@ -183,13 +194,16 @@ const FileUpload: React.FC = () => {
               </label>
               
               <div
-                className={`relative border-2 border-dashed rounded-xl p-8 transition-all duration-300 ${
+                className={`relative border-2 border-dashed rounded-2xl p-12 transition-all duration-300 ${
                   dragOver 
-                    ? 'border-blue-400 bg-blue-50' 
-                    : 'border-gray-300 bg-gray-50 hover:bg-gray-100'
-                } ${loading.upload ? 'pointer-events-none opacity-50' : ''}`}
+                    ? 'border-blue-500 bg-blue-100 scale-105 shadow-lg' 
+                    : selectedFile 
+                      ? 'border-emerald-300 bg-emerald-50' 
+                      : 'border-gray-300 bg-gray-50 hover:border-blue-300 hover:bg-blue-25'
+                } ${loading.upload ? 'pointer-events-none opacity-50' : 'cursor-pointer'}`}
                 onDrop={handleDrop}
                 onDragOver={handleDragOver}
+                onDragEnter={handleDragEnter}
                 onDragLeave={handleDragLeave}
               >
                 <input
@@ -202,16 +216,82 @@ const FileUpload: React.FC = () => {
                 />
                 
                 <div className="text-center">
-                  <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" stroke="currentColor" fill="none" viewBox="0 0 48 48">
-                    <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
+                  {/* Dynamic Icon based on state */}
+                  {dragOver ? (
+                    <div className="mx-auto h-16 w-16 bg-blue-100 rounded-2xl flex items-center justify-center mb-6 animate-bounce-subtle">
+                      <svg className="h-8 w-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                      </svg>
+                    </div>
+                  ) : selectedFile ? (
+                    <div className="mx-auto h-16 w-16 bg-emerald-100 rounded-2xl flex items-center justify-center mb-6">
+                      <svg className="h-8 w-8 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                  ) : (
+                    <div className="mx-auto h-16 w-16 bg-gray-100 rounded-2xl flex items-center justify-center mb-6 group-hover:bg-blue-100 transition-colors">
+                      <svg className="h-8 w-8 text-gray-400 group-hover:text-blue-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                      </svg>
+                    </div>
+                  )}
                   
-                  <div className="text-sm text-gray-600">
-                    <span className="font-semibold text-blue-600">Click to upload</span> or drag and drop
+                  {/* Dynamic Text based on state */}
+                  {dragOver ? (
+                    <div>
+                      <div className="text-lg font-semibold text-blue-700 mb-2">
+                        🎯 Drop your file here!
+                      </div>
+                      <p className="text-sm text-blue-600">
+                        Release to upload your financial data file
+                      </p>
+                    </div>
+                  ) : selectedFile ? (
+                    <div>
+                      <div className="text-lg font-semibold text-emerald-700 mb-2">
+                        ✅ File Ready to Upload
+                      </div>
+                      <p className="text-sm text-emerald-600">
+                        Click "Upload and Process" below to continue
+                      </p>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="text-lg font-semibold text-gray-700 mb-2">
+                        📁 Upload Your Financial Data
+                      </div>
+                      <div className="text-sm text-gray-600 mb-4">
+                        <span className="font-semibold text-blue-600 hover:text-blue-700">Click to browse files</span>
+                        <span className="text-gray-400 mx-2">•</span>
+                        <span className="font-medium">Drag & drop files here</span>
+                      </div>
+                      <div className="inline-flex items-center space-x-6 text-xs text-gray-500">
+                        <div className="flex items-center">
+                          <div className="w-8 h-6 bg-green-500 rounded-sm mr-2 flex items-center justify-center">
+                            <span className="text-white text-xs font-bold">XLS</span>
+                          </div>
+                          Excel
+                        </div>
+                        <div className="flex items-center">
+                          <div className="w-8 h-6 bg-red-500 rounded-sm mr-2 flex items-center justify-center">
+                            <span className="text-white text-xs font-bold">PDF</span>
+                          </div>
+                          PDF
+                        </div>
+                        <div className="flex items-center">
+                          <div className="w-8 h-6 bg-blue-500 rounded-sm mr-2 flex items-center justify-center">
+                            <span className="text-white text-xs font-bold">CSV</span>
+                          </div>
+                          CSV
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="mt-4 text-xs text-gray-500">
+                    Maximum file size: 10MB
                   </div>
-                  <p className="text-xs text-gray-500 mt-2">
-                    Excel (.xlsx), PDF (.pdf), or CSV (.csv) files up to 10MB
-                  </p>
                 </div>
               </div>
               

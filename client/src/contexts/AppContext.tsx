@@ -224,7 +224,7 @@ export function AppProvider({ children }: AppProviderProps) {
       dispatch({ type: ACTIONS.SET_UPLOAD_PROGRESS, payload: { step: 'upload', completed: true } });
       dispatch({ type: ACTIONS.SET_SUCCESS, payload: 'Uploading file and starting processing pipeline...' });
 
-      const response = await fetch(`${API_URL}/api/v1/upload`, {
+      const response = await fetch(`${API_URL}/api/upload`, {
         method: 'POST',
         body: formData,
       });
@@ -275,7 +275,7 @@ export function AppProvider({ children }: AppProviderProps) {
     try {
       dispatch({ type: ACTIONS.SET_SUCCESS, payload: 'Generating report... This may take a few moments.' });
 
-      const response = await fetch(`${API_URL}/api/v1/generate-report`, {
+      const response = await fetch(`${API_URL}/api/generate-report`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

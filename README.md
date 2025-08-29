@@ -519,15 +519,22 @@ curl -X POST http://localhost:4000/api/generate-report \
      -d '{"company_id":1}'
 ```
 
-docker logs --tail 50 finance-server_ci
-docker logs --tail 250 finance-server_ci
+## Modern Frontend Features
 
-if docker is complaining finance-server_ci is still running, must remove or rename the existing one first:
+### TypeScript + Tailwind CSS
+- **Type Safety**: Full TypeScript coverage with strict type checking
+- **Modern Design System**: Custom Tailwind configuration with gradients and animations  
+- **Responsive UI**: Mobile-first design with responsive layouts
+- **Interactive Elements**: Drag & drop file upload, smooth animations, hover effects
+- **Accessibility**: ARIA labels, keyboard navigation, semantic HTML
 
-docker rm -f finance-server_ci
+### Enhanced User Experience
+- **Smart File Upload**: Visual drag-and-drop zone with file type indicators
+- **Progress Tracking**: Step-by-step visual progress indicator for data processing
+- **Status Management**: Contextual success/error messages with detailed feedback
+- **Report Management**: Modern card-based layout for generated reports
 
-
-## Step 5: Deploy to Railway (Production Backend)
+## Deployment
 
 1. **Sign up for Railway**: Go to https://railway.app and create account
 2. **Install Railway CLI**: `npm install -g @railway/cli`
