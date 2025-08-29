@@ -11,8 +11,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 try:
-    from server.scripts.utils import get_db_connection
-    from server.scripts.logging_config import setup_logger, log_with_context
+    from server.app.services.utils import get_db_connection
+    from server.app.services.logging_config import setup_logger, log_with_context
 except ImportError:
     print("Error: Could not import database utilities.")
     sys.exit(1)

@@ -1,0 +1,1 @@
+"""Test package for financial data analysis system"""

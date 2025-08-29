@@ -1,8 +1,11 @@
 # server/scripts/extraction.py
 import pandas as pd
 import openpyxl
+import sys
 from pathlib import Path
 from typing import List, Dict, Any
+
+# Path insert not needed, utils is in same directory
 from utils import log_event
 
 def extract_data(file_path: str) -> List[Dict[str, Any]]:

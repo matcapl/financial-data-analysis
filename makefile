@@ -1,16 +1,35 @@
 # Financial Data Analysis - FastAPI Backend Setup
-.PHONY: help setup install server client test-db test-api clean kill-ports
+.PHONY: help setup install server client test-db test-api clean kill-ports ci-check deploy health validate aliases questions generate-periods validate-yaml
 
 # Default target
 help:
 	@echo "Financial Data Analysis - FastAPI Setup Commands"
 	@echo "=============================================="
+	@echo "Development Commands:"
 	@echo "make setup        - Complete setup for new developers"
 	@echo "make install      - Install Python dependencies"
 	@echo "make server       - Start FastAPI server on port 4000"
 	@echo "make client       - Start React client on port 3000"
+	@echo ""
+	@echo "Testing Commands:"
+	@echo "make test         - Run all tests"
+	@echo "make test-unit    - Run unit tests only"
 	@echo "make test-db      - Test database connection"
 	@echo "make test-api     - Test API endpoints"
+	@echo ""
+	@echo "CI/CD Commands:"
+	@echo "make ci-check     - Run full CI health check"
+	@echo "make deploy       - Production deployment"
+	@echo "make health       - Check application health"
+	@echo "make validate     - Validate configuration"
+	@echo ""
+	@echo "Data Management Commands:"
+	@echo "make aliases      - Manage period aliases (requires ARGS=...)"
+	@echo "make questions    - Generate analytical questions"
+	@echo "make validate-yaml - Validate YAML configuration files"
+	@echo "make generate-periods - Generate periods.yaml"
+	@echo ""
+	@echo "Utility Commands:"
 	@echo "make kill-ports   - Kill processes on ports 3000 and 4000"
 	@echo "make clean        - Clean up generated files"
 	@echo ""
@@ -22,39 +41,31 @@ help:
 
 # Kill any processes running on our ports
 kill-ports:
-	@echo "🔪 Killing processes on ports 3000 and 4000..."
-	-lsof -ti:3000 | xargs kill -9 2>/dev/null || true
-	-lsof -ti:4000 | xargs kill -9 2>/dev/null || true
-	@echo "✅ Ports cleared"
+	@.venv/bin/python3 scripts/ci_manager.py kill-ports
 
 # Install Python dependencies
 install:
 	@echo "📦 Installing Python dependencies..."
 	@if [ ! -d ".venv" ]; then echo "Creating virtual environment..." && uv venv; fi
-	@echo "Activating virtual environment and installing dependencies..."
-	@bash -c "source .venv/bin/activate && uv pip install -r requirements.txt"
+	@echo "Installing Python dependencies..."
+	@uv pip install -r requirements.txt
 	@echo "📦 Installing React client dependencies..."
 	cd client && npm install
 	@echo "✅ All dependencies installed"
 
 # Set up database
 db-setup:
-	@echo "🗄️ Setting up database..."
-	@bash -c "source .venv/bin/activate && python database/migrate.py up"
-	@bash -c "source .venv/bin/activate && python database/seed.py"
-	@echo "✅ Database setup completed"
+	@.venv/bin/python3 scripts/ci_manager.py db setup
 
 # Test database connection
 test-db:
-	@echo "🧪 Testing database connection..."
-	@bash -c "source .venv/bin/activate && python -c \"from server.app.services.utils import get_db_connection; conn = get_db_connection(); print('✅ Database connection successful'); conn.close()\""
-	@bash -c "source .venv/bin/activate && python database/migrate.py status"
+	@.venv/bin/python3 scripts/ci_manager.py db check
 
 # Start FastAPI server
 server: kill-ports
 	@echo "🚀 Starting FastAPI server on port 4000..."
 	@if lsof -ti:4000 > /dev/null 2>&1; then echo "❌ Port 4000 is still in use. Run 'make kill-ports' first."; exit 1; fi
-	@bash -c "source .venv/bin/activate && python server/main.py"
+	@.venv/bin/python3 server/main.py
 
 # Start React client
 client:
@@ -64,23 +75,45 @@ client:
 
 # Test API endpoints
 test-api:
-	@echo "🧪 Testing API endpoints..."
-	@echo "Testing health endpoint..."
-	@curl -s http://localhost:4000/health | jq . || echo "❌ API server not responding on port 4000"
-	@echo "Testing upload endpoint..."
-	@curl -s -F "file=@data/sample_data.csv" http://localhost:4000/api/upload | jq .message || echo "❌ Upload endpoint failed"
-	@echo "✅ API tests completed"
+	@.venv/bin/python3 scripts/ci_manager.py health
+
+# Run all tests
+test:
+	@.venv/bin/python3 scripts/ci_manager.py test
+
+# Run unit tests only
+test-unit:
+	@.venv/bin/python3 scripts/ci_manager.py test --type unit
 
 # Clean up generated files
 clean:
-	@echo "🧹 Cleaning up..."
-	rm -rf logs/
-	rm -rf __pycache__/
-	rm -rf server/__pycache__/
-	rm -rf server/app/__pycache__/
-	rm -rf server/app/services/__pycache__/
-	find . -name "*.pyc" -delete
-	@echo "✅ Cleanup completed"
+	@.venv/bin/python3 scripts/ci_manager.py clean
+
+# CI/CD Commands using consolidated script
+ci-check:
+	@.venv/bin/python3 scripts/ci_manager.py check-all
+
+deploy:
+	@.venv/bin/python3 scripts/ci_manager.py deploy
+
+health:
+	@.venv/bin/python3 scripts/ci_manager.py health
+
+validate:
+	@.venv/bin/python3 scripts/ci_manager.py validate
+
+# Data Management Commands
+aliases:
+	@.venv/bin/python3 scripts/manage.py aliases $(ARGS)
+
+questions:
+	@.venv/bin/python3 scripts/manage.py questions
+
+validate-yaml:
+	@.venv/bin/python3 scripts/manage.py validate-yaml
+
+generate-periods:
+	@.venv/bin/python3 scripts/manage.py generate-periods
 
 # Complete setup for new developers
 setup: install db-setup test-db
