@@ -1,15 +1,10 @@
 -- Migration: Seed initial data
 -- Version: 002  
--- Description: Insert initial seed data for companies, periods, and line item definitions
+-- Description: Insert minimal essential data for system operation
 -- Author: System Migration
 -- Date: 2025-01-28
 
--- Insert example company
-INSERT INTO companies (name, industry)
-VALUES ('Example Company', 'Example Industry')
-ON CONFLICT (name) DO NOTHING;
-
--- Generate time periods (last 20 years)
+-- Generate time periods (last 20 years) - Essential for system operation
 WITH
   today AS (
     SELECT date_trunc('month', now())::date AS current_month
@@ -65,29 +60,21 @@ SELECT period_label, period_type, start_date, end_date, now(), now()
 FROM all_periods
 ON CONFLICT (period_label, period_type) DO NOTHING;
 
--- Insert standard financial line item definitions
+-- Insert only essential line item definitions required for basic system operation
 INSERT INTO line_item_definitions (name, aliases, description) VALUES
   ('Revenue', '{sales,income,turnover,total_revenue,rev}'::TEXT[], 'Total revenue from operations'),
   ('Gross Profit', '{gross_profit,grossincome,"gross income"}'::TEXT[], 'Revenue minus cost of goods sold'),
-  ('EBITDA', '{earnings_before_interest,earnings_before_taxes,earnings_before_interest_taxes,operating_profit}'::TEXT[], 'Earnings before interest, taxes, depreciation, amortization'),
-  ('Net Income', '{net_profit,"net profit",earnings,"bottom line"}'::TEXT[], 'Final profit after all expenses'),
-  ('Total Assets', '{assets,"total assets",balance_sheet_assets}'::TEXT[], 'Sum of all company assets'),
-  ('Total Liabilities', '{liabilities,"total liabilities",debt}'::TEXT[], 'Sum of all company liabilities'),
-  ('Shareholders Equity', '{equity,"shareholders equity","stockholders equity",owners_equity}'::TEXT[], 'Owner/shareholder equity in the company')
+  ('EBITDA', '{earnings_before_interest,earnings_before_taxes,earnings_before_interest_taxes,operating_profit}'::TEXT[], 'Earnings before interest, taxes, depreciation, amortization')
 ON CONFLICT (name) DO NOTHING;
 
 -- ROLLBACK SQL (automatically extracted by migration system)
 /*ROLLBACK_START
--- Delete seeded data (in reverse order)
+-- Delete essential seeded data (in reverse order)
 DELETE FROM line_item_definitions WHERE name IN (
-  'Revenue', 'Gross Profit', 'EBITDA', 'Net Income', 
-  'Total Assets', 'Total Liabilities', 'Shareholders Equity'
+  'Revenue', 'Gross Profit', 'EBITDA'
 );
 
 -- Delete generated periods (careful: this will remove ALL generated periods)
 -- Note: This is a destructive rollback - only run if you're sure
 DELETE FROM periods WHERE period_type IN ('Monthly', 'Quarterly', 'Yearly');
-
--- Delete example company
-DELETE FROM companies WHERE name = 'Example Company';
 ROLLBACK_END*/

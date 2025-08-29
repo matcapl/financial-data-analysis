@@ -4,7 +4,6 @@ A concise guide for developers to quickly get the financial data analysis system
 
 ## Prerequisites
 
-- **Node.js** (v16+)
 - **Python** (v3.8+)
 - **PostgreSQL** database
 - **uv** - Python package manager ([install from uv.sh](https://docs.astral.sh/uv/))
@@ -29,7 +28,7 @@ source .venv/bin/activate     # macOS/Linux
 .venv\Scripts\activate        # Windows
 
 # Install Python dependencies
-uv add pandas psycopg2-binary openpyxl fpdf2 pyyaml pathlib
+uv pip install -r requirements.txt
 ```
 
 ### 3. Database Setup
@@ -37,28 +36,32 @@ uv add pandas psycopg2-binary openpyxl fpdf2 pyyaml pathlib
 ```bash
 # Create .env file with your database credentials
 echo "DATABASE_URL=postgresql://username:password@localhost:5432/your_database" > .env
-echo "NODE_ENV=development" >> .env
+echo "ENVIRONMENT=development" >> .env
 echo "PORT=4000" >> .env
 
-# Apply database schema using the new migration system
+# Apply database migrations (includes essential seed data)
 source .venv/bin/activate
 python database/migrate.py up
 
-# Check migration status
+# Add comprehensive development data (optional but recommended)
+python database/seed.py
+
+# Check migration and seeding status
 python database/migrate.py status
+psql "$DATABASE_URL" -c "SELECT COUNT(*) as line_items FROM line_item_definitions;"
 ```
 
-### 4. Start Backend Server
+### 4. Start FastAPI Backend Server
 
 ```bash
-# Navigate to server directory
-cd server
+# Activate virtual environment (if not already active)
+source .venv/bin/activate
 
-# Install Node.js dependencies
-npm install
+# Start FastAPI development server with auto-reload
+python server/main.py
 
-# Start development server with hot reload
-npm run dev
+# OR use uvicorn directly from project root
+uvicorn server.main:app --host 0.0.0.0 --port 4000 --reload
 ```
 
 **Backend will be available at:** `http://localhost:4000`
@@ -93,37 +96,33 @@ source .venv/bin/activate
 deactivate
 
 # Install new Python package
-uv add package_name
-
-# Remove Python package
-uv remove package_name
+uv pip install package_name
 
 # Show installed packages
 uv pip list
 
-# Update all packages
+# Update requirements.txt after adding dependencies to pyproject.toml
+uv pip compile pyproject.toml -o requirements.txt
+
+# Sync environment with requirements.txt
 uv pip sync requirements.txt
 ```
 
-### Backend Development Commands
+### FastAPI Backend Development Commands
 
 ```bash
-cd server
-
 # Development server (auto-restart on changes)
-npm run dev
+source .venv/bin/activate
+uvicorn main:app --host 0.0.0.0 --port 4000 --reload
 
 # Production mode
-npm run start
+uvicorn main:app --host 0.0.0.0 --port 4000
 
-# Install new Node.js dependency
-npm install package-name
-
-# Run specific Python scripts (with venv active)
-source ../.venv/bin/activate
-python scripts/calc_metrics.py 1
-python scripts/questions_engine.py 1
-python scripts/report_generator.py 1 /path/to/output.pdf
+# Run specific Python scripts directly (with venv active)
+source .venv/bin/activate
+python server/app/services/calc_metrics.py 1
+python server/app/services/questions_engine.py 1
+python server/app/services/report_generator.py 1 /path/to/output.pdf
 
 # Check server health
 curl http://localhost:4000/health
@@ -227,24 +226,28 @@ psql "$DATABASE_URL" -c "SELECT name FROM line_item_definitions;"
 
 ```
 financial-data-analysis/
-├── server/                 # Node.js backend
-│   ├── api/
-│   │   ├── index.js       # Main server
-│   │   ├── upload-improved.js
-│   │   └── generate-report.js
-│   ├── scripts/           # Python processing
-│   │   ├── pipeline_processor.py
-│   │   ├── calc_metrics.py
-│   │   └── report_generator.py
-│   └── package.json
-├── client/                 # React frontend
+├── server/                # FastAPI backend server
+│   ├── main.py           # FastAPI application entry point
+│   └── app/              # Application package
+│       └── services/     # Business logic modules
+│           ├── pipeline_processor.py
+│           ├── calc_metrics.py
+│           ├── report_generator.py
+│           └── utils.py
+├── scripts/               # General utility scripts
+├── client/                # React frontend
 │   ├── src/
 │   │   ├── App.jsx
 │   │   └── components/
 │   └── package.json
-├── .venv/                  # Python virtual environment
-├── .env                    # Environment variables
-└── data/                   # Sample data files
+├── database/              # Database migrations
+│   ├── migrate.py
+│   ├── migrations/
+│   └── seed.py
+├── config/                # YAML configurations
+├── .venv/                 # Python virtual environment
+├── .env                   # Environment variables
+└── data/                  # Sample data files
 ```
 
 ## Environment Variables
@@ -312,16 +315,19 @@ lsof -ti:4000 | xargs kill -9  # Backend
 # Test database connection
 psql "$DATABASE_URL" -c "SELECT 1;"
 
-# Recreate schema
+# Apply/reapply migrations
 source .venv/bin/activate
-python scripts/generate_schema.py
+python database/migrate.py up
+
+# Add comprehensive seed data for development
+python database/seed.py
 ```
 
 **Python Module Not Found**
 ```bash
 # Ensure virtual environment is active and dependencies installed
 source .venv/bin/activate
-uv add pandas psycopg2-binary
+uv pip install -r requirements.txt
 ```
 
 ### Development Tips
@@ -343,8 +349,9 @@ For production deployment, see the main README.md file which covers:
 
 **Quick Start Summary:**
 1. `uv venv && source .venv/bin/activate`
-2. `uv add pandas psycopg2-binary openpyxl fpdf2 pyyaml pathlib`
+2. `uv pip install -r requirements.txt`
 3. Set up `.env` with `DATABASE_URL`
-4. `cd server && npm install && npm run dev`
-5. `cd client && npm install && npm start`
-6. Open `http://localhost:3000`
+4. `python database/migrate.py up && python database/seed.py`
+5. `python server/main.py` (FastAPI backend)
+6. `cd client && npm install && npm start` (React frontend)
+7. Open `http://localhost:3000`

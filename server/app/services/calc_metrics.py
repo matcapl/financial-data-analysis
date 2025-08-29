@@ -21,7 +21,7 @@ from decimal import Decimal
 from pathlib import Path
 
 # FIXED: Use absolute path resolution from project root
-project_root = Path(__file__).resolve().parent.parent.parent
+project_root = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(project_root / 'server' / 'scripts'))
 
 from utils import get_db_connection, log_event

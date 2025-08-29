@@ -20,9 +20,7 @@ from jinja2 import Template
 from pathlib import Path
 
 # FIXED: Use absolute path resolution from project root
-project_root = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(project_root / 'server' / 'scripts'))
-
+project_root = Path(__file__).resolve().parent.parent.parent.parent
 from utils import get_db_connection, log_event
 
 

@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from utils import log_event, get_db_connection
 
 # Load periods.yaml
-BASE = Path(__file__).resolve().parent.parent.parent
+BASE = Path(__file__).resolve().parent.parent.parent.parent
 PERIODS_CFG = yaml.safe_load((BASE / "config" / "periods.yaml").read_text())
 
 # Validate alias uniqueness

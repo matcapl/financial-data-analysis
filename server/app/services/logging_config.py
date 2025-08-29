@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 
 # Create logs directory if it doesn't exist
-logs_dir = Path(__file__).parent.parent / 'logs'
+logs_dir = Path(__file__).parent.parent.parent.parent / 'logs'
 logs_dir.mkdir(exist_ok=True)
 
 class StructuredFormatter(logging.Formatter):

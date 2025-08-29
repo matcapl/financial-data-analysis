@@ -1,6 +1,6 @@
 # Financial Data Analysis System
 
-This repository hosts a system for analyzing financial data from Excel and PDF files. It calculates key metrics like Revenue, Gross Profit, and EBITDA, generates insightful questions, and produces PDF reports. Deployable on Vercel, it features a React front-end for user interaction and a Node.js back-end for processing, with Python scripts handling data ingestion and report generation.
+This repository hosts a system for analyzing financial data from Excel and PDF files. It calculates key metrics like Revenue, Gross Profit, and EBITDA, generates insightful questions, and produces PDF reports. Deployable on Railway and Vercel, it features a React front-end for user interaction and a unified FastAPI back-end with direct Python integration for processing, eliminating the previous Node.js + Python complexity.
 
 ## Methodology
 
@@ -11,19 +11,19 @@ The system operates through these key steps:
 3. **Question Generation**: The `questions_engine.py` script creates questions from the metrics to drive deeper analysis.
 4. **Report Generation**: The `report_generator.py` script compiles metrics and questions into PDF reports, stored and served via Vercel Blob.
 
-Data is managed in a PostgreSQL database with tables for companies, periods, financial metrics, derived metrics, questions, and reports, as defined in `001_financial_schema.sql` and `002_question_templates.sql`.
+Data is managed in a PostgreSQL database with tables for companies, periods, financial metrics, derived metrics, questions, and reports, as defined in database migrations and comprehensive seeding scripts.
 
 <!-- Running make db after cloning guarantees that every new developer has the schema and role in place before touching the UI. -->
 
 This project is split into three specialized hosting environments to leverage each platform’s strengths. The React front-end is deployed on Vercel, which excels at serving static assets and delivering global CDN performance. Vercel builds the React app from the client/ folder, and rewrites all incoming routes to the compiled client/build directory. Environment variables (e.g. REACT_APP_API_URL) point the front-end to the back-end API without embedding secrets in source code.
-The Express/Node API with embedded Python data-processing scripts is hosted on Railway, which supports long-running processes, containerized builds, custom ports, and direct PostgreSQL connections. Railway runs the server/api/index.js entrypoint and routes all /health, /api/*, and static assets through this single service. By running on Railway, your Python ingestion/calculation scripts execute reliably in a full Node + Python environment, unencumbered by Vercel’s serverless timeouts and stateless file system.
+The FastAPI backend with integrated Python data-processing is hosted on Railway, which supports long-running processes, containerized builds, custom ports, and direct PostgreSQL connections. Railway runs the server/main.py FastAPI application and routes all /health, /api/*, and static assets through this unified service. The FastAPI architecture eliminates the Node.js + Python complexity, providing direct Python execution without subprocess overhead or inter-process communication issues.
 The PostgreSQL database is managed by Neon.tech, a serverless Postgres service with a generous free tier. Neon provides secure, channel-bound SSL connections and scales automatically. Schemas for financial metrics and question templates are applied directly to Neon via schema/ SQL files, ensuring your data persists independently of application hosts.
 Points of Failure & Lessons Learned
 Serverless Limitations – Vercel’s functions are ill-suited for Python-backed pipelines; child-processes and file I/O frequently exceed timeouts and lose local state.
 Routing Configuration – Custom vercel.json builds and rewrites can override dashboard settings, leading to 404 or authentication walls if entrypoints aren’t precisely defined.
-Environment Management – Mixing multiple CLI-generated .vercel/ metadata folders caused confusion; isolating the front-end on Vercel and back-end on Railway clarified which platform handles each component.
-Database Connectivity – Local Postgres worked in development, but deploying required a hosted database. Neon.tech’s serverless Postgres offered a drop-in replacement, but environment variables must be quoted correctly and scoped to each hosting platform.
-By aligning each part of the stack with the platform that best supports its runtime needs—static React on Vercel, dynamic Python/Node API on Railway, and serverless Postgres on Neon—this architecture maximizes reliability, performance, and developer productivity.
+Environment Management – The unified FastAPI backend simplifies deployment by eliminating Node.js/Python coordination complexity.
+Database Connectivity – Direct Python database connections provide better performance and simpler error handling compared to the previous subprocess approach.
+By consolidating to FastAPI with direct Python integration, this architecture eliminates inter-process communication overhead while maintaining scalability on Railway and leveraging Neon's serverless PostgreSQL capabilities.
 
 ## Technologies
 
@@ -32,12 +32,12 @@ By aligning each part of the stack with the platform that best supports its runt
   - Environment variables (like `REACT_APP_API_URL`) point at backend API.
 
 - **Back-End**
-  - NodeJS/Express server handles HTTP API, file upload, task orchestration (`server/server.js`).
-  - Invokes Python scripts for heavy-lifting (ingestion, metrics, analytics) (`server/scripts/` directory).
+  - FastAPI server handles HTTP API, file upload, and direct Python processing (`main.py`).
+  - Integrated Python scripts for data ingestion, metrics, and analytics (`scripts/` directory).
 
-- **Middle/Glue**
-  - Python scripts run in child-process or direct mode.
-  - PostgreSQL DB for persistent analytics/state.
+- **Database Integration**
+  - Direct Python database connections for optimal performance.
+  - PostgreSQL DB for persistent analytics and state management.
 
 - **Data Tools**
   - Schema generator scripts (`config/` + `scripts/` -> `schema/` directory).
@@ -47,7 +47,7 @@ By aligning each part of the stack with the platform that best supports its runt
 - **Docker** (Dev/test infra)
 - **YAML-based config** (for schema, mappings)
 - **Shell (bash) scripts** for CI
-- **Deployment**: Vercel for hosting and scalability.
+- **Deployment**: Railway for FastAPI backend, Vercel for React frontend.
 
 --
 Below is a consolidated overview of the entire data-processing and CI pipeline, including all YAML-driven configuration, three-layer ingestion, downstream analytics, and report generation. On the left is the processing flow of the main programs; on the right are the CI scripts that validate and rebuild each stage to ensure nothing breaks.
@@ -163,12 +163,12 @@ Below is a detailed description of the interlinked components and their roles. U
      – `/api/generate-report` to trigger report  
    -  Displays reports and visualizes data.
 
-2. Middle/Glue (Express/Node API + Python orchestration)
-   -  `server/server.js`  
+2. Unified FastAPI Backend (Direct Python Integration)
+   -  `server/main.py` (FastAPI application)
      – Defines HTTP routes (`/health`, `/api/upload`, `/api/generate-report`)  
-     – On file upload: spawns Python ingestion (`ingest_xlsx.py` or `ingest_pdf.py`).  
-     – On report request: calls Python report generator (`report_generator.py`).  
-   -  Python scripts (under `server/scripts/`):  
+     – Direct Python function calls (no subprocess overhead)
+     – Integrated file upload handling and pipeline processing
+   -  Python processing modules (under `server/app/services/`):
      – extraction.py: raw data extraction  
      – field_mapper.py: map raw to canonical fields using `fields.yaml` & `taxonomy.yaml`  
      – normalization.py: normalize periods/values via `periods.yaml`  
@@ -240,14 +240,17 @@ This section briefly describes each key file/module in the financial-data-analys
 
 ***
 
-## Schema (`schema/`)
-1. **001_financial_schema.sql**  
-   -  DDL to create core tables: `companies`, `periods`, `line_item_definitions`, `financial_metrics`, `derived_metrics`, etc.  
-   -  **Applied by:** `ci/02_create_tables.sh`.
+## Database (`database/`)
+1. **Migrations** (`database/migrations/`)
+   - `001_create_core_tables.sql`: Core table definitions with indexes and constraints
+   - `002_seed_initial_data.sql`: Essential seed data (periods + 3 core line items)
+   - **Applied by:** `database/migrate.py up`
 
-2. **002_question_templates.sql**  
-   -  DDL and seed data for question‐template tables.  
-   -  **Applied by:** `ci/02_create_tables.sh`.
+2. **Comprehensive Seeding** (`database/seed.py`)
+   - 28 financial line item definitions (P&L, Balance Sheet, Cash Flow)
+   - 12 question templates across 6 analysis categories
+   - 5 demo companies and user preferences
+   - **Applied by:** `python database/seed.py` or `ci/04_seed_database.sh`
 
 ***
 
@@ -262,13 +265,11 @@ This section briefly describes each key file/module in the financial-data-analys
    -  Reads YAML configs to produce or update `schema/*.sql`.  
    -  **Precedes:** dropping and recreating DB tables.
 
-3. **01_drop_tables.sh**  
-   -  Drops all public tables in the target database.  
-   -  **Precedes:** `02_create_tables.sh`.
-
-4. **02_create_tables.sh**  
-   -  Applies `001_financial_schema.sql` and `002_question_templates.sql` to recreate schema.  
-   -  **Precedes:** ingestion smoke tests.
+3. **Database Migration & Seeding Scripts**
+   - `00_migration_check.sh`: Verifies migration system integrity and database connectivity
+   - `03_apply_schema.sh`: Applies database migrations with essential seed data
+   - `04_seed_database.sh`: Runs comprehensive seeding with verification checks
+   - **Flow:** Migration check → Apply migrations → Comprehensive seeding → Pipeline tests
 5.
 6.
 7.
@@ -278,7 +279,7 @@ This section briefly describes each key file/module in the financial-data-analys
 
 ***
 
-## Utility Modules (`server/scripts/` or `server/utils/`)
+## Utility Modules (`server/app/services/` directory)
 1. **utils.py**  
    -  `get_db_connection()`, `parse_period()`, `clean_numeric_value()`, `hash_datapoint()`, `log_event()`.  
    -  **Used by:** all ingestion scripts (`ingest_xlsx.py`, `ingest_pdf.py`), normalization, persistence.
@@ -348,9 +349,9 @@ Confirm CI scripts still apply schema and smoke tests still pass. If any upstrea
 
 ## Prerequisites
 - Git
-- Docker Desktop
-- Node.js 18+
+- Docker Desktop (optional for containerized deployment)
 - Python 3.10+
+- PostgreSQL database or NeonDB account
 - A terminal/command line
 
 ## Step 1: Clone and Setup Repository
@@ -367,11 +368,6 @@ pip install --upgrade pip uv
 
 # 3. Install project dependencies using uv for faster package management
 uv pip install -r requirements.txt
-
-# 5. Install Node.js dependencies
-cd server
-npm install
-cd ..
 ```
 
 ## Step 2: Setup Database (NeonDB - Free Tier)
@@ -379,21 +375,19 @@ cd ..
 1. **Sign up for NeonDB**: Go to https://neon.tech and create a free account
 2. **Create a new project**: Choose your region and project name
 3. **Get connection string**: Copy the connection string from the dashboard
-4. **Apply database schema**:
+4. **Apply database schema and seed data**:
    ```bash
-   # Use the connection string from Neon dashboard
-   psql "postgresql://username:password@ep-xxx.neon.tech:5432/database?sslmode=require" -f schema/001_financial_schema.sql
-   psql "postgresql://username:password@ep-xxx.neon.tech:5432/database?sslmode=require" -f schema/002_question_templates.sql
+   # Apply migrations (includes essential seed data)
+   python database/migrate.py up
+   
+   # Add comprehensive development/demo data (optional)
+   python database/seed.py
    ```
 
-question_templates.sql must be deployed with matching 001_financial_schema.sql.
-If changes to metric definitions occur in the schema, corresponding question templates updates should be part of the same PR and deployment.
-
-psql "$LOCAL_DATABASE_URL" -f schema/001_financial_schema.sql
-psql "$LOCAL_DATABASE_URL" -f schema/002_question_templates.sql
-
-psql "$DATABASE_URL" -f schema/001_financial_schema.sql
-psql "$DATABASE_URL" -f schema/002_question_templates.sql
+**Database Seeding Architecture:**
+- **Migrations** (`002_seed_initial_data.sql`): Essential data (periods + 3 core line items)
+- **Seed Script** (`database/seed.py`): Comprehensive development data (28 line items, 12 question templates, 5 demo companies)
+- **CI Integration** (`ci/04_seed_database.sh`): Automated seeding with verification for deployments
 
 
 ## Step 3: Environment Configuration
@@ -403,48 +397,53 @@ Create `.env` file in project root:
 echo "DATABASE_URL=postgresql://your_user:your_password@ep-xxx.neon.tech:5432/your_db?sslmode=require" > .env
 ```
 
-## Step 4: Build and Test Locally
+## Step 4: Start Development Servers
 
+### Option A: Run FastAPI Directly (Recommended for Development)
 ```bash
-# Build Docker image
-docker build -t finance-server -f server/Dockerfile .
+# Activate virtual environment
+source .venv/bin/activate
 
-# Find and kill process on a port
-lsof -ti:4000 | xargs -r kill -9
+# Start FastAPI server with auto-reload
+python server/main.py
+# OR use uvicorn directly
+# uvicorn server.main:app --host 0.0.0.0 --port 4000 --reload
+```
 
-# Check Docker is open
-open -a Docker
+### Option B: Run with Docker (Production-like)
+```bash
+# Build FastAPI Docker image
+docker build -t financial-api .
 
-# Run container
-docker run --rm --env-file .env -p 4000:4000 finance-server &
-sleep 10
-# sleep 5 or sleep 10 is optional - gives cursor for running commands in terminal but lose tail
+# Run FastAPI container
+docker run --rm --env-file .env -p 4000:4000 financial-api
 
-# OR, if troubleshooting
-# Stop any running container named finance-server (if you gave it a name)
-docker stop finance-server 2>/dev/null || true
+### Start React Frontend
+```bash
+# In a new terminal
+cd client
 
-# Or kill any container using that image
-docker ps -q --filter ancestor=finance-server | xargs -r docker stop
+# Create environment file (if not exists)
+echo "REACT_APP_API_URL=http://localhost:4000" > .env.local
 
-# Then rebuild and run
-docker build -t finance-server -f server/Dockerfile .
-docker run --rm --env-file .env -p 4000:4000 --name finance-server finance-server &
-sleep 10
+# Install dependencies and start
+npm install
+npm start
+```
 
+### Test the System
+```bash
 # Test health endpoint
 curl http://localhost:4000/health
 
-# Inspect available endpoints
-curl http://localhost:4000/api/info
-
 # Test file upload
-for file in data/*; do
-  echo "→ Uploading $file"
-  curl -F "file=@$file" http://localhost:4000/api/upload
-done
-# or point to specific file if prefered
-curl -F "file=@data/financial_data_template.csv" http://localhost:4000/api/upload
+curl -F "file=@data/sample_data.csv" http://localhost:4000/api/upload
+
+# Generate report
+curl -X POST http://localhost:4000/api/generate-report \
+     -H "Content-Type: application/json" \
+     -d '{"company_id":1}'
+```
 
 # Test database connection and contents
 psql "$DATABASE_URL" -c "SELECT current_database();"
@@ -509,7 +508,7 @@ if docker is complaining finance-server_ci is still running, must remove or rena
 docker rm -f finance-server_ci
 
 
-## Step 5: Deploy to Railway (Optional - for Production)
+## Step 5: Deploy to Railway (Production Backend)
 
 1. **Sign up for Railway**: Go to https://railway.app and create account
 2. **Install Railway CLI**: `npm install -g @railway/cli`
@@ -661,10 +660,10 @@ The following 20 tests progress from high-level smoke tests through detailed uni
 | 4  | **Upload CSV Template**                                 | `curl -F "file=@data/financial_data_template.csv" http://localhost:4000/api/upload`                          | JSON `{ "message":"File processed successfully!", "processing_steps":[…] }`.                                                                                          |
 | 5  | **Upload Smoke CSV**                                    | `curl -F "file=@data/smoke.csv" http://localhost:4000/api/upload`                                             | Same success JSON, with `company_id`=1.                                                                                                                              |
 | 6  | **Database Row Count Post-Upload**                      | `psql "$DATABASE_URL" -t -c "SELECT COUNT(*) FROM financial_metrics;"`                                        | Returns `>=1`.                                                                                                                                                        |
-| 7  | **Derived Metrics Unit Test**                           | `pytest server/scripts/test_calc_metrics.py` (create test file invoking `calc_metrics.py`)                   | Assert correct MoM, QoQ, YoY, YTD, variance for provided sample data.                                                                                                |
-| 8  | **Field Mapper Mapping**                                | `pytest server/scripts/test_field_mapper.py`                                                                  | Assert that input names map to canonical IDs (Revenue, Gross Profit, EBITDA).                                                                                        |
-| 9  | **Question Engine Variance Threshold**                  | `pytest server/scripts/test_questions_engine.py`                                                              | For a metric variance of +15%, ensure a “positive variance” question is generated.                                                                                   |
-| 10 | **Report Generator PDF Creation**                       | `python server/scripts/report_generator.py --input data/financial_data_template.csv --output out.pdf`         | `out.pdf` exists, nonzero file size, contains expected headings (“Revenue”, “Questions”).                                                                              |
+| 7  | **Derived Metrics Unit Test**                           | `pytest server/app/services/test_calc_metrics.py` (create test file invoking `calc_metrics.py`)                   | Assert correct MoM, QoQ, YoY, YTD, variance for provided sample data.                                                                                                |
+| 8  | **Field Mapper Mapping**                                | `pytest server/app/services/test_field_mapper.py`                                                                  | Assert that input names map to canonical IDs (Revenue, Gross Profit, EBITDA).                                                                                        |
+| 9  | **Question Engine Variance Threshold**                  | `pytest server/app/services/test_questions_engine.py`                                                              | For a metric variance of +15%, ensure a “positive variance” question is generated.                                                                                   |
+| 10 | **Report Generator PDF Creation**                       | `python server/app/services/report_generator.py --input data/financial_data_template.csv --output out.pdf`         | `out.pdf` exists, nonzero file size, contains expected headings (“Revenue”, “Questions”).                                                                              |
 | 11 | **Report Generator Question Inclusion**                 | Same command as #10; then `grep -q "Why did Revenue change"` `strings out.pdf`                                | Returns `0`.                                                                                                                                                          |
 | 12 | **Blob Upload Simulation**                              | `node server/api/test_blob.js out.pdf`                                                                        | Returns a valid blob URL.                                                                                                                                             |
 | 13 | **Generate-Report API Integration**                     | `curl -X POST http://localhost:4000/api/generate-report -H "Content-Type: application/json" -d '{"company_id":1}'` | JSON `"report_filename":"report_1_*.pdf"`, `"processing_steps"` includes PDF creation.                                                                                |
@@ -674,7 +673,7 @@ The following 20 tests progress from high-level smoke tests through detailed uni
 | 17 | **Database Schema Migration Idempotency**               | `./ci/migrate.sh && ./ci/migrate.sh`                                                                          | Second run detects no changes and exits `0`.                                                                                                                          |
 | 18 | **Reset Local DB Script**                               | `./ci/reset_local_db.sh && psql "$DATABASE_URL" -c "\dt"`                                                      | Database tables are dropped and re-created; `\dt` shows only `public.*` base tables.                                                                                 |
 | 19 | **Docker Container End-to-End**                         | `docker build -t test-server -f server/Dockerfile . && docker run --rm -p 4000:4000 -e DATABASE_URL=$DATABASE_URL test-server` plus smoke upload | Container responds to `/health`, ingestion and report generation work identically to local.                                                                            |
-| 20 | **Code Style and Linting**                              | `npm run lint` (in `server/`) and `flake8 server/scripts`                                                      | No linting errors reported.                                                                                                                                           |
+| 20 | **Code Style and Linting**                              | `flake8 server/`                                                      | No linting errors reported.                                                                                                                                           |
 
 Each test uses existing files under `data/` (e.g., `financial_data_template.csv`, `smoke.csv`) and the provided database schemas. This ensures thorough coverage from high-level pipeline verification to granular unit tests of individual scripts and API endpoints.
 
@@ -704,29 +703,33 @@ echo "Generated questions preview:"
 head -20 schema/002_question_templates.sql
 ```
 
-## **Step 3: Run CI Pipeline**
+## **Step 3: Database Setup and Seeding**
 ```bash
-# Run CI pipeline step by step
-echo "=== STEP 3: CI Pipeline ==="
+# Run database setup and seeding pipeline
+echo "=== STEP 3: Database Setup ==="
 
-# Step 3a: Drop all tables
-echo "--- CI Step 1: Drop Tables ---"
-ci/01_drop_tables.sh
+# Step 3a: Check migration system
+echo "--- Migration System Check ---"
+ci/00_migration_check.sh
 
-# Step 3b: Reset/create schema
-echo "--- CI Step 2: Reset Database ---"
-ci/02_reset_db.sh
+# Step 3b: Apply migrations (includes essential seed data)
+echo "--- Apply Database Migrations ---"
+python database/migrate.py up
 
-# Verify tables were created correctly
+# Step 3c: Add comprehensive development data
+echo "--- Comprehensive Seeding ---"
+python database/seed.py
+
+# Verify database setup
 echo "--- Database Verification ---"
 psql "$DATABASE_URL" -c "\dt"
-psql "$DATABASE_URL" -c "\d financial_metrics"
-psql "$DATABASE_URL" -c "\d line_item_definitions"
-psql "$DATABASE_URL" -c "SELECT COUNT(*) FROM line_item_definitions;"
+psql "$DATABASE_URL" -c "SELECT COUNT(*) as total_line_items FROM line_item_definitions;"
+psql "$DATABASE_URL" -c "SELECT COUNT(*) as question_templates FROM question_templates;" 
+psql "$DATABASE_URL" -c "SELECT COUNT(*) as demo_companies FROM companies;"
 
-# Step 3c: Run smoke test
-echo "--- CI Step 3: Smoke Test ---"
-ci/03_smoke_csv.sh
+# Step 3d: Run smoke test
+echo "--- Pipeline Smoke Test ---"
+ci/08_smoke_csv.sh
 ```
 
 ## **Step 4: If Docker/Container Issues Occur**
@@ -782,8 +785,16 @@ psql "$DATABASE_URL" -c "\dt public.*"
 # Inspect financial_metrics structure
 psql "$DATABASE_URL" -c "\d+ financial_metrics"
 
-# Check line_item_definitions data
+# Check essential line_item_definitions from migrations
 psql "$DATABASE_URL" -c "SELECT id, name FROM line_item_definitions;"
+
+# Add comprehensive development data
+python database/seed.py
+
+# Verify comprehensive seeding
+psql "$DATABASE_URL" -c "SELECT COUNT(*) as line_items FROM line_item_definitions;"
+psql "$DATABASE_URL" -c "SELECT COUNT(*) as question_templates FROM question_templates;"
+psql "$DATABASE_URL" -c "SELECT COUNT(*) as demo_companies FROM companies;"
 
 # Check if smoke test data exists
 psql "$DATABASE_URL" -c "
@@ -805,13 +816,15 @@ LIMIT 5;"
 # Run remaining CI steps if smoke test passes
 echo "=== STEP 6: Full Integration ==="
 
-ci/04_integration_xlsx.sh
-ci/05_full_sample.sh
+ci/09_integration_xlsx.sh
+ci/11_full_sample.sh
+ci/12_comprehensive_check.sh
 
 # Final validation
 echo "=== Final Status ==="
 psql "$DATABASE_URL" -c "SELECT COUNT(*) as total_metrics FROM financial_metrics;"
 psql "$DATABASE_URL" -c "SELECT COUNT(*) as derived_metrics FROM derived_metrics;"
+psql "$DATABASE_URL" -c "SELECT COUNT(*) as generated_questions FROM questions;"
 ```
 
 ***
@@ -822,11 +835,13 @@ psql "$DATABASE_URL" -c "SELECT COUNT(*) as derived_metrics FROM derived_metrics
 
 **Step 2:** Should generate schema files without errors and show table definitions
 
-**Step 3a:** Should print "01 | All tables dropped."
+**Step 3a:** Should print "✅ Migration system accessible" and "✅ Database connectivity verified"
 
-**Step 3b:** Should print "02 | Schema reset complete." and show tables like `financial_metrics`, `companies`, etc.
+**Step 3b:** Should print migration status and "Migrations applied successfully"
 
-**Step 3c:** Should print "03 | Smoke CSV test passed: revenue=2,390,873.00"
+**Step 3c:** Should print "✅ Database seeding completed successfully" with verification counts
+
+**Step 3d:** Should print "Smoke test passed: revenue=2,390,873.00"
 
 ***
 

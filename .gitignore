@@ -56,8 +56,7 @@ Thumbs.db
 *~
 
 # Sensitive data
-data/*.xlsx
-data/*.pdf
+data/
 reports/*.pdf
 
 # Database dumps
