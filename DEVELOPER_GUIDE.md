@@ -178,15 +178,18 @@ npm run build
 # Run React tests with TypeScript support
 npm test
 
-# Install new dependency
-npm install package-name
+# Install new dependency (with compatibility fix)
+npm install package-name --legacy-peer-deps
 
 # Install TypeScript types for dependency
-npm install @types/package-name
+npm install @types/package-name --legacy-peer-deps
 
 # Tailwind CSS development
 # Classes are compiled automatically during npm start
 # Custom styles in src/index.css using @layer directives
+
+# Dependency troubleshooting
+rm -rf node_modules package-lock.json && npm install --legacy-peer-deps
 ```
 
 ### Database Commands
@@ -378,6 +381,77 @@ curl -X POST http://localhost:4000/api/generate-report \
      -d '{"company_id":1}'
 ```
 
+## Docker Development
+
+### Docker Compose Setup
+```bash
+# Start PostgreSQL and Redis for development
+make docker-dev
+
+# Start full containerized development environment
+make docker-dev-full
+
+# Stop all Docker services
+make docker-stop
+
+# Build production Docker image
+make docker-build
+```
+
+### Docker Development Workflow
+```bash
+# Option 1: Hybrid development (recommended)
+make docker-dev          # Start database services
+make server              # Local FastAPI server
+make client              # Local React development server
+
+# Option 2: Fully containerized development
+make docker-dev-full     # Everything in containers
+
+# Option 3: Production testing
+make docker-build        # Build production image
+docker run -p 4000:4000 financial-data-analysis:latest
+```
+
+## Monitoring and Observability
+
+### Real-Time Monitoring
+```bash
+# System health and performance metrics
+make monitoring-health
+
+# Application metrics and performance data
+make monitoring-metrics
+
+# Error tracking and analytics
+make monitoring-errors
+
+# Manual API calls for detailed monitoring
+curl http://localhost:4000/api/monitoring/metrics/health
+curl http://localhost:4000/api/monitoring/errors/summary
+curl http://localhost:4000/api/monitoring/errors/slow-operations
+```
+
+### Performance Monitoring Features
+- **Correlation IDs**: Track requests across the entire system
+- **Automatic Timing**: All API requests and database queries timed automatically
+- **Slow Operation Detection**: Alerts for operations taking >2 seconds
+- **System Resource Monitoring**: CPU, memory, and disk usage tracking
+- **Error Analytics**: Centralized error tracking with pattern detection
+
+### Monitoring Files and Logs
+```bash
+# Structured log files (JSON format)
+tail -f logs/financial-api-enhanced.log         # Application logs with correlation IDs
+tail -f logs/metrics.jsonl                      # Performance metrics
+tail -f logs/errors.jsonl                       # Error tracking
+tail -f logs/alerts.jsonl                       # Alert events
+
+# Legacy logs (for compatibility)
+tail -f logs/financial-data-api.log             # Standard application logs
+tail -f logs/pipeline-processor.log             # Data processing logs
+```
+
 ## Troubleshooting
 
 ### Common Issues
@@ -413,6 +487,51 @@ python database/seed.py
 # Ensure virtual environment is active and dependencies installed
 source .venv/bin/activate
 uv pip install -r requirements.txt
+
+# For monitoring dependencies specifically
+uv pip install psutil==6.1.0
+```
+
+**React TypeScript Build Issues**
+```bash
+# Clean and reinstall with compatibility fixes
+cd client
+rm -rf node_modules package-lock.json
+npm install --legacy-peer-deps
+
+# Check TypeScript compilation
+npx tsc --noEmit
+
+# Force dependency resolution (if needed)
+npm install --legacy-peer-deps --force
+```
+
+**Docker Issues**
+```bash
+# Clean Docker environment
+make docker-stop
+docker system prune -f
+
+# Rebuild from scratch
+make docker-build
+
+# Check container logs
+docker-compose logs backend
+docker-compose logs postgres
+```
+
+**Monitoring Issues**
+```bash
+# Check monitoring endpoints
+curl http://localhost:4000/health
+curl http://localhost:4000/api/monitoring/metrics/health
+
+# Check log files for errors
+tail -f logs/financial-api-enhanced.log
+tail -f logs/errors.jsonl
+
+# Verify psutil dependency
+.venv/bin/python3 -c "import psutil; print('✅ psutil working')"
 ```
 
 ### Development Tips

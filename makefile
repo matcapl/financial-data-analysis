@@ -1,21 +1,30 @@
-# Financial Data Analysis - FastAPI Backend Setup
-.PHONY: help setup install server client test-db test-api clean kill-ports ci-check deploy health validate aliases questions generate-periods validate-yaml
+# Financial Data Analysis - Enterprise FastAPI Architecture
+.PHONY: help setup install server client test-db test-api clean kill-ports ci-check deploy health validate aliases questions generate-periods validate-yaml docker-build docker-dev docker-stop monitoring-health monitoring-metrics
 
 # Default target
 help:
-	@echo "Financial Data Analysis - FastAPI Setup Commands"
-	@echo "=============================================="
+	@echo "Financial Data Analysis - Enterprise FastAPI Architecture"
+	@echo "========================================================"
 	@echo "Development Commands:"
 	@echo "make setup        - Complete setup for new developers"
 	@echo "make install      - Install Python dependencies"
 	@echo "make server       - Start FastAPI server on port 4000"
-	@echo "make client       - Start React client on port 3000"
+	@echo "make client       - Start React TypeScript client on port 3000"
 	@echo ""
 	@echo "Testing Commands:"
 	@echo "make test         - Run all tests"
 	@echo "make test-unit    - Run unit tests only"
 	@echo "make test-db      - Test database connection"
 	@echo "make test-api     - Test API endpoints"
+	@echo ""
+	@echo "Docker Commands:"
+	@echo "make docker-build - Build optimized Docker image"
+	@echo "make docker-dev   - Start development environment with Docker Compose"
+	@echo "make docker-stop  - Stop Docker Compose services"
+	@echo ""
+	@echo "Monitoring Commands:"
+	@echo "make monitoring-health  - Check system health and metrics"
+	@echo "make monitoring-metrics - View application metrics"
 	@echo ""
 	@echo "CI/CD Commands:"
 	@echo "make ci-check     - Run full CI health check"
@@ -34,10 +43,10 @@ help:
 	@echo "make clean        - Clean up generated files"
 	@echo ""
 	@echo "QUICK START:"
-	@echo "1. make kill-ports"
-	@echo "2. make setup"
-	@echo "3. make server (in one terminal)"
-	@echo "4. make client (in another terminal)"
+	@echo "1. make setup"
+	@echo "2. make server (in one terminal)"
+	@echo "3. make client (in another terminal)"
+	@echo "4. Visit http://localhost:3000"
 
 # Kill any processes running on our ports
 kill-ports:
@@ -114,6 +123,42 @@ validate-yaml:
 
 generate-periods:
 	@.venv/bin/python3 scripts/manage.py generate-periods
+
+# Docker Commands
+docker-build:
+	@echo "🐳 Building optimized Docker image..."
+	@./scripts/docker-build.sh
+
+docker-dev:
+	@echo "🐳 Starting development environment with Docker Compose..."
+	@docker-compose up -d postgres redis
+	@echo "✅ PostgreSQL and Redis started"
+	@echo "💡 Use 'make server' and 'make client' for development servers"
+
+docker-dev-full:
+	@echo "🐳 Starting full development environment with Docker Compose..."
+	@docker-compose --profile dev up -d
+	@echo "✅ Full development environment started"
+	@echo "🌐 Frontend: http://localhost:3000"
+	@echo "🚀 Backend: http://localhost:4000"
+
+docker-stop:
+	@echo "🛑 Stopping Docker Compose services..."
+	@docker-compose down
+	@echo "✅ Services stopped"
+
+# Monitoring Commands
+monitoring-health:
+	@echo "🔍 Checking system health and metrics..."
+	@curl -s http://localhost:4000/api/monitoring/metrics/health | python3 -m json.tool
+
+monitoring-metrics:
+	@echo "📊 Viewing application metrics..."
+	@curl -s http://localhost:4000/api/monitoring/metrics | python3 -m json.tool
+
+monitoring-errors:
+	@echo "🚨 Viewing error summary..."
+	@curl -s http://localhost:4000/api/monitoring/errors/summary | python3 -m json.tool
 
 # Complete setup for new developers
 setup: install db-setup test-db

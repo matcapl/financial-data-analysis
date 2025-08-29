@@ -4,14 +4,15 @@ This guide covers the modernized CI/CD pipeline using consolidated Python script
 
 ## Overview
 
-The financial data analysis system includes a robust CI/CD pipeline that:
+The financial data analysis system includes an enterprise-grade CI/CD pipeline with comprehensive monitoring that:
 - ✅ Consolidated CI operations into unified Python scripts (`scripts/ci_manager.py` and `scripts/manage.py`)
-- ✅ Verifies FastAPI server functionality with health checks
-- ✅ Runs database migrations automatically during deployment
-- ✅ Provides rollback capabilities for safe database changes
-- ✅ Tests the complete data processing pipeline
+- ✅ Verifies FastAPI server functionality with health checks and performance monitoring
+- ✅ Runs database migrations automatically during deployment with rollback capabilities
+- ✅ Tests the complete data processing pipeline with performance profiling
 - ✅ Supports GitHub Actions automated testing with PostgreSQL
-- ✅ Streamlined deployment with Railway and Docker
+- ✅ Multi-stage Docker builds with optimization and security hardening
+- ✅ Real-time monitoring with metrics collection and error tracking
+- ✅ Streamlined deployment with Railway, Docker, and Docker Compose
 
 ## Consolidated CI/CD Architecture
 
@@ -51,13 +52,41 @@ Consolidated data management utilities that handle:
 .venv/bin/python3 scripts/manage.py generate-periods # Generate periods.yaml
 ```
 
-### 3. Make Integration
+### 3. Docker Integration (`docker-compose.yml`)
+Enterprise Docker setup with multi-stage builds:
+- **Production**: Multi-stage build with frontend compilation and security hardening
+- **Development**: Full development environment with PostgreSQL and Redis
+- **Optimization**: Layer caching, minimal base images, non-root execution
+
+```bash
+# Docker operations
+make docker-build      # Build optimized production image
+make docker-dev        # Start PostgreSQL and Redis for development
+make docker-dev-full   # Full containerized development environment
+make docker-stop       # Stop all Docker services
+```
+
+### 4. Monitoring and Observability
+Comprehensive monitoring system with real-time metrics:
+- **Correlation tracking** across all requests with unique IDs
+- **Performance monitoring** with automatic slow operation detection
+- **Error tracking** with centralized analytics and alerting
+- **System metrics** for CPU, memory, and disk usage
+
+```bash
+# Monitoring operations
+make monitoring-health   # System health and performance metrics
+make monitoring-metrics  # Application metrics dashboard
+make monitoring-errors   # Error tracking and analytics
+```
+
+### 5. Make Integration
 All operations are accessible via Make commands for developer convenience:
 
 ```bash
 # Development workflow
-make setup        # Complete setup
-make ci-check     # Full CI validation
+make setup        # Complete setup with dependency resolution
+make ci-check     # Full CI validation with monitoring
 make health       # Application health check
 make validate     # Configuration validation
 
@@ -65,6 +94,16 @@ make validate     # Configuration validation
 make test         # Run all tests
 make test-unit    # Unit tests only
 make test-db      # Database connection test
+
+# Docker workflow
+make docker-build      # Build production image
+make docker-dev        # Start development services
+make docker-stop       # Stop Docker services
+
+# Monitoring
+make monitoring-health   # Health and metrics dashboard
+make monitoring-metrics  # Application performance metrics
+make monitoring-errors   # Error tracking and analytics
 
 # Data management
 make aliases ARGS="list"                           # List aliases
@@ -105,6 +144,115 @@ Integrated health checks across the system:
 make health
 make test-db
 ```
+
+## Enterprise Docker Architecture
+
+### Multi-Stage Production Build
+
+**Optimized Dockerfile Features:**
+- **Frontend Build Stage**: Node.js 18 Alpine for TypeScript React + Tailwind compilation
+- **Production Stage**: Python 3.11 slim with FastAPI backend
+- **Security**: Non-root user execution, minimal attack surface
+- **Optimization**: Layer caching, compressed builds, health checks
+
+```dockerfile
+# Multi-stage build example
+FROM node:18-alpine AS frontend-builder
+WORKDIR /app/client
+COPY client/package*.json ./
+RUN npm ci --only=production
+COPY client/ ./
+RUN npm run build
+
+FROM python:3.11-slim AS production
+# Copy built frontend from build stage
+COPY --from=frontend-builder /app/client/build ./client/build
+```
+
+### Docker Compose Development Environment
+
+**Full Development Stack:**
+```yaml
+services:
+  postgres:    # PostgreSQL 15 with health checks
+  backend:     # FastAPI with volume mounts for development
+  frontend-dev: # React dev server with hot reload (optional)
+  redis:       # Redis caching (optional profile)
+```
+
+**Development Commands:**
+```bash
+# Start database services for development
+make docker-dev
+
+# Start full containerized development environment
+make docker-dev-full
+
+# Stop all services
+make docker-stop
+
+# Build optimized production image
+make docker-build
+```
+
+## Monitoring and Observability
+
+### Real-Time Monitoring System
+
+**Correlation Tracking:**
+- Unique correlation IDs for all requests
+- Request/response logging with timing and context
+- Cross-service request tracing
+
+**Performance Monitoring:**
+- Automatic slow operation detection (>2 seconds)
+- Database query performance tracking
+- System resource monitoring (CPU, memory, disk)
+- Code profiling with memory usage analysis
+
+**Error Tracking:**
+- Centralized error collection with unique error IDs
+- Automatic alerting for critical errors and high error rates
+- Error analytics and pattern detection
+- Stack trace preservation with context
+
+### Monitoring APIs
+
+**Health and Metrics Endpoints:**
+```bash
+# System health with performance data
+curl http://localhost:4000/api/monitoring/metrics/health
+
+# Application metrics summary
+curl http://localhost:4000/api/monitoring/metrics
+
+# Error tracking and analytics
+curl http://localhost:4000/api/monitoring/errors/summary
+
+# Slow operations analysis
+curl http://localhost:4000/api/monitoring/errors/slow-operations
+```
+
+**Monitoring Commands:**
+```bash
+# Real-time monitoring via Make commands
+make monitoring-health   # Comprehensive health dashboard
+make monitoring-metrics  # Performance metrics overview
+make monitoring-errors   # Error analytics and alerts
+```
+
+### Alert System
+
+**Automated Alerting:**
+- High error rate detection (>10 errors/minute)
+- Repeated error patterns (>5 same error occurrences)
+- Critical error immediate alerts
+- System resource threshold warnings (CPU >80%, Memory >80%)
+
+**Alert Log Files:**
+- `logs/alerts.jsonl` - Structured alert events
+- `logs/errors.jsonl` - Detailed error tracking
+- `logs/metrics.jsonl` - Performance metrics history
 
 ## Platform Integrations
 
