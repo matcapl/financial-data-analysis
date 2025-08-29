@@ -1,7 +1,7 @@
 {
   "build": {
     "builder": "dockerfile",
-    "dockerfilePath": "server/Dockerfile"
+    "dockerfilePath": "Dockerfile"
   },
   "deploy": {
     "startCommand": "bash scripts/deploy-start.sh"
