@@ -1,35 +1,57 @@
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
 [project]
 name = "financial-data-analysis"
 version = "0.1.0"
 description = "Financial data analysis system"
 requires-python = ">=3.10,<4.0"
 dependencies = [
-    "pandas>=2.0.0",
-    "psycopg2-binary>=2.9.0",
-    "pymupdf>=1.22.0",
-    "pytesseract>=0.3.10",
-    "pdf2image>=1.16.0",
-    "fpdf2>=2.7.0",
-    "python-dotenv>=1.0.0",
+    "pandas>=2.0.0,<3.0.0",
+    "psycopg2-binary>=2.9.0,<3.0.0",
+    "pymupdf>=1.22.0,<2.0.0",
+    "pytesseract>=0.3.10,<0.4.0",
+    "pdf2image>=1.16.0,<2.0.0",
+    "fpdf2>=2.7.0,<3.0.0",
+    "python-dotenv>=1.0.0,<2.0.0",
     "openpyxl>=3.1.5,<4.0.0",
-    "camelot-py[cv]>=1.0.0,<2.0.0",
+    "camelot-py>=1.0.0,<2.0.0",
     "tabula-py>=2.10.0,<3.0.0",
     "opencv-python>=4.12.0.88,<5.0.0.0",
     "pyyaml>=6.0.2,<7.0.0",
     "pydantic>=2.11.7,<3.0.0",
     "jinja2>=3.1.6,<4.0.0",
     "fastapi>=0.116.1,<0.117.0",
-    "uvicorn>=0.35.0,<0.36.0",
-    "pathlib>=1.0.1",
+    "uvicorn>=0.35.0,<0.36.0"
 ]
 
-[tool.uv.dependency-groups]
+[dependency-groups]
 dev = [
-    "pytest>=7.0",
-    "black>=24.0.0",
-    "ruff>=0.6.0",
+    "pytest>=7.0,<9.0",
+    "black>=24.0.0,<25.0.0",
+    "ruff>=0.6.0,<1.0.0"
 ]
+
+# Configure hatchling to not try to build as a package
+[tool.hatch.build.targets.wheel]
+bypass-selection = true
+only-include = [
+    "server/",
+    "config/", 
+    "data/",
+    "schema/",
+    "ci/"
+]
+
+[tool.hatch.build.targets.sdist]
+only-include = [
+    "server/",
+    "config/", 
+    "data/",
+    "schema/",
+    "ci/",
+    "*.md",
+    "*.toml",
+    "*.lock"
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

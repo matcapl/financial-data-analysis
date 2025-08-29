@@ -14,9 +14,8 @@ RUN apt-get update && \
         npm && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Install uv (single binary)
-ADD https://astral.sh/uv/install.sh /install.sh
-RUN sh /install.sh && rm /install.sh
+# Install uv via pip so it's available in /usr/local/bin
+RUN python3 -m pip install --no-cache-dir uv
 
 # Set environment variables
 ENV PYTHON_PATH=/usr/local/bin/python3
@@ -25,21 +24,25 @@ ENV PYTHONPATH=/app/server/scripts:/app/server
 
 WORKDIR /app
 
-# Copy lock and manifest first (for caching layers)
+# Copy dependency manifests for caching layers
 COPY pyproject.toml uv.lock ./
+
+# Install Python dependencies (production only)
 RUN uv sync --frozen --no-dev
 
-# Install Node.js deps
+# Install Node.js dependencies
 COPY server/package*.json ./server/
 RUN npm install --prefix ./server
 
-# Copy app code
+# Copy application code
 COPY server/api ./server/api
 COPY server/scripts ./server/scripts
 COPY config ./config
 COPY data ./data
 COPY .env ./
 
-# Expose and run
+# Expose service port
 EXPOSE 4000
+
+# Default command
 CMD ["node", "server/api/index.js"]

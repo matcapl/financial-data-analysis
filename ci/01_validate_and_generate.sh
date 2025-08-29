@@ -14,10 +14,10 @@ else
 fi
 
 echo "=== STEP 0: Config and YAML Validation ==="
-poetry run python scripts/validate_yaml.py
+uv run python scripts/validate_yaml.py
 
 echo "=== STEP 0: Generating SQL schema and question templates ==="
-poetry run python scripts/generate_schema.py
-poetry run python scripts/generate_questions.py
+uv run python scripts/generate_schema.py
+uv run python scripts/generate_questions.py
 
 echo "=== Config validation and SQL generation complete! ==="
