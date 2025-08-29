@@ -1,84 +1,109 @@
-# CI/CD Guide - FastAPI Backend
+# CI/CD Guide - Consolidated FastAPI Architecture
 
-This guide covers the comprehensive CI/CD pipeline for the unified FastAPI backend architecture.
+This guide covers the modernized CI/CD pipeline using consolidated Python scripts for the unified FastAPI backend architecture.
 
 ## Overview
 
 The financial data analysis system includes a robust CI/CD pipeline that:
-- ✅ Verifies FastAPI server functionality before deployment
+- ✅ Consolidated CI operations into unified Python scripts (`scripts/ci_manager.py` and `scripts/manage.py`)
+- ✅ Verifies FastAPI server functionality with health checks
 - ✅ Runs database migrations automatically during deployment
 - ✅ Provides rollback capabilities for safe database changes
 - ✅ Tests the complete data processing pipeline
-- ✅ Supports multiple deployment targets (Railway, Docker, GitHub Actions)
+- ✅ Supports GitHub Actions automated testing with PostgreSQL
+- ✅ Streamlined deployment with Railway and Docker
 
-## CI/CD Pipeline Components
+## Consolidated CI/CD Architecture
 
-### 1. Migration System Check (`ci/00_migration_check.sh`)
-Pre-deployment verification script that ensures:
-- Migration system accessibility
-- Database connectivity
-- Migration file integrity
-- Rollback SQL coverage
-- Python dependencies availability
-
-```bash
-# Run migration system check
-bash ci/00_migration_check.sh
-```
-
-### 2. Schema Application (`ci/03_apply_schema.sh`)
-Enhanced CI/CD migration runner that:
-- Loads environment variables safely
-- Checks migration status before applying
-- Applies pending migrations
-- Shows final migration status
-- Updates rollback SQL (non-critical)
+### 1. Main CI Manager (`scripts/ci_manager.py`)
+Unified CI/CD operations script that handles:
+- Database setup and health checks
+- Port management and cleanup
+- Testing (unit and integration)
+- Health monitoring
+- Configuration validation
+- Deployment operations
 
 ```bash
-# Apply migrations in CI/CD mode
-bash ci/03_apply_schema.sh
+# Available commands
+.venv/bin/python3 scripts/ci_manager.py health        # Health check
+.venv/bin/python3 scripts/ci_manager.py db setup     # Database setup
+.venv/bin/python3 scripts/ci_manager.py db check     # Database test
+.venv/bin/python3 scripts/ci_manager.py test         # Run tests
+.venv/bin/python3 scripts/ci_manager.py validate     # Config validation
+.venv/bin/python3 scripts/ci_manager.py deploy       # Production deployment
+.venv/bin/python3 scripts/ci_manager.py kill-ports   # Port cleanup
+.venv/bin/python3 scripts/ci_manager.py check-all    # Full CI check
 ```
 
-### 3. Comprehensive Testing (`ci/12_comprehensive_check.sh`)
-Full integration test that includes:
-- Migration system verification (calls `00_migration_check.sh`)
+### 2. Data Management Tool (`scripts/manage.py`)
+Consolidated data management utilities that handle:
 - YAML configuration validation
-- Python script presence checks
-- Database schema compatibility testing
-- Data ingestion pipeline testing
-- Metrics calculation testing
-- Question generation testing
-- Database integrity validation
+- Period alias management
+- Question generation
+- Configuration file generation
 
 ```bash
-# Run full integration test
-bash ci/12_comprehensive_check.sh
+# Available commands
+.venv/bin/python3 scripts/manage.py validate-yaml    # Validate YAML files
+.venv/bin/python3 scripts/manage.py aliases list     # List period aliases
+.venv/bin/python3 scripts/manage.py questions        # Generate questions
+.venv/bin/python3 scripts/manage.py generate-periods # Generate periods.yaml
 ```
 
-## Deployment Scripts
-
-### 1. Production Start (`scripts/deploy-start.sh`)
-Production deployment script that:
-- Runs database migrations before starting the app
-- Updates rollback SQL
-- Shows migration status
-- Starts the FastAPI application
+### 3. Make Integration
+All operations are accessible via Make commands for developer convenience:
 
 ```bash
-# Used automatically in railway.json
-bash scripts/deploy-start.sh
+# Development workflow
+make setup        # Complete setup
+make ci-check     # Full CI validation
+make health       # Application health check
+make validate     # Configuration validation
+
+# Testing
+make test         # Run all tests
+make test-unit    # Unit tests only
+make test-db      # Database connection test
+
+# Data management
+make aliases ARGS="list"                           # List aliases
+make questions                                      # Generate questions
+make validate-yaml                                 # Validate YAML
 ```
 
-### 2. Health Check (`scripts/health-check.sh`)
-Post-deployment verification that checks:
-- Database connectivity and migration status
-- Application health endpoint
-- Migration system status
-- No pending migrations
+## Deployment Operations
+
+### 1. Production Deployment
+The CI manager handles production deployment operations:
 
 ```bash
-# Check deployment health
-bash scripts/health-check.sh
+# Production deployment with CI manager
+.venv/bin/python3 scripts/ci_manager.py deploy
+
+# Or via Make command
+make deploy
+```
+
+**Deployment process:**
+1. Database migration verification and application
+2. Configuration validation
+3. Health check verification
+4. Application startup
+
+### 2. Health Monitoring
+Integrated health checks across the system:
+
+```bash
+# Application health check
+.venv/bin/python3 scripts/ci_manager.py health
+
+# Database connectivity test
+.venv/bin/python3 scripts/ci_manager.py db check
+
+# Or via Make commands
+make health
+make test-db
 ```
 
 ## Platform Integrations
@@ -90,18 +115,18 @@ bash scripts/health-check.sh
 {
   "build": {
     "builder": "dockerfile",
-    "dockerfilePath": "server/Dockerfile"
+    "dockerfilePath": "Dockerfile"
   },
   "deploy": {
-    "startCommand": "bash scripts/deploy-start.sh"
+    "startCommand": ".venv/bin/python3 server/main.py"
   }
 }
 ```
 
 **Features:**
-- Automatic migration execution on deployment
-- Rollback SQL updates
-- Health monitoring integration
+- Simplified deployment using direct Python execution
+- Automatic migration handling via startup logic
+- Streamlined startup process
 
 ### Docker Deployment
 
@@ -121,21 +146,29 @@ CMD ["bash", "scripts/deploy-start.sh"]
 
 ### GitHub Actions
 
-**CI/CD Pipeline (`.github/workflows/ci-cd.yml`):**
+**CI/CD Pipeline (`.github/workflows/ci.yml`):**
 
 #### Jobs:
-1. **Migration Check** - Verifies migration system with PostgreSQL service
-2. **Full Integration** - Runs comprehensive tests with database
-3. **Docker Build** - Tests container build and migration inclusion
+1. **Test** - Full test suite with PostgreSQL service using consolidated CI scripts
 
 #### Features:
 - PostgreSQL 15 service for realistic testing
-- Python 3.11+ environment with FastAPI and uvicorn
-- Migration rollback testing
-- Docker image structure validation
+- Python 3.11+ environment with FastAPI dependencies
+- Uses consolidated CI manager for all operations
+- Streamlined workflow using Make commands
 
 ```yaml
-# Example job configuration
+# Workflow uses consolidated scripts
+- name: Setup Database
+  run: make setup
+
+- name: Run Tests
+  run: make test
+
+- name: CI Health Check
+  run: make ci-check
+
+# PostgreSQL service
 services:
   postgres:
     image: postgres:15
@@ -175,55 +208,66 @@ services:
 
 ## Usage Examples
 
-### Local Development
+### Local Development Workflow
 ```bash
-# Check migration system
-bash ci/00_migration_check.sh
+# Full setup and validation
+make setup
+make ci-check
 
-# Apply migrations
-bash ci/03_apply_schema.sh
+# Direct CI manager usage
+.venv/bin/python3 scripts/ci_manager.py db setup
+.venv/bin/python3 scripts/ci_manager.py health
+.venv/bin/python3 scripts/ci_manager.py test
 
-# Run full integration test
-bash ci/12_comprehensive_check.sh
-
-# Check health
-bash scripts/health-check.sh
+# Data management
+.venv/bin/python3 scripts/manage.py validate-yaml
+.venv/bin/python3 scripts/manage.py questions
 ```
 
-### CI/CD Pipeline
+### CI/CD Pipeline (GitHub Actions)
 ```yaml
-# In GitHub Actions
-- name: Run migration system check
-  run: bash ci/00_migration_check.sh
+# Streamlined workflow using Make
+- name: Setup Environment
+  run: make setup
 
-- name: Run database migrations  
-  run: bash ci/03_apply_schema.sh
+- name: Run Tests
+  run: make test
 
-- name: Test rollback functionality
-  run: |
-    python3 database/migrate.py down
-    python3 database/migrate.py up
+- name: CI Health Check
+  run: make ci-check
+
+# Direct script usage for specific operations
+- name: Database Migration Check
+  run: .venv/bin/python3 scripts/ci_manager.py db check
+
+- name: Validate Configuration
+  run: .venv/bin/python3 scripts/ci_manager.py validate
 ```
 
 ### Production Deployment
 ```bash
-# Railway automatically executes:
-bash scripts/deploy-start.sh
+# Railway deployment (simplified)
+# Uses railway.json startCommand: ".venv/bin/python3 server/main.py"
 
-# Which includes:
-# 1. Migration execution
-# 2. Rollback SQL updates
-# 3. Application startup
+# Manual deployment operations
+.venv/bin/python3 scripts/ci_manager.py deploy
+
+# Health verification post-deployment
+.venv/bin/python3 scripts/ci_manager.py health
 ```
 
 ## Troubleshooting
 
-### Migration Check Failures
+### CI Manager Failures
 ```bash
-# Check specific components
-python3 database/migrate.py --help        # System accessibility
-python3 database/migrate.py status        # Database connectivity
-ls -la database/migrations/*.sql          # File integrity
+# Debug CI operations
+.venv/bin/python3 scripts/ci_manager.py db check     # Database connectivity
+.venv/bin/python3 scripts/ci_manager.py validate     # Configuration validation
+.venv/bin/python3 scripts/ci_manager.py health       # Application health
+
+# Check individual components
+.venv/bin/python3 database/migrate.py status         # Migration status
+ls -la database/migrations/*.sql                     # Migration files
 ```
 
 ### Deployment Issues
@@ -231,46 +275,52 @@ ls -la database/migrations/*.sql          # File integrity
 # Check environment variables
 echo $DATABASE_URL
 
-# Test migration manually
-python3 database/migrate.py up
+# Test deployment process
+.venv/bin/python3 scripts/ci_manager.py deploy
 
 # Verify health
-bash scripts/health-check.sh
+.venv/bin/python3 scripts/ci_manager.py health
 ```
 
-### Rollback Operations
+### Database Issues
 ```bash
-# Emergency rollback
-python3 database/migrate.py down
+# Database setup and testing
+.venv/bin/python3 scripts/ci_manager.py db setup
+.venv/bin/python3 scripts/ci_manager.py db check
 
-# Check status after rollback
-python3 database/migrate.py status
-
-# Re-apply if needed
-python3 database/migrate.py up
+# Manual migration operations
+.venv/bin/python3 database/migrate.py down
+.venv/bin/python3 database/migrate.py status
+.venv/bin/python3 database/migrate.py up
 ```
 
 ## Best Practices
 
-### Development
-1. **Always test migrations locally** before committing
-2. **Include rollback SQL** in all new migrations
-3. **Run CI checks** before pushing to main branch
-4. **Test rollback functionality** for critical migrations
+### Development Workflow
+1. **Use Make commands** for consistent operations (`make setup`, `make test`, `make ci-check`)
+2. **Test migrations locally** before committing (`make test-db`)
+3. **Run full CI validation** before pushing (`make ci-check`)
+4. **Validate configurations** regularly (`make validate-yaml`)
+
+### CI Script Usage
+1. **Use consolidated scripts** instead of individual bash scripts
+2. **Leverage CI manager** for all database and deployment operations
+3. **Use management tool** for data-related operations
+4. **Follow Make patterns** for team consistency
 
 ### Deployment
-1. **Monitor deployment logs** for migration status
-2. **Verify health checks** post-deployment
-3. **Have rollback plan** for critical deployments
-4. **Test in staging** before production deployment
+1. **Monitor deployment via CI manager** health checks
+2. **Use deployment script** for production deployments
+3. **Verify with health checks** post-deployment
+4. **Maintain rollback capabilities** through migration system
 
-### Monitoring
-1. **Check migration status** regularly
-2. **Monitor database health** continuously
-3. **Alert on pending migrations** in production
-4. **Track rollback operations** for audit purposes
+### Testing
+1. **Run unit tests regularly** (`make test-unit`)
+2. **Use integration testing** for pipeline validation
+3. **Test database operations** independently (`make test-db`)
+4. **Validate API endpoints** with health checks (`make health`)
 
 ---
 
-**For complete migration system documentation, see `database/README.md`**
-**For development setup, see `DEVELOPER_GUIDE.md`**
+**For development setup, see `Developer_guide.md`**
+**For database migration details, see migration system in `database/`**

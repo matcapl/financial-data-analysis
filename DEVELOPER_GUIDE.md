@@ -10,14 +10,29 @@ A concise guide for developers to quickly get the financial data analysis system
 
 ## Quick Setup Commands
 
-### 1. Clone Repository
+### Option A: Make Commands (Recommended)
+```bash
+# Clone repository
+git clone <repository-url>
+cd financial-data-analysis
+
+# Complete setup (installs dependencies + database setup)
+make setup
+
+# Start servers (in separate terminals)
+make server    # FastAPI backend (port 4000)
+make client    # React frontend (port 3000)
+```
+
+### Option B: Manual Setup
+
+#### 1. Clone Repository
 ```bash
 git clone <repository-url>
 cd financial-data-analysis
 ```
 
-### 2. Python Virtual Environment Setup
-
+#### 2. Python Environment Setup
 ```bash
 # Create virtual environment using uv
 uv venv
@@ -31,8 +46,7 @@ source .venv/bin/activate     # macOS/Linux
 uv pip install -r requirements.txt
 ```
 
-### 3. Database Setup
-
+#### 3. Database Setup
 ```bash
 # Create .env file with your database credentials
 echo "DATABASE_URL=postgresql://username:password@localhost:5432/your_database" > .env
@@ -40,40 +54,30 @@ echo "ENVIRONMENT=development" >> .env
 echo "PORT=4000" >> .env
 
 # Apply database migrations (includes essential seed data)
-source .venv/bin/activate
-python database/migrate.py up
+.venv/bin/python3 database/migrate.py up
 
 # Add comprehensive development data (optional but recommended)
-python database/seed.py
+.venv/bin/python3 database/seed.py
 
 # Check migration and seeding status
-python database/migrate.py status
-psql "$DATABASE_URL" -c "SELECT COUNT(*) as line_items FROM line_item_definitions;"
+.venv/bin/python3 database/migrate.py status
 ```
 
-### 4. Start FastAPI Backend Server
-
+#### 4. Start FastAPI Backend Server
 ```bash
-# Activate virtual environment (if not already active)
-source .venv/bin/activate
+# Start FastAPI development server
+.venv/bin/python3 server/main.py
 
-# Start FastAPI development server with auto-reload
-python server/main.py
-
-# OR use uvicorn directly from project root
+# OR use uvicorn directly
 uvicorn server.main:app --host 0.0.0.0 --port 4000 --reload
 ```
 
 **Backend will be available at:** `http://localhost:4000`
 
-### 5. Start React Client
-
+#### 5. Start React Client
 ```bash
 # Open new terminal and navigate to client directory
 cd client
-
-# Create React environment file
-echo "REACT_APP_API_URL=http://localhost:4000" > .env.local
 
 # Install React dependencies
 npm install
@@ -86,58 +90,79 @@ npm start
 
 ## Development Commands Reference
 
-### Python Virtual Environment Commands
-
+### Make Commands (Recommended)
 ```bash
-# Activate virtual environment
-source .venv/bin/activate
+# Setup and dependencies
+make setup        # Complete setup for new developers
+make install      # Install Python dependencies only
+make kill-ports   # Kill processes on ports 3000 and 4000
 
-# Deactivate virtual environment
-deactivate
+# Development servers
+make server       # Start FastAPI server (port 4000)
+make client       # Start React client (port 3000)
 
-# Install new Python package
-uv pip install package_name
+# Testing
+make test         # Run all tests
+make test-unit    # Run unit tests only
+make test-db      # Test database connection
+make test-api     # Test API endpoints
+make health       # Check application health
 
-# Show installed packages
-uv pip list
+# CI/CD operations
+make ci-check     # Run full CI health check
+make deploy       # Production deployment
+make validate     # Validate configuration
 
-# Update requirements.txt after adding dependencies to pyproject.toml
-uv pip compile pyproject.toml -o requirements.txt
+# Data management
+make aliases ARGS="list"                    # List period aliases
+make aliases ARGS="add --alias Q1 --canonical 2025-Q1"  # Add alias
+make questions    # Generate analytical questions
+make validate-yaml # Validate YAML configuration files
+make generate-periods # Generate periods.yaml
 
-# Sync environment with requirements.txt
-uv pip sync requirements.txt
+# Utilities
+make clean        # Clean up generated files
 ```
 
-### FastAPI Backend Development Commands
-
+### Direct Python Commands
 ```bash
-# Development server (auto-restart on changes)
-source .venv/bin/activate
-uvicorn main:app --host 0.0.0.0 --port 4000 --reload
+# Always use .venv/bin/python3 for consistency
 
-# Production mode
-uvicorn main:app --host 0.0.0.0 --port 4000
+# Database operations
+.venv/bin/python3 database/migrate.py status
+.venv/bin/python3 database/migrate.py up
+.venv/bin/python3 database/seed.py
 
-# Run specific Python scripts directly (with venv active)
-source .venv/bin/activate
-python server/app/services/calc_metrics.py 1
-python server/app/services/questions_engine.py 1
-python server/app/services/report_generator.py 1 /path/to/output.pdf
+# CI management
+.venv/bin/python3 scripts/ci_manager.py health
+.venv/bin/python3 scripts/ci_manager.py db check
+.venv/bin/python3 scripts/ci_manager.py test
 
-# Check server health
+# Data management
+.venv/bin/python3 scripts/manage.py validate-yaml
+.venv/bin/python3 scripts/manage.py questions
+
+# Direct service execution
+.venv/bin/python3 server/app/services/calc_metrics.py 1
+.venv/bin/python3 server/app/services/questions_engine.py 1
+.venv/bin/python3 server/app/services/report_generator.py 1
+```
+
+### API Testing Commands
+```bash
+# Health check
 curl http://localhost:4000/health
 
 # Test file upload
-curl -F "file=@../data/sample_data.csv" http://localhost:4000/api/upload
+curl -F "file=@data/sample_data.csv" http://localhost:4000/api/v1/upload
 
 # Test report generation
-curl -X POST http://localhost:4000/api/generate-report \
+curl -X POST http://localhost:4000/api/v1/generate-report \
      -H "Content-Type: application/json" \
      -d '{"company_id":1}'
 ```
 
 ### Frontend Development Commands
-
 ```bash
 cd client
 
@@ -159,42 +184,30 @@ npm install package-name
 The system uses **database migrations** with full CI/CD integration and rollback capability.
 
 ```bash
-# Basic Migration Commands
-source .venv/bin/activate
+# Migration Commands (using make)
+make test-db      # Test database connection
 
-# Check migration status
-python database/migrate.py status
+# Direct migration commands
+.venv/bin/python3 database/migrate.py status
+.venv/bin/python3 database/migrate.py up
+.venv/bin/python3 database/migrate.py down
+.venv/bin/python3 database/migrate.py create "Add new feature"
+.venv/bin/python3 database/migrate.py update-rollback
 
-# Apply all pending migrations
-python database/migrate.py up
+# Database seeding
+.venv/bin/python3 database/seed.py
 
-# Rollback last migration
-python database/migrate.py down
-
-# Create new migration
-python database/migrate.py create "Add new feature"
-
-# Update rollback SQL from migration files
-python database/migrate.py update-rollback
-
-# CI/CD Integration Commands
-# Run migration system check
-bash ci/00_migration_check.sh
-
-# Apply migrations in CI/CD mode
-bash ci/03_apply_schema.sh
-
-# Run comprehensive integration test (includes migrations)
-bash ci/12_comprehensive_check.sh
-
-# Check deployment health
-bash scripts/health-check.sh
+# CI/CD Integration using consolidated scripts
+.venv/bin/python3 scripts/ci_manager.py db setup    # Setup database
+.venv/bin/python3 scripts/ci_manager.py db check    # Test connection
+.venv/bin/python3 scripts/ci_manager.py health      # Health check
+.venv/bin/python3 scripts/ci_manager.py validate    # Validate config
 
 # Database Testing
 # Test database connection
-python -c "
+.venv/bin/python3 -c "
 import sys
-sys.path.append('server/scripts')
+sys.path.append('server/app/services')
 from utils import get_db_connection
 with get_db_connection() as conn:
     print('✅ Database connection successful!')
@@ -204,8 +217,6 @@ with get_db_connection() as conn:
 psql "$DATABASE_URL" -c "\dt"
 psql "$DATABASE_URL" -c "SELECT COUNT(*) FROM financial_metrics;"
 psql "$DATABASE_URL" -c "SELECT name FROM line_item_definitions;"
-
-# See database/README.md for complete migration documentation
 ```
 
 #### CI/CD Migration Features
@@ -229,21 +240,37 @@ financial-data-analysis/
 ├── server/                # FastAPI backend server
 │   ├── main.py           # FastAPI application entry point
 │   └── app/              # Application package
+│       ├── api/          # API routers and endpoints
+│       │   └── v1/       # API v1 routes
+│       ├── core/         # Core application components
+│       │   ├── config.py # Pydantic configuration
+│       │   └── background_tasks.py
+│       ├── models/       # Data models
+│       │   ├── api/      # API request/response models
+│       │   └── domain/   # Business domain models
+│       ├── repositories/ # Data access layer
 │       └── services/     # Business logic modules
 │           ├── pipeline_processor.py
 │           ├── calc_metrics.py
 │           ├── report_generator.py
 │           └── utils.py
-├── scripts/               # General utility scripts
+├── scripts/               # Consolidated CI/CD scripts
+│   ├── ci_manager.py     # Main CI/CD operations
+│   └── manage.py         # Data management utilities
 ├── client/                # React frontend
 │   ├── src/
 │   │   ├── App.jsx
 │   │   └── components/
 │   └── package.json
 ├── database/              # Database migrations
-│   ├── migrate.py
-│   ├── migrations/
-│   └── seed.py
+│   ├── migrate.py        # Migration management
+│   ├── migrations/       # SQL migration files
+│   └── seed.py          # Comprehensive seed data
+├── tests/                 # Test suite
+│   ├── unit/             # Unit tests
+│   ├── integration/      # Integration tests
+│   └── conftest.py       # Test configuration
+├── .github/workflows/     # GitHub Actions CI
 ├── config/                # YAML configurations
 ├── .venv/                 # Python virtual environment
 ├── .env                   # Environment variables
@@ -347,17 +374,17 @@ For production deployment, see the main README.md file which covers:
 
 ---
 
-**Quick Start Summary:**
-1. `uv venv && source .venv/bin/activate`
-2. `uv pip install -r requirements.txt`
-3. Set up `.env` with `DATABASE_URL`
-4. `python database/migrate.py up && python database/seed.py`
-5. `python server/main.py` (FastAPI backend)
-6. `cd client && npm install && npm start` (React frontend)
-7. Open `http://localhost:3000`
-
-**Alternative using Make:**
+**Quick Start Summary (Recommended):**
 1. `make setup` (installs deps + sets up database)
 2. `make server` (FastAPI backend)
 3. `make client` (React frontend)
 4. Open `http://localhost:3000`
+
+**Manual Alternative:**
+1. `uv venv && source .venv/bin/activate`
+2. `uv pip install -r requirements.txt`
+3. Set up `.env` with `DATABASE_URL`
+4. `.venv/bin/python3 database/migrate.py up && .venv/bin/python3 database/seed.py`
+5. `.venv/bin/python3 server/main.py` (FastAPI backend)
+6. `cd client && npm install && npm start` (React frontend)
+7. Open `http://localhost:3000`
