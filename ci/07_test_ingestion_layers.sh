@@ -73,16 +73,16 @@ test_database_connection() {
     fi
 }
 
-# Test 1: Python environment and imports
+# Test 1: uv run python environment and imports
 test_python_environment() {
-    print_test "Python environment and module imports"
+    print_test "uv run python environment and module imports"
     
-    if python3 -c "
+    if uv run python -c "
 import sys
 sys.path.insert(0, 'server/scripts')
 
 try:
-    from extraction import extract_data_auto
+    from extraction import extract_data
     from field_mapper import map_and_filter_row  
     from normalization import normalize_data
     from persistence import persist_data
@@ -92,9 +92,9 @@ except ImportError as e:
     print(f'❌ Import error: {e}')
     exit(1)
 "; then
-        print_pass "Python environment OK"
+        print_pass "uv run python environment OK"
     else
-        print_fail "Python import issues"
+        print_fail "uv run python import issues"
         return 1
     fi
 }
@@ -103,14 +103,14 @@ except ImportError as e:
 test_extraction_layer() {
     print_test "Layer 1: Data Extraction"
     
-    python3 << EOF
+    uv run python << EOF
 import sys
 sys.path.insert(0, 'server/scripts')
 
-from extraction import extract_data_auto
+from extraction import extract_data
 
 try:
-    data = extract_data_auto('$TEST_FILE')
+    data = extract_data('$TEST_FILE')
     print(f'✅ Extracted {len(data)} rows')
     
     if len(data) >= $EXPECTED_ROWS:
@@ -149,16 +149,16 @@ EOF
 test_field_mapping_layer() {
     print_test "Layer 2: Field Mapping"
     
-    python3 << EOF
+    uv run python << EOF
 import sys
 sys.path.insert(0, 'server/scripts')
 
-from extraction import extract_data_auto
+from extraction import extract_data
 from field_mapper import map_and_filter_row
 
 try:
     # Get raw data
-    raw_data = extract_data_auto('$TEST_FILE')
+    raw_data = extract_data('$TEST_FILE')
     print(f'✅ Got {len(raw_data)} raw rows')
     
     # Test field mapping
@@ -196,17 +196,17 @@ EOF
 test_normalization_layer() {
     print_test "Layer 3: Normalization"
     
-    python3 << EOF
+    uv run python << EOF
 import sys
 sys.path.insert(0, 'server/scripts')
 
-from extraction import extract_data_auto
+from extraction import extract_data
 from field_mapper import map_and_filter_row
 from normalization import normalize_data
 
 try:
     # Get mapped data
-    raw_data = extract_data_auto('$TEST_FILE')
+    raw_data = extract_data('$TEST_FILE')
     mapped_rows = []
     for row in raw_data:
         mapped_rows.append(map_and_filter_row(row))
@@ -260,18 +260,18 @@ test_persistence_layer() {
     # Clear any existing test data
     psql "$DATABASE_URL" -c "DELETE FROM financial_metrics WHERE source_file = 'test_minimal.csv';" > /dev/null
     
-    python3 << EOF
+    uv run python << EOF
 import sys
 sys.path.insert(0, 'server/scripts')
 
-from extraction import extract_data_auto
+from extraction import extract_data
 from field_mapper import map_and_filter_row
 from normalization import normalize_data
 from persistence import persist_data
 
 try:
     # Get normalized data
-    raw_data = extract_data_auto('$TEST_FILE')
+    raw_data = extract_data('$TEST_FILE')
     mapped_rows = [map_and_filter_row(row) for row in raw_data]
     normalized_rows, error_count = normalize_data(mapped_rows, '$TEST_FILE')
     
@@ -366,7 +366,7 @@ test_full_integration() {
     psql "$DATABASE_URL" -c "DELETE FROM financial_metrics WHERE source_file = 'test_minimal.csv';" > /dev/null
     
     # Run the actual ingestion script
-    if python3 server/scripts/ingest_xlsx.py "$TEST_FILE" "$COMPANY_ID"; then
+    if uv run python server/scripts/ingest_xlsx.py "$TEST_FILE" "$COMPANY_ID"; then
         print_pass "ingest_xlsx.py executed successfully"
     else
         print_fail "ingest_xlsx.py failed"
@@ -428,7 +428,11 @@ test_upload_api() {
     fi
     
     # Test file upload
-    local upload_response=$(curl -sf -w "%{http_code}" -F "file=@$TEST_FILE" "http://localhost:4001/api/upload" 2>/dev/null || echo "FAILED")
+    local upload_response=$(curl -sf -w "%{http_code}" \
+        -F "file=@$TEST_FILE" \
+        -F "company_id=$COMPANY_ID" \
+        "http://localhost:4001/api/upload" \
+        2>/dev/null || echo "FAILED")
     
     # Clean up container
     docker stop "$container_name" > /dev/null 2>&1
