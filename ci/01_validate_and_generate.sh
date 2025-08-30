@@ -14,10 +14,16 @@ else
 fi
 
 echo "=== STEP 0: Config and YAML Validation ==="
-poetry run python scripts/validate_yaml.py
+uv run python scripts/validate_yaml.py
 
+<<<<<<< HEAD
 echo "=== STEP 0: Database migrations ==="
 echo "NOTE: Schema generation has been replaced with database migrations."
 echo "To apply database schema changes, run: python database/migrate.py up"
+=======
+echo "=== STEP 0: Generating SQL schema and question templates ==="
+uv run python scripts/generate_schema.py
+uv run python scripts/generate_questions.py
+>>>>>>> main
 
 echo "=== Config validation complete! ==="

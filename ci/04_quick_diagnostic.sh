@@ -8,10 +8,17 @@ echo "🔍 === QUICK INGESTION DIAGNOSTIC ==="
 
 # Load environment
 if [[ -f .env ]]; then
+    echo "Loading .env environment variables."
     export $(grep -v '^#' .env | xargs)
 fi
 
 : "${DATABASE_URL:?DATABASE_URL must be set}"
+
+# Activate uv virtual environment if present
+if [[ -f .venv/bin/activate ]]; then
+    # shellcheck disable=SC1091
+    source .venv/bin/activate
+fi
 
 # Create minimal test data
 cat > data/quick_test.csv << 'EOF'
@@ -24,59 +31,67 @@ echo ""
 
 # Test 1: Python Environment
 echo "🔍 Test 1: Python modules can be imported"
-python3 -c "
+uv run python - <<'PYCODE'
 import sys
 sys.path.insert(0, 'server/scripts')
-from extraction import extract_data_auto
+from extraction import extract_data
 from field_mapper import map_and_filter_row
 from normalization import normalize_data
 from persistence import persist_data
 from utils import get_db_connection
 print('✅ All modules imported successfully')
-" || { echo "❌ Python import failed"; exit 1; }
+PYCODE
+
+echo ""
 
 # Test 2: Extraction
 echo "🔍 Test 2: Data extraction"
-python3 -c "
+uv run python - <<'PYCODE'
 import sys
 sys.path.insert(0, 'server/scripts')
-from extraction import extract_data_auto
-data = extract_data_auto('data/quick_test.csv')
+from extraction import extract_data
+data = extract_data('data/quick_test.csv')
 print(f'✅ Extracted {len(data)} rows')
-print(f'Sample: {data[0] if data else \"No data\"}')
-" || { echo "❌ Extraction failed"; exit 1; }
+print(f'Sample: {data[0] if data else "No data"}')
+PYCODE
 
-# Test 3: Field Mapping  
+echo ""
+
+# Test 3: Field Mapping
 echo "🔍 Test 3: Field mapping"
-python3 -c "
+uv run python - <<'PYCODE'
 import sys
 sys.path.insert(0, 'server/scripts')
-from extraction import extract_data_auto
+from extraction import extract_data
 from field_mapper import map_and_filter_row
-data = extract_data_auto('data/quick_test.csv')
+data = extract_data('data/quick_test.csv')
 mapped = map_and_filter_row(data[0])
 print(f'✅ Mapped row: {mapped}')
-" || { echo "❌ Field mapping failed"; exit 1; }
+PYCODE
+
+echo ""
 
 # Test 4: Normalization
 echo "🔍 Test 4: Normalization"
-python3 -c "
+uv run python - <<'PYCODE'
 import sys
 sys.path.insert(0, 'server/scripts')
-from extraction import extract_data_auto
+from extraction import extract_data
 from field_mapper import map_and_filter_row
 from normalization import normalize_data
-data = extract_data_auto('data/quick_test.csv')
+data = extract_data('data/quick_test.csv')
 mapped = [map_and_filter_row(row) for row in data]
 normalized, errors = normalize_data(mapped, 'quick_test.csv')
 print(f'✅ Normalized {len(normalized)} rows, {errors} errors')
 if normalized:
     print(f'Sample normalized: {normalized[0]}')
-" || { echo "❌ Normalization failed"; exit 1; }
+PYCODE
+
+echo ""
 
 # Test 5: Database Connection
 echo "🔍 Test 5: Database connectivity"
-python3 -c "
+uv run python - <<'PYCODE'
 import sys
 sys.path.insert(0, 'server/scripts')
 from utils import get_db_connection
@@ -85,7 +100,9 @@ with get_db_connection() as conn:
         cur.execute('SELECT COUNT(*) FROM financial_metrics')
         count = cur.fetchone()[0]
         print(f'✅ Database connection OK, current rows: {count}')
-" || { echo "❌ Database connection failed"; exit 1; }
+PYCODE
+
+echo ""
 
 # Test 6: Full Pipeline (with detailed output)
 echo "🔍 Test 6: Full pipeline with debugging"
@@ -93,10 +110,10 @@ echo "🔍 Test 6: Full pipeline with debugging"
 # Clear any existing test data
 psql "$DATABASE_URL" -c "DELETE FROM financial_metrics WHERE source_file = 'quick_test.csv';" > /dev/null
 
-python3 - << 'PYCODE'
+uv run python - <<'PYCODE'
 import sys
 sys.path.insert(0, 'server/scripts')
-from extraction import extract_data_auto
+from extraction import extract_data
 from field_mapper import map_and_filter_row
 from normalization import normalize_data
 from persistence import persist_data
@@ -105,7 +122,7 @@ from utils import get_db_connection
 print('🔄 Running full pipeline...')
 
 # 1. Extract
-data = extract_data_auto('data/quick_test.csv')
+data = extract_data('data/quick_test.csv')
 print(f'1. Extracted: {len(data)} rows')
 
 # 2. Map

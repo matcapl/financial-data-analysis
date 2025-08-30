@@ -27,8 +27,13 @@ source .venv/bin/activate     # macOS/Linux
 # OR
 .venv\Scripts\activate        # Windows
 
+<<<<<<< HEAD
 # Install Python dependencies
 uv pip install -r requirements.txt
+=======
+# Install Python dependencies from pyproject.toml
+uv sync
+>>>>>>> main
 ```
 
 ### 3. Database Setup
@@ -95,17 +100,33 @@ source .venv/bin/activate
 # Deactivate virtual environment
 deactivate
 
+<<<<<<< HEAD
 # Install new Python package
 uv pip install package_name
+=======
+# Install new Python package and update pyproject.toml
+uv add package_name
+
+# Remove Python package
+uv remove package_name
+>>>>>>> main
 
 # Show installed packages
 uv pip list
 
+<<<<<<< HEAD
 # Update requirements.txt after adding dependencies to pyproject.toml
 uv pip compile pyproject.toml -o requirements.txt
 
 # Sync environment with requirements.txt
 uv pip sync requirements.txt
+=======
+# Sync dependencies from pyproject.toml
+uv sync
+
+# Update all packages to latest compatible versions
+uv lock --upgrade
+>>>>>>> main
 ```
 
 ### FastAPI Backend Development Commands
