@@ -1,5 +1,5 @@
 # Financial Data Analysis - Enterprise FastAPI Architecture
-.PHONY: help setup install server client test-db test-api clean kill-ports ci-check deploy health validate aliases questions generate-periods validate-yaml docker-build docker-dev docker-stop monitoring-health monitoring-metrics
+.PHONY: help setup install server client test-db test-api clean kill-ports ci-check deploy health validate aliases questions generate-periods validate-yaml docker-build docker-dev docker-stop monitoring-health monitoring-metrics cleanup-dev cleanup-dry-run
 
 # Default target
 help:
@@ -37,6 +37,8 @@ help:
 	@echo "make questions    - Generate analytical questions"
 	@echo "make validate-yaml - Validate YAML configuration files"
 	@echo "make generate-periods - Generate periods.yaml"
+	@echo "make cleanup-dev  - Clear transient data (development only)"
+	@echo "make cleanup-dry-run - Preview cleanup without executing"
 	@echo ""
 	@echo "Utility Commands:"
 	@echo "make kill-ports   - Kill processes on ports 3000 and 4000"
@@ -171,3 +173,12 @@ setup: install db-setup test-db
 	@echo "3. In terminal 2: make client"
 	@echo "4. Visit http://localhost:3000"
 	@echo ""
+
+# Database Cleanup Commands (Development/Testing Only)
+cleanup-dev:
+	@echo "🧹 Cleaning transient data in development environment..."
+	@.venv/bin/python3 scripts/cleanup_transient_data.py --confirm
+
+cleanup-dry-run:
+	@echo "🔍 Previewing transient data cleanup..."
+	@.venv/bin/python3 scripts/cleanup_transient_data.py --dry-run
