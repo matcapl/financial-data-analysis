@@ -28,8 +28,8 @@ source .venv/bin/activate     # macOS/Linux
 # OR
 .venv\Scripts\activate        # Windows
 
-# Install Python dependencies
-uv add pandas psycopg2-binary openpyxl fpdf2 pyyaml pathlib
+# Install Python dependencies from pyproject.toml
+uv sync
 ```
 
 ### 3. Database Setup
@@ -107,7 +107,7 @@ source .venv/bin/activate
 # Deactivate virtual environment
 deactivate
 
-# Install new Python package
+# Install new Python package and update pyproject.toml
 uv add package_name
 
 # Remove Python package
@@ -116,8 +116,11 @@ uv remove package_name
 # Show installed packages
 uv pip list
 
-# Update all packages
-uv pip sync requirements.txt
+# Sync dependencies from pyproject.toml
+uv sync
+
+# Update all packages to latest compatible versions
+uv lock --upgrade
 ```
 
 ### Backend Development Commands
