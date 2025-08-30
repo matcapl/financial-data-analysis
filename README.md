@@ -19,6 +19,9 @@ Enterprise-grade financial data processing system with TypeScript React frontend
 
 🔧 **Enterprise Operations**
 - Correlation ID tracking across all requests
+- Rate limiting (100 requests/minute per IP)
+- Database connection pooling (5-20 connections)
+- Memory monitoring with automatic garbage collection
 - Structured JSON logging with automatic error detection
 - Performance monitoring with slow operation alerts
 - System resource monitoring (CPU, memory, disk)
@@ -198,10 +201,12 @@ financial-data-analysis/
 │   ├── main.py                # Application entry point with monitoring
 │   └── app/
 │       ├── api/               # API endpoints and routers
-│       ├── core/              # Configuration, monitoring, error tracking
+│       ├── core/              # Configuration, monitoring, rate limiting
 │       ├── models/            # Pydantic data models
 │       ├── repositories/      # Database access layer
-│       └── services/          # Business logic and data processing
+│       ├── services/          # Business logic and data processing
+│       ├── utils/             # Shared utilities and logging
+│       └── tests/             # All tests
 ├── database/                   # Database migrations and seeding
 │   ├── migrations/            # SQL migration files
 │   ├── migrate.py            # Migration management

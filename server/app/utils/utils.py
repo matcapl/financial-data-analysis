@@ -12,12 +12,19 @@ import pandas as pd
 load_dotenv()
 
 def get_db_connection():
-    """Get database connection using DATABASE_URL"""
+    """Get database connection with fallback for direct scripts"""
     try:
-        return psycopg2.connect(os.environ["DATABASE_URL"])
-    except psycopg2.Error as e:
-        log_event('database_error', {'error': str(e)})
-        raise
+        # Try connection pool first (when running as part of FastAPI app)
+        from ..core.database_pool import db_pool
+        return db_pool.get_connection()
+    except (ImportError, ValueError):
+        # Fallback to direct connection for scripts and migration tools
+        try:
+            import psycopg2
+            return psycopg2.connect(os.environ["DATABASE_URL"])
+        except psycopg2.Error as e:
+            log_event('database_error', {'error': str(e)})
+            raise
 
 def log_event(event_type, data):
     """Log events to JSON file, serializing unknown types as strings"""

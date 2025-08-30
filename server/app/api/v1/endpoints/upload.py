@@ -10,12 +10,9 @@ from typing import Optional, List
 
 from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "services"))
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-
-from utils import get_db_connection
-from logging_config import setup_logger, log_with_context
-from pipeline_processor import FinancialDataProcessor
+from app.utils.utils import get_db_connection
+from app.utils.logging_config import setup_logger, log_with_context
+from app.services.pipeline_processor import FinancialDataProcessor
 from app.models.api.responses import UploadResponse
 from app.core.config import settings
 

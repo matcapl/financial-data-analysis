@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).parent / "app"))
 
 from app.core.config import settings
 from app.api.v1.router import api_router
-from app.services.logging_config import setup_logger, log_with_context
+from app.utils.logging_config import setup_logger, log_with_context
 from app.core.metrics_middleware import add_metrics_middleware
 from app.core.monitoring import enhanced_logger
 from app.core.error_tracking import error_tracker, track_exception
@@ -30,7 +30,11 @@ app = FastAPI(
     version=settings.version
 )
 
-# Add monitoring middleware first
+# Add rate limiting middleware first
+from app.core.rate_limiter import RateLimitMiddleware
+app.add_middleware(RateLimitMiddleware, requests_per_minute=100)
+
+# Add monitoring middleware
 add_metrics_middleware(app)
 
 # Setup CORS

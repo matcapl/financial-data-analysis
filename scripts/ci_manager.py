@@ -16,6 +16,7 @@ from datetime import datetime
 
 # Add server modules to path
 project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root / "server" / "app" / "utils"))
 sys.path.insert(0, str(project_root / "server" / "app" / "services"))
 
 from logging_config import setup_logger, log_with_context

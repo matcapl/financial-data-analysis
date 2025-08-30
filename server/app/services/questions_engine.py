@@ -21,7 +21,14 @@ from pathlib import Path
 
 # FIXED: Use absolute path resolution from project root
 project_root = Path(__file__).resolve().parent.parent.parent.parent
-from utils import get_db_connection, log_event
+sys.path.insert(0, str(project_root / 'server'))
+
+try:
+    from app.utils.utils import get_db_connection, log_event
+except ImportError:
+    # Fallback for standalone execution
+    sys.path.insert(0, str(project_root / 'server' / 'app' / 'utils'))
+    from utils import get_db_connection, log_event
 
 
 class QuestionsEngine:

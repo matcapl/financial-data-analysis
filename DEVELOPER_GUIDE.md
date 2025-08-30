@@ -257,16 +257,21 @@ financial-data-analysis/
 │       │   └── v1/       # API v1 routes
 │       ├── core/         # Core application components
 │       │   ├── config.py # Pydantic configuration
-│       │   └── background_tasks.py
+│       │   ├── rate_limiter.py # Rate limiting middleware
+│       │   ├── database_pool.py # Connection pooling
+│       │   └── memory_manager.py # Memory optimization
 │       ├── models/       # Data models
 │       │   ├── api/      # API request/response models
 │       │   └── domain/   # Business domain models
 │       ├── repositories/ # Data access layer
-│       └── services/     # Business logic modules
-│           ├── pipeline_processor.py
-│           ├── calc_metrics.py
-│           ├── report_generator.py
-│           └── utils.py
+│       ├── services/     # Business logic modules
+│       │   ├── pipeline_processor.py
+│       │   ├── calc_metrics.py
+│       │   └── report_generator.py
+│       ├── utils/        # Shared utilities
+│       │   ├── utils.py  # Database and utility functions
+│       │   └── logging_config.py # Logging configuration
+│       └── tests/        # All tests
 ├── scripts/               # Consolidated CI/CD scripts
 │   ├── ci_manager.py     # Main CI/CD operations
 │   └── manage.py         # Data management utilities
@@ -434,6 +439,9 @@ curl http://localhost:4000/api/monitoring/errors/slow-operations
 
 ### Performance Monitoring Features
 - **Correlation IDs**: Track requests across the entire system
+- **Rate Limiting**: 100 requests/minute per IP address protection
+- **Connection Pooling**: 5-20 database connections for optimal performance
+- **Memory Management**: Automatic garbage collection for large operations
 - **Automatic Timing**: All API requests and database queries timed automatically
 - **Slow Operation Detection**: Alerts for operations taking >2 seconds
 - **System Resource Monitoring**: CPU, memory, and disk usage tracking

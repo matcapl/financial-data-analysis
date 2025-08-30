@@ -4,8 +4,19 @@ import json
 import datetime
 import logging
 import psycopg2
-from utils import get_db_connection
+from pathlib import Path
 from fpdf import FPDF
+
+# Add proper path for imports
+project_root = Path(__file__).resolve().parent.parent.parent.parent
+sys.path.insert(0, str(project_root / 'server'))
+
+try:
+    from app.utils.utils import get_db_connection
+except ImportError:
+    # Fallback for standalone execution
+    sys.path.insert(0, str(project_root / 'server' / 'app' / 'utils'))
+    from utils import get_db_connection
 
 
 # Setup logging
@@ -73,75 +84,68 @@ class Report(FPDF):
 
 def generate_report(company_id: int, output_path: str):
     logger.info(f"Starting report generation for company_id={company_id}")
-    conn = None
-    cur = None
     try:
-        conn = get_db_connection()
-        cur = conn.cursor()
-        # Fetch metrics
-        cur.execute(
-            """
-            SELECT lid.name, p.period_label, fm.value_type, fm.value, fm.currency,
-                   fm.source_file, fm.source_page, fm.notes
-              FROM financial_metrics fm
-              JOIN line_item_definitions lid ON fm.line_item_id = lid.id
-              JOIN periods p ON fm.period_id = p.id
-             WHERE fm.company_id = %s
-             ORDER BY p.start_date, lid.name
-            """, (company_id,)
-        )
-        metrics = cur.fetchall()
-        # Fetch questions - simplified query that works with current schema
-        try:
+        with get_db_connection() as conn:
+            cur = conn.cursor()
+            # Fetch metrics
             cur.execute(
                 """
-                SELECT q.id, q.company_id, q.created_at, q.question_text, q.category, q.priority
-                  FROM questions q
-                 WHERE q.company_id = %s
-                 ORDER BY q.created_at DESC
-                 LIMIT 10
+                SELECT lid.name, p.period_label, fm.value_type, fm.value, fm.currency,
+                       fm.source_file, fm.source_page, fm.notes
+                  FROM financial_metrics fm
+                  JOIN line_item_definitions lid ON fm.line_item_id = lid.id
+                  JOIN periods p ON fm.period_id = p.id
+                 WHERE fm.company_id = %s
+                 ORDER BY p.start_date, lid.name
                 """, (company_id,)
             )
-            questions_data = cur.fetchall()
-            # Convert to expected format (placeholder data since questions aren't persisted)
-            questions = [(f"Generated question {i+1}", "Open", 5) for i, _ in enumerate(questions_data)]
-        except Exception as e:
-            logger.warning(f"Questions query failed: {e}. Using empty questions list.")
-            questions = []
+            metrics = cur.fetchall()
+            # Fetch questions - simplified query that works with current schema
+            try:
+                cur.execute(
+                    """
+                    SELECT q.id, q.company_id, q.created_at, q.question_text, q.category, q.priority
+                      FROM questions q
+                     WHERE q.company_id = %s
+                     ORDER BY q.created_at DESC
+                     LIMIT 10
+                    """, (company_id,)
+                )
+                questions_data = cur.fetchall()
+                # Convert to expected format (placeholder data since questions aren't persisted)
+                questions = [(f"Generated question {i+1}", "Open", 5) for i, _ in enumerate(questions_data)]
+            except Exception as e:
+                logger.warning(f"Questions query failed: {e}. Using empty questions list.")
+                questions = []
 
-        # Generate PDF
-        pdf = Report(company_id)
-        pdf.add_page()
+            # Generate PDF
+            pdf = Report(company_id)
+            pdf.add_page()
 
-        # Metrics table
-        headers = ['Line Item','Period','Type','Value','Currency','Source','Page','Notes','Status']
-        col_widths = [40, 20, 20, 20, 20, 30, 15, 40, 20]
-        pdf.add_table(metrics, headers, col_widths)
+            # Metrics table
+            headers = ['Line Item','Period','Type','Value','Currency','Source','Page','Notes','Status']
+            col_widths = [40, 20, 20, 20, 20, 30, 15, 40, 20]
+            pdf.add_table(metrics, headers, col_widths)
 
-        # Questions table
-        q_headers = ['Question','Status','Score']
-        q_col_widths = [120, 30, 20]
-        pdf.add_table(questions, q_headers, q_col_widths)
+            # Questions table
+            q_headers = ['Question','Status','Score']
+            q_col_widths = [120, 30, 20]
+            pdf.add_table(questions, q_headers, q_col_widths)
 
-        pdf.output(output_path)
-        logger.info(f"PDF written to {output_path}")
+            pdf.output(output_path)
+            logger.info(f"PDF written to {output_path}")
 
-        # Record metadata
-        cur.execute(
-            "INSERT INTO generated_reports (company_id, report_type, file_path, created_at) VALUES (%s, %s, %s, %s)",
-            (company_id, 'financial_analysis', output_path, datetime.datetime.now())
-        )
-        conn.commit()
-        logger.info("Metadata recorded in generated_reports")
+            # Record metadata
+            cur.execute(
+                "INSERT INTO generated_reports (company_id, report_type, file_path, created_at) VALUES (%s, %s, %s, %s)",
+                (company_id, 'financial_analysis', output_path, datetime.datetime.now())
+            )
+            conn.commit()
+            logger.info("Metadata recorded in generated_reports")
 
     except Exception:
         logger.exception("Error generating report")
         sys.exit(1)
-    finally:
-        if cur:
-            cur.close()
-        if conn:
-            conn.close()
 
 
 if __name__ == "__main__":

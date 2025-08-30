@@ -10,12 +10,9 @@ from typing import List, Dict, Any, Optional
 
 from fastapi import APIRouter, HTTPException
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "services"))
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-
-from utils import get_db_connection
-from logging_config import setup_logger, log_with_context
-from pipeline_processor import FinancialDataProcessor
+from app.utils.utils import get_db_connection
+from app.utils.logging_config import setup_logger, log_with_context
+from app.services.pipeline_processor import FinancialDataProcessor
 from app.models.api.requests import ReportRequest
 from app.models.api.responses import ReportResponse
 from app.core.config import settings

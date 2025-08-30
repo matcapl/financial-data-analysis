@@ -7,7 +7,7 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 # Path insert not needed, utils is in same directory
-from utils import log_event, get_db_connection
+from app.utils.utils import log_event, get_db_connection
 
 # Load periods.yaml - navigate to project root
 BASE = Path(__file__).resolve().parent.parent.parent.parent

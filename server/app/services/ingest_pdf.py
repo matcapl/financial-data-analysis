@@ -30,7 +30,7 @@ sys.path.insert(0, str(current_dir))
 from field_mapper import map_and_filter_row
 from normalization import normalize_data
 from persistence import persist_data
-from utils import log_event
+from app.utils.utils import log_event
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

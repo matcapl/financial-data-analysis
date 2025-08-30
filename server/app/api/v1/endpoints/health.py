@@ -11,11 +11,8 @@ from typing import List
 
 from fastapi import APIRouter
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "services"))
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-
-from utils import get_db_connection
-from logging_config import setup_logger, log_with_context
+from app.utils.utils import get_db_connection
+from app.utils.logging_config import setup_logger, log_with_context
 from app.models.api.responses import HealthResponse
 
 router = APIRouter(tags=["health"])

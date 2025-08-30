@@ -16,7 +16,7 @@ current_dir = Path(__file__).resolve().parent
 sys.path.insert(0, str(current_dir))
 
 # Import structured logging
-from logging_config import setup_logger, log_with_context, log_pipeline_step
+from app.utils.logging_config import setup_logger, log_with_context, log_pipeline_step
 
 try:
     # Import all processing modules
@@ -24,7 +24,7 @@ try:
     from field_mapper import map_and_filter_row
     from normalization import normalize_data
     from persistence import persist_data
-    from utils import log_event, get_db_connection
+    from app.utils.utils import log_event, get_db_connection
     
     # Import specific script functions (we'll refactor these)
     import ingest_xlsx
@@ -173,11 +173,13 @@ class FinancialDataProcessor:
             
             # Use subprocess to call the script with command line arguments
             import subprocess
+            # Get project root directory  
+            project_root = current_dir.parent.parent.parent
             result = subprocess.run([
                 sys.executable, 
                 str(current_dir / 'calc_metrics.py'), 
                 str(company_id)
-            ], capture_output=True, text=True)
+            ], capture_output=True, text=True, cwd=str(project_root))
             
             if result.returncode == 0:
                 return PipelineResult(True, "Metrics calculated successfully", data={"output": result.stdout})
@@ -199,11 +201,13 @@ class FinancialDataProcessor:
             
             # Use subprocess to call the script with command line arguments
             import subprocess
+            # Get project root directory  
+            project_root = current_dir.parent.parent.parent
             result = subprocess.run([
                 sys.executable,
                 str(current_dir / 'questions_engine.py'),
                 str(company_id)
-            ], capture_output=True, text=True)
+            ], capture_output=True, text=True, cwd=str(project_root))
             
             if result.returncode == 0:
                 return PipelineResult(True, "Questions generated successfully", data={"output": result.stdout})
@@ -229,12 +233,14 @@ class FinancialDataProcessor:
             else:
                 # Fallback to subprocess
                 import subprocess
+                # Get project root directory  
+                project_root = current_dir.parent.parent.parent
                 result = subprocess.run([
                     sys.executable,
                     str(current_dir / 'report_generator.py'),
                     str(company_id),
                     output_path
-                ], capture_output=True, text=True)
+                ], capture_output=True, text=True, cwd=str(project_root))
                 
                 if result.returncode == 0:
                     return PipelineResult(True, f"Report generated: {output_path}", data={"output_path": output_path})
