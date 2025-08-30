@@ -4,7 +4,7 @@
 import os
 import yaml
 import re
-from utils import log_event
+from app.utils.utils import log_event
 
 CONFIG_DIR = os.path.join(os.path.dirname(__file__), os.pardir, "config")
 FIELDS_YAML = os.path.join(CONFIG_DIR, "fields.yaml")

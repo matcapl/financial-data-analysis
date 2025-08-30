@@ -13,15 +13,23 @@ FIXED ISSUES:
 
 import os
 import sys
-import yaml
 import json
+import yaml
 from datetime import datetime
+from decimal import Decimal
 from jinja2 import Template
 from pathlib import Path
 
 # FIXED: Use absolute path resolution from project root
 project_root = Path(__file__).resolve().parent.parent.parent.parent
-from utils import get_db_connection, log_event
+sys.path.insert(0, str(project_root / 'server'))
+
+try:
+    from app.utils.utils import get_db_connection, log_event
+except ImportError:
+    # Fallback for standalone execution
+    sys.path.insert(0, str(project_root / 'server' / 'app' / 'utils'))
+    from utils import get_db_connection, log_event
 
 
 class QuestionsEngine:
@@ -157,6 +165,7 @@ class QuestionsEngine:
                 **observation_data,
                 
                 # Helper functions for formatting
+                'abs': abs,  # Add abs function
                 'percent': lambda current, prior: round((current - prior) / prior * 100, 2) if prior and prior != 0 else 0,
                 'format_currency': lambda value: f"${value:,.2f}" if value else "$0.00",
                 'format_abs': lambda value: f"${abs(value):,.2f}" if value else "$0.00",
@@ -171,6 +180,11 @@ class QuestionsEngine:
                 context['budget_value'] = observation_data.get('budget_value', 0)
                 context['forecast_value'] = observation_data.get('forecast_value', 0)
                 context['variance_percent'] = observation_data.get('calculated_value', 0)
+                
+                # For margin analysis observations, map calculated_value to margin_percentage
+                if observation_data.get('observation_name') == 'margin_analysis':
+                    context['margin_percentage'] = observation_data.get('calculated_value', 0) / 100  # Convert from percentage to decimal
+                    context['margin_change'] = 0  # Default to 0 if no prior period data available
             
             # Render the template
             rendered_question = template.render(**context)
@@ -194,13 +208,49 @@ class QuestionsEngine:
             return None
     
     def _store_generated_question(self, question_data, cur):
-        """Store generated question in live_questions table"""
+        """Store generated question in questions table"""
         try:
-            # First check if we need to create a basic question record
-            # Since live_questions links to derived_metrics, we'll create a simple log entry
+            # Map priority text to integer
+            priority_map = {'low': 1, 'medium': 3, 'high': 5}
+            priority_int = priority_map.get(question_data.get('priority', 'medium'), 3)
             
-            # For now, store in a simple questions log or skip database storage
-            # This depends on your specific schema requirements
+            # Convert Decimal objects to float for JSON serialization
+            def convert_decimals(obj):
+                if isinstance(obj, dict):
+                    return {k: convert_decimals(v) for k, v in obj.items()}
+                elif isinstance(obj, list):
+                    return [convert_decimals(item) for item in obj]
+                elif isinstance(obj, Decimal):
+                    return float(obj)
+                else:
+                    return obj
+            
+            # Store metadata in metric_context jsonb field
+            context_data = convert_decimals(question_data.get('context', {}))
+            metric_context = {
+                'template_id': question_data['template_id'],
+                'observation_id': question_data['observation_id'],
+                'importance': question_data['importance'],
+                'weight': question_data.get('weight', 1.0),
+                'context': context_data
+            }
+            
+            # Insert the question into the questions table
+            cur.execute("""
+                INSERT INTO questions (
+                    company_id, 
+                    question_text, 
+                    category, 
+                    priority,
+                    metric_context
+                ) VALUES (%s, %s, %s, %s, %s)
+            """, (
+                self.company_id,
+                question_data['rendered_text'],
+                question_data['category'],
+                priority_int,
+                json.dumps(metric_context)
+            ))
             
             log_event("question_generated", {
                 "template_id": question_data['template_id'],
@@ -247,6 +297,7 @@ class QuestionsEngine:
                 questions_generated = 0
                 questions_failed = 0
                 
+                
                 for obs_data in all_observations_data:
                     observation_id = obs_data['observation_id']
                     
@@ -264,6 +315,8 @@ class QuestionsEngine:
                                 questions_generated += 1
                             else:
                                 questions_failed += 1
+                        else:
+                            questions_failed += 1
                 
                 conn.commit()
                 

@@ -48,6 +48,6 @@ $PYTHON_CMD database/seed.py || {
 LOG "Final migration status:"
 $PYTHON_CMD database/migrate.py status
 
-# Start the Node.js application
-LOG "Starting Node.js application..."
-cd server && node api/index.js
+# Start the FastAPI application
+LOG "Starting FastAPI application..."
+exec /app/.venv/bin/python server/main.py

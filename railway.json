@@ -4,6 +4,6 @@
     "dockerfilePath": "Dockerfile"
   },
   "deploy": {
-    "startCommand": "bash scripts/deploy-start.sh"
+    "startCommand": ".venv/bin/python3 server/main.py"
   }
 }

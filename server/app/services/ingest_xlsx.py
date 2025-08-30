@@ -30,7 +30,7 @@ try:
     from field_mapper import map_and_filter_row
     from normalization import normalize_data
     from persistence import persist_data
-    from utils import log_event, get_db_connection
+    from app.utils.utils import log_event, get_db_connection
 except ImportError as e:
     print(f"❌ Import error: {e}")
     print("Please ensure all required modules are available in server/scripts/")

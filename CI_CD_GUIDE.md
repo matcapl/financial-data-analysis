@@ -1,85 +1,258 @@
-# CI/CD Guide - FastAPI Backend
+# CI/CD Guide - Consolidated FastAPI Architecture
 
-This guide covers the comprehensive CI/CD pipeline for the unified FastAPI backend architecture.
+This guide covers the modernized CI/CD pipeline using consolidated Python scripts for the unified FastAPI backend architecture.
 
 ## Overview
 
-The financial data analysis system includes a robust CI/CD pipeline that:
-- ✅ Verifies FastAPI server functionality before deployment
-- ✅ Runs database migrations automatically during deployment
-- ✅ Provides rollback capabilities for safe database changes
-- ✅ Tests the complete data processing pipeline
-- ✅ Supports multiple deployment targets (Railway, Docker, GitHub Actions)
+The financial data analysis system includes an enterprise-grade CI/CD pipeline with comprehensive monitoring that:
+- ✅ Consolidated CI operations into unified Python scripts (`scripts/ci_manager.py` and `scripts/manage.py`)
+- ✅ Verifies FastAPI server functionality with health checks and performance monitoring
+- ✅ Runs database migrations automatically during deployment with rollback capabilities
+- ✅ Tests the complete data processing pipeline with performance profiling
+- ✅ Supports GitHub Actions automated testing with PostgreSQL
+- ✅ Multi-stage Docker builds with optimization and security hardening
+- ✅ Real-time monitoring with metrics collection and error tracking
+- ✅ Streamlined deployment with Railway, Docker, and Docker Compose
 
-## CI/CD Pipeline Components
+## Consolidated CI/CD Architecture
 
-### 1. Migration System Check (`ci/00_migration_check.sh`)
-Pre-deployment verification script that ensures:
-- Migration system accessibility
-- Database connectivity
-- Migration file integrity
-- Rollback SQL coverage
-- Python dependencies availability
-
-```bash
-# Run migration system check
-bash ci/00_migration_check.sh
-```
-
-### 2. Schema Application (`ci/03_apply_schema.sh`)
-Enhanced CI/CD migration runner that:
-- Loads environment variables safely
-- Checks migration status before applying
-- Applies pending migrations
-- Shows final migration status
-- Updates rollback SQL (non-critical)
+### 1. Main CI Manager (`scripts/ci_manager.py`)
+Unified CI/CD operations script that handles:
+- Database setup and health checks
+- Port management and cleanup
+- Testing (unit and integration)
+- Health monitoring
+- Configuration validation
+- Deployment operations
 
 ```bash
-# Apply migrations in CI/CD mode
-bash ci/03_apply_schema.sh
+# Available commands
+.venv/bin/python3 scripts/ci_manager.py health        # Health check
+.venv/bin/python3 scripts/ci_manager.py db setup     # Database setup
+.venv/bin/python3 scripts/ci_manager.py db check     # Database test
+.venv/bin/python3 scripts/ci_manager.py test         # Run tests
+.venv/bin/python3 scripts/ci_manager.py validate     # Config validation
+.venv/bin/python3 scripts/ci_manager.py deploy       # Production deployment
+.venv/bin/python3 scripts/ci_manager.py kill-ports   # Port cleanup
+.venv/bin/python3 scripts/ci_manager.py check-all    # Full CI check
 ```
 
-### 3. Comprehensive Testing (`ci/12_comprehensive_check.sh`)
-Full integration test that includes:
-- Migration system verification (calls `00_migration_check.sh`)
+### 2. Data Management Tool (`scripts/manage.py`)
+Consolidated data management utilities that handle:
 - YAML configuration validation
-- Python script presence checks
-- Database schema compatibility testing
-- Data ingestion pipeline testing
-- Metrics calculation testing
-- Question generation testing
-- Database integrity validation
+- Period alias management
+- Question generation
+- Configuration file generation
 
 ```bash
-# Run full integration test
-bash ci/12_comprehensive_check.sh
+# Available commands
+.venv/bin/python3 scripts/manage.py validate-yaml    # Validate YAML files
+.venv/bin/python3 scripts/manage.py aliases list     # List period aliases
+.venv/bin/python3 scripts/manage.py questions        # Generate questions
+.venv/bin/python3 scripts/manage.py generate-periods # Generate periods.yaml
 ```
 
-## Deployment Scripts
-
-### 1. Production Start (`scripts/deploy-start.sh`)
-Production deployment script that:
-- Runs database migrations before starting the app
-- Updates rollback SQL
-- Shows migration status
-- Starts the FastAPI application
+### 3. Docker Integration (`docker-compose.yml`)
+Enterprise Docker setup with multi-stage builds:
+- **Production**: Multi-stage build with frontend compilation and security hardening
+- **Development**: Full development environment with PostgreSQL and Redis
+- **Optimization**: Layer caching, minimal base images, non-root execution
 
 ```bash
-# Used automatically in railway.json
-bash scripts/deploy-start.sh
+# Docker operations
+make docker-build      # Build optimized production image
+make docker-dev        # Start PostgreSQL and Redis for development
+make docker-dev-full   # Full containerized development environment
+make docker-stop       # Stop all Docker services
 ```
 
-### 2. Health Check (`scripts/health-check.sh`)
-Post-deployment verification that checks:
-- Database connectivity and migration status
-- Application health endpoint
-- Migration system status
-- No pending migrations
+### 4. Monitoring and Observability
+Comprehensive monitoring system with real-time metrics:
+- **Correlation tracking** across all requests with unique IDs
+- **Performance monitoring** with automatic slow operation detection
+- **Error tracking** with centralized analytics and alerting
+- **System metrics** for CPU, memory, and disk usage
 
 ```bash
-# Check deployment health
-bash scripts/health-check.sh
+# Monitoring operations
+make monitoring-health   # System health and performance metrics
+make monitoring-metrics  # Application metrics dashboard
+make monitoring-errors   # Error tracking and analytics
 ```
+
+### 5. Make Integration
+All operations are accessible via Make commands for developer convenience:
+
+```bash
+# Development workflow
+make setup        # Complete setup with dependency resolution
+make ci-check     # Full CI validation with monitoring
+make health       # Application health check
+make validate     # Configuration validation
+
+# Testing
+make test         # Run all tests
+make test-unit    # Unit tests only
+make test-db      # Database connection test
+
+# Docker workflow
+make docker-build      # Build production image
+make docker-dev        # Start development services
+make docker-stop       # Stop Docker services
+
+# Monitoring
+make monitoring-health   # Health and metrics dashboard
+make monitoring-metrics  # Application performance metrics
+make monitoring-errors   # Error tracking and analytics
+
+# Data management
+make aliases ARGS="list"                           # List aliases
+make questions                                      # Generate questions
+make validate-yaml                                 # Validate YAML
+```
+
+## Deployment Operations
+
+### 1. Production Deployment
+The CI manager handles production deployment operations:
+
+```bash
+# Production deployment with CI manager
+.venv/bin/python3 scripts/ci_manager.py deploy
+
+# Or via Make command
+make deploy
+```
+
+**Deployment process:**
+1. Database migration verification and application
+2. Configuration validation
+3. Health check verification
+4. Application startup
+
+### 2. Health Monitoring
+Integrated health checks across the system:
+
+```bash
+# Application health check
+.venv/bin/python3 scripts/ci_manager.py health
+
+# Database connectivity test
+.venv/bin/python3 scripts/ci_manager.py db check
+
+# Or via Make commands
+make health
+make test-db
+```
+
+## Enterprise Docker Architecture
+
+### Multi-Stage Production Build
+
+**Optimized Dockerfile Features:**
+- **Frontend Build Stage**: Node.js 18 Alpine for TypeScript React + Tailwind compilation
+- **Production Stage**: Python 3.11 slim with FastAPI backend
+- **Security**: Non-root user execution, minimal attack surface
+- **Optimization**: Layer caching, compressed builds, health checks
+
+```dockerfile
+# Multi-stage build example
+FROM node:18-alpine AS frontend-builder
+WORKDIR /app/client
+COPY client/package*.json ./
+RUN npm ci --only=production
+COPY client/ ./
+RUN npm run build
+
+FROM python:3.11-slim AS production
+# Copy built frontend from build stage
+COPY --from=frontend-builder /app/client/build ./client/build
+```
+
+### Docker Compose Development Environment
+
+**Full Development Stack:**
+```yaml
+services:
+  postgres:    # PostgreSQL 15 with health checks
+  backend:     # FastAPI with volume mounts for development
+  frontend-dev: # React dev server with hot reload (optional)
+  redis:       # Redis caching (optional profile)
+```
+
+**Development Commands:**
+```bash
+# Start database services for development
+make docker-dev
+
+# Start full containerized development environment
+make docker-dev-full
+
+# Stop all services
+make docker-stop
+
+# Build optimized production image
+make docker-build
+```
+
+## Monitoring and Observability
+
+### Real-Time Monitoring System
+
+**Correlation Tracking:**
+- Unique correlation IDs for all requests
+- Request/response logging with timing and context
+- Cross-service request tracing
+
+**Performance Monitoring:**
+- Automatic slow operation detection (>2 seconds)
+- Database query performance tracking
+- System resource monitoring (CPU, memory, disk)
+- Code profiling with memory usage analysis
+
+**Error Tracking:**
+- Centralized error collection with unique error IDs
+- Automatic alerting for critical errors and high error rates
+- Error analytics and pattern detection
+- Stack trace preservation with context
+
+### Monitoring APIs
+
+**Health and Metrics Endpoints:**
+```bash
+# System health with performance data
+curl http://localhost:4000/api/monitoring/metrics/health
+
+# Application metrics summary
+curl http://localhost:4000/api/monitoring/metrics
+
+# Error tracking and analytics
+curl http://localhost:4000/api/monitoring/errors/summary
+
+# Slow operations analysis
+curl http://localhost:4000/api/monitoring/errors/slow-operations
+```
+
+**Monitoring Commands:**
+```bash
+# Real-time monitoring via Make commands
+make monitoring-health   # Comprehensive health dashboard
+make monitoring-metrics  # Performance metrics overview
+make monitoring-errors   # Error analytics and alerts
+```
+
+### Alert System
+
+**Automated Alerting:**
+- High error rate detection (>10 errors/minute)
+- Repeated error patterns (>5 same error occurrences)
+- Critical error immediate alerts
+- System resource threshold warnings (CPU >80%, Memory >80%)
+
+**Alert Log Files:**
+- `logs/alerts.jsonl` - Structured alert events
+- `logs/errors.jsonl` - Detailed error tracking
+- `logs/metrics.jsonl` - Performance metrics history
 
 ## Platform Integrations
 
@@ -90,18 +263,18 @@ bash scripts/health-check.sh
 {
   "build": {
     "builder": "dockerfile",
-    "dockerfilePath": "server/Dockerfile"
+    "dockerfilePath": "Dockerfile"
   },
   "deploy": {
-    "startCommand": "bash scripts/deploy-start.sh"
+    "startCommand": ".venv/bin/python3 server/main.py"
   }
 }
 ```
 
 **Features:**
-- Automatic migration execution on deployment
-- Rollback SQL updates
-- Health monitoring integration
+- Simplified deployment using direct Python execution
+- Automatic migration handling via startup logic
+- Streamlined startup process
 
 ### Docker Deployment
 
@@ -121,21 +294,45 @@ CMD ["bash", "scripts/deploy-start.sh"]
 
 ### GitHub Actions
 
-**CI/CD Pipeline (`.github/workflows/ci-cd.yml`):**
+**CI/CD Pipeline (`.github/workflows/ci.yml`):**
 
 #### Jobs:
-1. **Migration Check** - Verifies migration system with PostgreSQL service
-2. **Full Integration** - Runs comprehensive tests with database
-3. **Docker Build** - Tests container build and migration inclusion
+1. **Backend Test** - FastAPI backend with PostgreSQL service using consolidated CI scripts
+2. **Frontend Build** - TypeScript + React build and type checking
 
 #### Features:
-- PostgreSQL 15 service for realistic testing
-- Python 3.11+ environment with FastAPI and uvicorn
-- Migration rollback testing
-- Docker image structure validation
+- **Backend**: PostgreSQL 15 service, Python 3.11+, FastAPI testing
+- **Frontend**: Node.js 18+, TypeScript compilation, Tailwind CSS build
+- Uses consolidated CI manager for all operations
+- Streamlined workflow using Make commands
 
 ```yaml
-# Example job configuration
+# Backend workflow
+- name: Setup Database
+  run: make setup
+
+- name: Run Tests
+  run: make test
+
+- name: CI Health Check
+  run: make ci-check
+
+# Frontend workflow  
+- name: Setup Node.js
+  uses: actions/setup-node@v3
+  with:
+    node-version: '18'
+
+- name: Install Frontend Dependencies
+  run: cd client && npm install
+
+- name: TypeScript Type Check
+  run: cd client && npx tsc --noEmit
+
+- name: Build Frontend
+  run: cd client && npm run build
+
+# PostgreSQL service
 services:
   postgres:
     image: postgres:15
@@ -175,55 +372,90 @@ services:
 
 ## Usage Examples
 
-### Local Development
+### Local Development Workflow
+
+#### Backend Development
 ```bash
-# Check migration system
-bash ci/00_migration_check.sh
+# Full setup and validation
+make setup
+make ci-check
 
-# Apply migrations
-bash ci/03_apply_schema.sh
+# Direct CI manager usage
+.venv/bin/python3 scripts/ci_manager.py db setup
+.venv/bin/python3 scripts/ci_manager.py health
+.venv/bin/python3 scripts/ci_manager.py test
 
-# Run full integration test
-bash ci/12_comprehensive_check.sh
-
-# Check health
-bash scripts/health-check.sh
+# Data management
+.venv/bin/python3 scripts/manage.py validate-yaml
+.venv/bin/python3 scripts/manage.py questions
 ```
 
-### CI/CD Pipeline
+#### Frontend Development
+```bash
+# TypeScript + React development
+cd client
+
+# Install dependencies
+npm install
+
+# TypeScript type checking
+npx tsc --noEmit
+
+# Development server with hot reload
+npm start
+
+# Production build
+npm run build
+
+# Integrated development (both servers)
+make client  # React dev server (port 3000)
+make server  # FastAPI server (port 4000)
+```
+
+### CI/CD Pipeline (GitHub Actions)
 ```yaml
-# In GitHub Actions
-- name: Run migration system check
-  run: bash ci/00_migration_check.sh
+# Streamlined workflow using Make
+- name: Setup Environment
+  run: make setup
 
-- name: Run database migrations  
-  run: bash ci/03_apply_schema.sh
+- name: Run Tests
+  run: make test
 
-- name: Test rollback functionality
-  run: |
-    python3 database/migrate.py down
-    python3 database/migrate.py up
+- name: CI Health Check
+  run: make ci-check
+
+# Direct script usage for specific operations
+- name: Database Migration Check
+  run: .venv/bin/python3 scripts/ci_manager.py db check
+
+- name: Validate Configuration
+  run: .venv/bin/python3 scripts/ci_manager.py validate
 ```
 
 ### Production Deployment
 ```bash
-# Railway automatically executes:
-bash scripts/deploy-start.sh
+# Railway deployment (simplified)
+# Uses railway.json startCommand: ".venv/bin/python3 server/main.py"
 
-# Which includes:
-# 1. Migration execution
-# 2. Rollback SQL updates
-# 3. Application startup
+# Manual deployment operations
+.venv/bin/python3 scripts/ci_manager.py deploy
+
+# Health verification post-deployment
+.venv/bin/python3 scripts/ci_manager.py health
 ```
 
 ## Troubleshooting
 
-### Migration Check Failures
+### CI Manager Failures
 ```bash
-# Check specific components
-python3 database/migrate.py --help        # System accessibility
-python3 database/migrate.py status        # Database connectivity
-ls -la database/migrations/*.sql          # File integrity
+# Debug CI operations
+.venv/bin/python3 scripts/ci_manager.py db check     # Database connectivity
+.venv/bin/python3 scripts/ci_manager.py validate     # Configuration validation
+.venv/bin/python3 scripts/ci_manager.py health       # Application health
+
+# Check individual components
+.venv/bin/python3 database/migrate.py status         # Migration status
+ls -la database/migrations/*.sql                     # Migration files
 ```
 
 ### Deployment Issues
@@ -231,46 +463,90 @@ ls -la database/migrations/*.sql          # File integrity
 # Check environment variables
 echo $DATABASE_URL
 
-# Test migration manually
-python3 database/migrate.py up
+# Test deployment process
+.venv/bin/python3 scripts/ci_manager.py deploy
 
 # Verify health
-bash scripts/health-check.sh
+.venv/bin/python3 scripts/ci_manager.py health
 ```
 
-### Rollback Operations
+### Database Issues
 ```bash
-# Emergency rollback
-python3 database/migrate.py down
+# Database setup and testing
+.venv/bin/python3 scripts/ci_manager.py db setup
+.venv/bin/python3 scripts/ci_manager.py db check
 
-# Check status after rollback
-python3 database/migrate.py status
-
-# Re-apply if needed
-python3 database/migrate.py up
+# Manual migration operations
+.venv/bin/python3 database/migrate.py down
+.venv/bin/python3 database/migrate.py status
+.venv/bin/python3 database/migrate.py up
 ```
 
 ## Best Practices
 
-### Development
-1. **Always test migrations locally** before committing
-2. **Include rollback SQL** in all new migrations
-3. **Run CI checks** before pushing to main branch
-4. **Test rollback functionality** for critical migrations
+### Development Workflow
+
+#### Backend Development
+1. **Use Make commands** for consistent operations (`make setup`, `make test`, `make ci-check`)
+2. **Test migrations locally** before committing (`make test-db`)
+3. **Run full CI validation** before pushing (`make ci-check`)
+4. **Validate configurations** regularly (`make validate-yaml`)
+
+#### Frontend Development
+1. **TypeScript-first approach** - ensure type safety with `npx tsc --noEmit`
+2. **Component-driven development** - build reusable TypeScript components
+3. **Responsive design** - test across different screen sizes
+4. **Build validation** - always test `npm run build` before deploying
+5. **API integration testing** - verify all API calls work with backend
+
+### CI Script Usage
+1. **Use consolidated scripts** instead of individual bash scripts
+2. **Leverage CI manager** for all database and deployment operations
+3. **Use management tool** for data-related operations
+4. **Follow Make patterns** for team consistency
 
 ### Deployment
-1. **Monitor deployment logs** for migration status
-2. **Verify health checks** post-deployment
-3. **Have rollback plan** for critical deployments
-4. **Test in staging** before production deployment
+1. **Monitor deployment via CI manager** health checks
+2. **Use deployment script** for production deployments
+3. **Verify with health checks** post-deployment
+4. **Maintain rollback capabilities** through migration system
 
-### Monitoring
-1. **Check migration status** regularly
-2. **Monitor database health** continuously
-3. **Alert on pending migrations** in production
-4. **Track rollback operations** for audit purposes
+### Testing
+
+#### Backend Testing
+1. **Run unit tests regularly** (`make test-unit`)
+2. **Use integration testing** for pipeline validation
+3. **Test database operations** independently (`make test-db`)
+4. **Validate API endpoints** with health checks (`make health`)
+
+#### Frontend Testing
+1. **TypeScript compilation** - `npx tsc --noEmit` for type safety
+2. **Build testing** - `npm run build` for production readiness
+3. **Component testing** - React Testing Library for UI components
+4. **API integration testing** - Test all API calls against running backend
+5. **Cross-browser testing** - Test drag & drop functionality across browsers
+
+## Frontend-Specific CI/CD Considerations
+
+### TypeScript Build Pipeline
+- **Type Safety**: All components are TypeScript with strict type checking
+- **Build Optimization**: Webpack bundling with code splitting
+- **Asset Optimization**: Tailwind CSS purging for minimal bundle size
+- **Error Handling**: TypeScript compilation errors fail the build
+
+### Modern UI Architecture
+- **Component Library**: Reusable TypeScript components with Tailwind CSS
+- **State Management**: Type-safe React Context with TypeScript interfaces
+- **API Layer**: Strongly typed API calls with error handling
+- **Responsive Design**: Mobile-first Tailwind CSS approach
+
+### Deployment Considerations
+- **Build Assets**: Static files generated in `client/build/`
+- **Environment Variables**: `REACT_APP_API_URL` for API endpoint configuration
+- **CDN Optimization**: Serve static assets from CDN for production
+- **Browser Compatibility**: Modern browsers with ES6+ support
 
 ---
 
-**For complete migration system documentation, see `database/README.md`**
-**For development setup, see `DEVELOPER_GUIDE.md`**
+**For development setup, see `Developer_guide.md`**
+**For database migration details, see migration system in `database/`**
