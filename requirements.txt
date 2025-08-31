@@ -3,17 +3,19 @@
 annotated-types==0.7.0
     # via pydantic
 anyio==4.10.0
-    # via
-    #   starlette
-    #   watchfiles
+    # via starlette
 camelot-py==1.0.9
     # via financial-data-analysis (pyproject.toml)
+certifi==2025.8.3
+    # via requests
 cffi==1.17.1
     # via cryptography
 chardet==5.2.0
     # via camelot-py
 charset-normalizer==3.4.3
-    # via pdfminer-six
+    # via
+    #   pdfminer-six
+    #   requests
 click==8.2.1
     # via
     #   camelot-py
@@ -34,10 +36,10 @@ fpdf2==2.8.4
     # via financial-data-analysis (pyproject.toml)
 h11==0.16.0
     # via uvicorn
-httptools==0.6.4
-    # via uvicorn
 idna==3.10
-    # via anyio
+    # via
+    #   anyio
+    #   requests
 jinja2==3.1.6
     # via financial-data-analysis (pyproject.toml)
 markupsafe==3.0.2
@@ -64,8 +66,6 @@ pandas==2.3.2
     #   financial-data-analysis (pyproject.toml)
     #   camelot-py
     #   tabula-py
-pathlib==1.0.1
-    # via financial-data-analysis (pyproject.toml)
 pdf2image==1.17.0
     # via financial-data-analysis (pyproject.toml)
 pdfminer-six==20250506
@@ -76,8 +76,6 @@ pillow==11.3.0
     #   fpdf2
     #   pdf2image
     #   pytesseract
-psutil==6.1.0
-    # via financial-data-analysis (monitoring)
 psycopg2-binary==2.9.10
     # via financial-data-analysis (pyproject.toml)
 pycparser==2.22
@@ -99,17 +97,13 @@ pytesseract==0.3.13
 python-dateutil==2.9.0.post0
     # via pandas
 python-dotenv==1.1.1
-    # via
-    #   financial-data-analysis (pyproject.toml)
-    #   uvicorn
-python-multipart==0.0.20
     # via financial-data-analysis (pyproject.toml)
 pytz==2025.2
     # via pandas
 pyyaml==6.0.2
-    # via
-    #   financial-data-analysis (pyproject.toml)
-    #   uvicorn
+    # via financial-data-analysis (pyproject.toml)
+requests==2.32.5
+    # via financial-data-analysis (pyproject.toml)
 six==1.17.0
     # via python-dateutil
 sniffio==1.3.1
@@ -122,19 +116,17 @@ tabulate==0.9.0
     # via camelot-py
 typing-extensions==4.15.0
     # via
+    #   anyio
     #   fastapi
     #   pydantic
     #   pydantic-core
+    #   starlette
     #   typing-inspection
 typing-inspection==0.4.1
     # via pydantic
 tzdata==2025.2
     # via pandas
+urllib3==2.5.0
+    # via requests
 uvicorn==0.35.0
     # via financial-data-analysis (pyproject.toml)
-uvloop==0.21.0
-    # via uvicorn
-watchfiles==1.1.0
-    # via uvicorn
-websockets==15.0.1
-    # via uvicorn
