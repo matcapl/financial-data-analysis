@@ -84,8 +84,11 @@ pydantic==2.11.7
     # via
     #   financial-data-analysis (pyproject.toml)
     #   fastapi
+    #   pydantic-settings
 pydantic-core==2.33.2
     # via pydantic
+pydantic-settings==2.10.1
+    # via financial-data-analysis (pyproject.toml)
 pymupdf==1.26.4
     # via financial-data-analysis (pyproject.toml)
 pypdf==5.9.0
@@ -97,7 +100,9 @@ pytesseract==0.3.13
 python-dateutil==2.9.0.post0
     # via pandas
 python-dotenv==1.1.1
-    # via financial-data-analysis (pyproject.toml)
+    # via
+    #   financial-data-analysis (pyproject.toml)
+    #   pydantic-settings
 pytz==2025.2
     # via pandas
 pyyaml==6.0.2
@@ -123,7 +128,9 @@ typing-extensions==4.15.0
     #   starlette
     #   typing-inspection
 typing-inspection==0.4.1
-    # via pydantic
+    # via
+    #   pydantic
+    #   pydantic-settings
 tzdata==2025.2
     # via pandas
 urllib3==2.5.0
