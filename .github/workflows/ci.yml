@@ -43,8 +43,10 @@ jobs:
     - name: Create virtual environment and install dependencies
       run: |
         uv venv
-        uv pip install -r requirements.txt
-        uv pip install pytest httpx requests
+        uv sync
+        # Verify python-multipart is installed
+        source .venv/bin/activate
+        python -c "import multipart; print('✓ python-multipart is available')"
     
     - name: Set up test environment
       run: |
