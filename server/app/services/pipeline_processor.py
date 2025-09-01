@@ -25,6 +25,7 @@ try:
     from normalization import normalize_data
     from persistence import persist_data
     from app.utils.utils import log_event, get_db_connection
+    from ingest_pdf import ingest_pdf
     
     # Import specific script functions (we'll refactor these)
     import ingest_xlsx
@@ -63,15 +64,55 @@ class FinancialDataProcessor:
     def ingest_file(self, file_path: str, company_id: int) -> PipelineResult:
         """
         Process file through the three-layer ingestion pipeline
-        Replaces: runPythonScript('ingest_xlsx.py', [file_path, company_id])
+        Routes PDF files to ingest_pdf service, other files to standard extraction
         """
         try:
+            file_path_obj = Path(file_path)
+            file_extension = file_path_obj.suffix.lower()
+            
             log_with_context(
                 self.logger, 'info', 'Starting file ingestion',
-                filePath=Path(file_path).name,
-                companyId=company_id
+                filePath=file_path_obj.name,
+                companyId=company_id,
+                fileExtension=file_extension
             )
             
+            # Route PDF files to dedicated PDF ingestion service
+            if file_extension == '.pdf':
+                log_with_context(
+                    self.logger, 'info', 'Processing PDF file with dedicated PDF ingestion service',
+                    filePath=file_path_obj.name
+                )
+                
+                pdf_result = ingest_pdf(file_path, company_id)
+                
+                # Check if PDF ingestion was successful
+                if pdf_result.get('status') == 'no_data':
+                    return PipelineResult(False, "No data extracted from PDF file", errors=["Empty or invalid PDF file"])
+                
+                ingested_count = pdf_result.get('persisted', pdf_result.get('ingested', 0))
+                error_count = pdf_result.get('persist_errors', pdf_result.get('errors', 0))
+                
+                if ingested_count > 0:
+                    return PipelineResult(
+                        success=True,
+                        message=f"Successfully processed {ingested_count} rows from PDF",
+                        data={
+                            "rows_extracted": pdf_result.get('rows_extracted', 0),
+                            "rows_mapped": pdf_result.get('rows_mapped', 0), 
+                            "rows_normalized": pdf_result.get('rows_normalized', 0),
+                            "rows_persisted": ingested_count,
+                            "pdf_processing_errors": error_count
+                        }
+                    )
+                else:
+                    return PipelineResult(
+                        False,
+                        "PDF processing failed - no data persisted",
+                        errors=[f"PDF ingestion returned: {pdf_result}"]
+                    )
+            
+            # Standard pipeline for Excel/CSV files
             # Stage 1: Extract data
             log_pipeline_step(self.logger, 'data_extraction', True, stage=1)
             extracted_data = extract_data(file_path)
