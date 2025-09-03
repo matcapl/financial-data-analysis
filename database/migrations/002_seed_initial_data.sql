@@ -12,7 +12,7 @@ WITH
   boundaries AS (
     SELECT
       (current_month - INTERVAL '20 years')::date AS start_month,
-      current_month AS end_month
+      (current_month + INTERVAL '5 years')::date AS end_month
     FROM today
   ),
   monthly AS (
