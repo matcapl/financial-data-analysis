@@ -90,22 +90,22 @@ def calculate_ytd(cur, company_id, year, line_item_id):
     return float(res[0]) if res and res[0] is not None else None
 
 def insert_or_update_derived_metric(cur, base_metric_id, calculation_type, company_id, period_id,
-                                   calculated_value, unit, source_ids, calculation_note,
+                                   metric_value, unit, source_ids, calculation_note,
                                    corroboration_status, frequency):
     cur.execute(
         """
         INSERT INTO derived_metrics (
             base_metric_id, calculation_type, company_id, period_id,
-            calculated_value, unit, source_ids, calculation_note,
+            metric_value, unit, source_ids, calculation_note,
             corroboration_status, frequency, created_at, updated_at
         ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
         ON CONFLICT (base_metric_id, company_id, period_id, calculation_type) DO UPDATE SET
-            calculated_value = EXCLUDED.calculated_value,
+            metric_value = EXCLUDED.metric_value,
             updated_at = EXCLUDED.updated_at
         """,
         (
             base_metric_id, calculation_type, company_id, period_id,
-            calculated_value, unit, source_ids, calculation_note,
+            metric_value, unit, source_ids, calculation_note,
             corroboration_status, frequency
         )
     )

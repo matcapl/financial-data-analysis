@@ -83,13 +83,18 @@ BEGIN
             id SERIAL PRIMARY KEY,
             company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
             period_id INTEGER NOT NULL REFERENCES periods(id) ON DELETE CASCADE,
-            metric_name TEXT NOT NULL,
+            base_metric_id INTEGER NOT NULL DEFAULT 0,
+            metric_name TEXT NOT NULL DEFAULT 'please_provide_name',
             metric_value DECIMAL(15,4),
-            calculation_method TEXT,
-            dependencies TEXT[],
+            calculation_type TEXT NOT NULL DEFAULT '',
+            source_ids TEXT[] NOT NULL DEFAULT '{}',
+            unit TEXT,
+            calculation_note TEXT,
+            corroboration_status TEXT,
+            frequency TEXT,            
             created_at TIMESTAMP DEFAULT NOW() NOT NULL,
             updated_at TIMESTAMP DEFAULT NOW() NOT NULL,
-            UNIQUE (company_id, period_id, metric_name)
+            UNIQUE (company_id, period_id, base_metric_id, calculation_type)
         );
     ELSE
         -- Add new columns to existing table if needed
@@ -99,19 +104,19 @@ BEGIN
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'derived_metrics' AND column_name = 'metric_value') THEN
             ALTER TABLE derived_metrics ADD COLUMN metric_value DECIMAL(15,4);
         END IF;
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'derived_metrics' AND column_name = 'calculation_method') THEN
-            ALTER TABLE derived_metrics ADD COLUMN calculation_method TEXT;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'derived_metrics' AND column_name = 'calculation_type') THEN
+            ALTER TABLE derived_metrics ADD COLUMN calculation_type TEXT;
         END IF;
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'derived_metrics' AND column_name = 'dependencies') THEN
-            ALTER TABLE derived_metrics ADD COLUMN dependencies TEXT[];
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'derived_metrics' AND column_name = 'source_ids') THEN
+            ALTER TABLE derived_metrics ADD COLUMN source_ids TEXT[];
         END IF;
     END IF;
 END $$;
 
 COMMENT ON TABLE derived_metrics IS 'Calculated financial metrics derived from raw data';
 COMMENT ON COLUMN derived_metrics.metric_name IS 'Name of the calculated metric (e.g., ROI, Profit Margin)';
-COMMENT ON COLUMN derived_metrics.calculation_method IS 'Formula or method used to calculate this metric';
-COMMENT ON COLUMN derived_metrics.dependencies IS 'Array of line items this calculation depends on';
+COMMENT ON COLUMN derived_metrics.calculation_type IS 'Formula or method used to calculate this metric';
+COMMENT ON COLUMN derived_metrics.source_ids IS 'Array of line items this calculation depends on';
 
 -- Create performance indexes
 CREATE INDEX IF NOT EXISTS idx_financial_metrics_company_period ON financial_metrics(company_id, period_id);
