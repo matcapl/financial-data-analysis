@@ -8,7 +8,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import Optional, List
 
-from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, BackgroundTasks
 
 from app.utils.utils import get_db_connection
 from app.utils.logging_config import setup_logger, log_with_context
@@ -26,7 +26,7 @@ DATA_DIR = settings.project_root / "data"
 async def upload_file(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    company_id: Optional[int] = 1
+    company_id: int = Form(...)
 ):
     """
     Upload and process financial data files
