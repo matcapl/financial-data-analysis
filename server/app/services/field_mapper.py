@@ -128,6 +128,7 @@ def map_and_filter_row(raw_row: dict) -> dict:
         "currency": raw_row.get("currency", mapped_fields.get("currency_headers", "USD")),
         "source_file": raw_row.get("source_file"),
         "source_page": raw_row.get("source_page"),
+        "context_key": raw_row.get("context_key"),
         "source_table": raw_row.get("source_table"),
         "source_row": raw_row.get("source_row"),
         "source_col": raw_row.get("source_col"),

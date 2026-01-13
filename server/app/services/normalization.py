@@ -281,6 +281,7 @@ def normalize_data(
         normalized_rows.append({
             "company_id": company_id,
             "document_id": document_id,
+            "context_key": normalize_text(row.get("context_key")),
             "period_id": pid,
             "line_item_id": lid,
             "value": float(val),

@@ -28,7 +28,7 @@ current_dir = Path(__file__).resolve().parent
 sys.path.insert(0, str(current_dir))
 
 from field_mapper import map_and_filter_row
-from normalization import normalize_data
+from normalization import normalize_data, normalize_period_label
 from persistence import persist_data
 from raw_persistence import persist_raw_facts
 from app.utils.utils import log_event
@@ -97,6 +97,135 @@ def _extract_enhanced_tables(page, page_index: int) -> List[Dict[str, Any]]:
     return rows
 
 
+
+
+def _detect_context_key(table_data: List[List], page_index: int, tbl_idx: int) -> str:
+    header = ''
+    try:
+        if table_data and table_data[0] and table_data[0][0]:
+            header = str(table_data[0][0])
+    except Exception:
+        header = ''
+
+    h = header.lower()
+    tag = 'table'
+    if 'profit and loss' in h or 'p&l' in h:
+        tag = 'pl'
+    elif 'kpi' in h or 'dashboard' in h:
+        tag = 'kpi'
+    elif 'site' in h or 'club' in h or 'location' in h:
+        tag = 'site'
+
+    return f"p{page_index+1}_t{tbl_idx+1}_{tag}"
+
+
+def _coerce_cell_text(cell: Any) -> str:
+    if cell is None:
+        return ''
+    try:
+        return str(cell).strip()
+    except Exception:
+        return ''
+
+
+def _looks_numeric_cell(text: str) -> bool:
+    import re
+    if not text:
+        return False
+    return bool(re.search(r"[0-9]", text)) and bool(re.search(r"[0-9,().-]", text))
+
+
+def _extract_header_mapped_table(table_data: List[List], page_index: int, tbl_idx: int) -> List[Dict[str, Any]]:
+    """Extract facts from a typical matrix table: line items in col 0, values in other cols.
+
+    Determines period/scenario from column headers and emits rows with proper period_label/value_type.
+    """
+    if not table_data or len(table_data) < 2:
+        return []
+
+    header_rows = table_data[:2]
+    col_count = max(len(r) for r in header_rows)
+
+    col_meta: List[Dict[str, Any]] = []
+    for col_idx in range(col_count):
+        pieces = []
+        for r in header_rows:
+            if col_idx < len(r):
+                t = _coerce_cell_text(r[col_idx])
+                if t:
+                    pieces.append(t)
+        header_text = ' '.join(pieces)
+        header_low = header_text.lower()
+
+        scenario = None
+        if 'budget' in header_low or 'plan' in header_low:
+            scenario = 'Budget'
+        elif 'prior' in header_low or 'py' in header_low:
+            scenario = 'Prior Year'
+        elif 'forecast' in header_low or 'fcst' in header_low:
+            scenario = 'Forecast'
+        elif 'actual' in header_low:
+            scenario = 'Actual'
+        elif 'ytd' in header_low:
+            scenario = scenario or 'Actual'
+
+        period_label = None
+        period_type = None
+        # Try to normalize any period-like substring from the header
+        # Use the entire header text; normalization will attempt aliases/patterns.
+        canon = normalize_period_label(header_text)
+        if canon and canon[0]:
+            period_label, period_type = canon
+
+        col_meta.append({
+            'col_idx': col_idx,
+            'header_text': header_text,
+            'scenario': scenario,
+            'period_label': period_label,
+            'period_type': period_type,
+        })
+
+    # Find the first data row after header
+    context_key = _detect_context_key(table_data, page_index, tbl_idx)
+
+    rows: List[Dict[str, Any]] = []
+    for row_idx, row in enumerate(table_data[2:], start=2):
+        if not row or len(row) < 2:
+            continue
+        line_item = _coerce_cell_text(row[0])
+        if not line_item:
+            continue
+
+        for col_idx in range(1, min(len(row), len(col_meta))):
+            meta = col_meta[col_idx]
+            cell_text = _coerce_cell_text(row[col_idx])
+            if not _looks_numeric_cell(cell_text):
+                continue
+
+            if not meta.get('period_label'):
+                continue
+
+            rows.append({
+                'context_key': context_key,
+                'line_item': _clean_line_item_name(line_item),
+                'value': cell_text,
+                'period_label': meta.get('period_label'),
+                'period_type': meta.get('period_type') or 'Monthly',
+                'value_type': meta.get('scenario') or 'Actual',
+                'frequency': meta.get('period_type') or 'Monthly',
+                'currency': 'GBP',
+                'source_file': f"page_{page_index+1}_table_{tbl_idx+1}",
+                'source_page': page_index + 1,
+                'source_table': tbl_idx + 1,
+                'source_row': row_idx,
+                'source_col': meta.get('header_text') or f"col_{col_idx}",
+                'notes': 'PDF: header-mapped table',
+                'extraction_method': 'pymupdf_table',
+                'confidence': 0.6,
+            })
+
+    return rows
+
 def _process_complex_table(table_data: List[List], page_index: int, tbl_idx: int) -> List[Dict[str, Any]]:
     """Process complex tables with merged cells and financial data structures"""
     rows = []
@@ -105,6 +234,12 @@ def _process_complex_table(table_data: List[List], page_index: int, tbl_idx: int
     pl_rows = _extract_board_pack_pl_table(table_data, page_index, tbl_idx)
     if pl_rows:
         return pl_rows
+
+
+    # Next, try a generic header-mapped table extractor (period/scenario from headers)
+    generic_rows = _extract_header_mapped_table(table_data, page_index, tbl_idx)
+    if generic_rows:
+        return generic_rows
     
     if not table_data:
         return rows

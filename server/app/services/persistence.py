@@ -70,11 +70,12 @@ def persist_data(
             return {"inserted": 0, "skipped": 0, "errors": 0}
 
         # 3. Bulk insert with ON CONFLICT on the compound key
-        values_template = ", ".join(["%s"] * 17)
+        values_template = ", ".join(["%s"] * 18)
         insert_sql = f"""
             INSERT INTO financial_metrics (
                 company_id,
                 document_id,
+                context_key,
                 period_id,
                 line_item_id,
                 value,
@@ -106,6 +107,7 @@ def persist_data(
             (
                 row["company_id"],
                 row.get("document_id"),
+                row.get("context_key"),
                 row["period_id"],
                 row["line_item_id"],
                 row["value"],

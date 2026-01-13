@@ -29,6 +29,7 @@ def persist_raw_facts(
         INSERT INTO extracted_facts_raw (
             document_id,
             company_id,
+            context_key,
             line_item_text,
             scenario,
             value_text,
@@ -43,7 +44,7 @@ def persist_raw_facts(
             extraction_method,
             confidence
         )
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
     """
 
     inserted = 0
@@ -58,6 +59,7 @@ def persist_raw_facts(
                     (
                         document_id,
                         company_id,
+                        row.get("context_key"),
                         row.get("line_item"),
                         row.get("value_type"),
                         None if row.get("value") is None else str(row.get("value")),

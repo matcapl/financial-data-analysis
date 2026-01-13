@@ -43,8 +43,8 @@ async def upload_file(
             detail=f"Invalid file type: {file_ext}. Allowed types: {', '.join(allowed_extensions)}"
         )
     
-    # Validate file size (10MB limit)
-    max_size = 10 * 1024 * 1024  # 10MB
+    # Validate file size (25MB limit)
+    max_size = 25 * 1024 * 1024  # 25MB
     file_content = await file.read()
     if len(file_content) > max_size:
         raise HTTPException(
