@@ -71,6 +71,7 @@ def run_reconciliation(company_id: int, document_id: Optional[int] = None, clear
     created: List[int] = []
 
     created.extend(_check_intra_document_inconsistencies(company_id, document_id))
+    created.extend(_check_time_rollups(company_id, document_id))
 
     # Only meaningful when scanning across documents.
     if document_id is None:
@@ -207,6 +208,226 @@ def _check_intra_document_inconsistencies(company_id: int, document_id: Optional
     return finding_ids
 
 
+
+
+def _parse_month(period_label: str) -> Optional[Tuple[int, int]]:
+    try:
+        year_s, month_s = period_label.split('-')
+        year = int(year_s)
+        month = int(month_s)
+        if 1 <= month <= 12:
+            return year, month
+    except Exception:
+        return None
+    return None
+
+
+def _quarter_label(year: int, month: int) -> str:
+    q = (month - 1) // 3 + 1
+    return f"{year}-Q{q}"
+
+
+def _check_time_rollups(company_id: int, document_id: Optional[int]) -> List[int]:
+    """Exact rollup checks: sum(months) == quarter, sum(quarters) == year.
+
+    Calendar year assumption (Jan-Dec).
+    Only emits findings where both rolled-up components and an explicit total exist.
+    """
+
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            if document_id is None:
+                cur.execute(
+                    """
+                    SELECT
+                        fm.document_id,
+                        lid.name AS metric_name,
+                        fm.value_type,
+                        fm.currency,
+                        p.period_type,
+                        p.period_label,
+                        fm.value,
+                        fm.source_page,
+                        fm.source_table,
+                        fm.source_row,
+                        fm.source_col
+                    FROM financial_metrics fm
+                    JOIN line_item_definitions lid ON lid.id=fm.line_item_id
+                    JOIN periods p ON p.id=fm.period_id
+                    WHERE fm.company_id=%s AND fm.document_id IS NOT NULL
+                    """,
+                    (company_id,),
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT
+                        fm.document_id,
+                        lid.name AS metric_name,
+                        fm.value_type,
+                        fm.currency,
+                        p.period_type,
+                        p.period_label,
+                        fm.value,
+                        fm.source_page,
+                        fm.source_table,
+                        fm.source_row,
+                        fm.source_col
+                    FROM financial_metrics fm
+                    JOIN line_item_definitions lid ON lid.id=fm.line_item_id
+                    JOIN periods p ON p.id=fm.period_id
+                    WHERE fm.company_id=%s AND fm.document_id=%s
+                    """,
+                    (company_id, document_id),
+                )
+            rows = cur.fetchall()
+
+    # Index facts
+    monthly = {}
+    quarterly = {}
+    yearly = {}
+
+    # Store evidence for totals and components
+    fact_evidence = {}
+
+    for (doc_id, metric_name, scenario, currency, period_type, period_label, value, sp, st, sr, sc) in rows:
+        key = (doc_id, metric_name, scenario, currency)
+        fact_evidence.setdefault((doc_id, metric_name, scenario, currency, period_type, period_label), {
+            'value': float(value) if value is not None else None,
+            'source_page': sp,
+            'source_table': st,
+            'source_row': sr,
+            'source_col': sc,
+        })
+
+        if period_type == 'Monthly':
+            parsed = _parse_month(period_label)
+            if parsed and value is not None:
+                monthly.setdefault(key, {})[period_label] = float(value)
+        elif period_type == 'Quarterly':
+            if value is not None:
+                quarterly.setdefault(key, {})[period_label] = float(value)
+        elif period_type == 'Yearly':
+            if value is not None:
+                yearly.setdefault(key, {})[period_label] = float(value)
+
+    finding_ids: List[int] = []
+
+    # Check monthly -> quarterly
+    for key, months in monthly.items():
+        doc_id, metric_name, scenario, currency = key
+        if key not in quarterly:
+            continue
+
+        # Group month values into quarters
+        by_quarter: Dict[str, List[Tuple[str, float]]] = {}
+        for pl, val in months.items():
+            parsed = _parse_month(pl)
+            if not parsed:
+                continue
+            y, m = parsed
+            ql = _quarter_label(y, m)
+            by_quarter.setdefault(ql, []).append((pl, val))
+
+        for ql, parts in by_quarter.items():
+            if ql not in quarterly[key]:
+                continue  # no explicit quarterly total to compare
+            rolled = sum(v for _, v in parts)
+            total = quarterly[key][ql]
+            if rolled != total:
+                evidence = {
+                    'rollup': 'monthly_to_quarter',
+                    'metric_name': metric_name,
+                    'scenario': scenario,
+                    'currency': currency,
+                    'quarter': ql,
+                    'rolled_sum': rolled,
+                    'reported_total': total,
+                    'components': [
+                        {
+                            'period_label': pl,
+                            'value': v,
+                            **fact_evidence.get((doc_id, metric_name, scenario, currency, 'Monthly', pl), {}),
+                        }
+                        for pl, v in sorted(parts)
+                    ],
+                    'total_fact': fact_evidence.get((doc_id, metric_name, scenario, currency, 'Quarterly', ql), {}),
+                }
+                msg = (
+                    f"Time rollup mismatch in document for {metric_name} ({scenario}) {ql} {currency}: "
+                    f"sum(months)={rolled} != quarter={total}."
+                )
+                fid = _insert_finding(
+                    company_id=company_id,
+                    document_id=doc_id,
+                    finding_type='time_rollup_mismatch',
+                    severity='warning',
+                    metric_name=metric_name,
+                    scenario=scenario,
+                    period_id=None,
+                    message=msg,
+                    evidence=evidence,
+                )
+                finding_ids.append(fid)
+
+    # Check quarterly -> yearly
+    for key, quarters in quarterly.items():
+        doc_id, metric_name, scenario, currency = key
+        if key not in yearly:
+            continue
+
+        # Group quarters by year
+        by_year: Dict[str, List[Tuple[str, float]]] = {}
+        for ql, val in quarters.items():
+            try:
+                year_s, q_s = ql.split('-Q')
+                year = int(year_s)
+                by_year.setdefault(str(year), []).append((ql, val))
+            except Exception:
+                continue
+
+        for yl, parts in by_year.items():
+            if yl not in yearly[key]:
+                continue
+            rolled = sum(v for _, v in parts)
+            total = yearly[key][yl]
+            if rolled != total:
+                evidence = {
+                    'rollup': 'quarter_to_year',
+                    'metric_name': metric_name,
+                    'scenario': scenario,
+                    'currency': currency,
+                    'year': yl,
+                    'rolled_sum': rolled,
+                    'reported_total': total,
+                    'components': [
+                        {
+                            'period_label': pl,
+                            'value': v,
+                            **fact_evidence.get((doc_id, metric_name, scenario, currency, 'Quarterly', pl), {}),
+                        }
+                        for pl, v in sorted(parts)
+                    ],
+                    'total_fact': fact_evidence.get((doc_id, metric_name, scenario, currency, 'Yearly', yl), {}),
+                }
+                msg = (
+                    f"Time rollup mismatch in document for {metric_name} ({scenario}) {yl} {currency}: "
+                    f"sum(quarters)={rolled} != year={total}."
+                )
+                fid = _insert_finding(
+                    company_id=company_id,
+                    document_id=doc_id,
+                    finding_type='time_rollup_mismatch',
+                    severity='warning',
+                    metric_name=metric_name,
+                    scenario=scenario,
+                    period_id=None,
+                    message=msg,
+                    evidence=evidence,
+                )
+                finding_ids.append(fid)
+
+    return finding_ids
 def _check_cross_document_restatements(company_id: int) -> List[int]:
     """Detect when the same coordinate differs between documents (goalpost moves)."""
 
