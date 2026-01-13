@@ -4,6 +4,8 @@ annotated-types==0.7.0
     # via pydantic
 anyio==4.10.0
     # via starlette
+pytest>=7.0,<9.0
+    # via financial-data-analysis (dev)
 camelot-py==1.0.9
     # via financial-data-analysis (pyproject.toml)
 certifi==2025.8.3
@@ -91,8 +93,8 @@ pydantic-settings==2.10.1
     # via financial-data-analysis (pyproject.toml)
 pymupdf==1.26.4
     # via financial-data-analysis (pyproject.toml)
-pypdf==5.9.0
-    # via camelot-py
+pypdf==3.17.4
+    # via camelot-py (camelot-py==1.0.9 requires pypdf<4)
 pypdfium2==4.30.0
     # via camelot-py
 pytesseract==0.3.13

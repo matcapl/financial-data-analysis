@@ -1,6 +1,7 @@
 import React from 'react';
 import { AppProvider } from './contexts/AppContext';
 import FileUpload from './components/FileUpload';
+import DemoRevenueSummary from './components/DemoRevenueSummary';
 import ReportPreview from './components/ReportPreview';
 import './App.css';
 
@@ -87,6 +88,7 @@ const App: React.FC = () => {
           {/* Main Application Components */}
           <div className="space-y-12">
             <FileUpload />
+            <DemoRevenueSummary />
             <ReportPreview />
           </div>
         </main>

@@ -49,13 +49,20 @@ class Report(FPDF):
         else:
             self.set_font('Arial', '', 10)  # Smaller font for landscape
 
+    def _safe_text(self, text: str) -> str:
+        try:
+            return text.encode('latin-1', 'replace').decode('latin-1')
+        except Exception:
+            return ''
+
+
 
     def header(self):
         # Title on first page only
         if self.page_no() == 1:
             self.set_font_size(18)
             self.set_text_color(0, 51, 102)
-            self.cell(0, 10, f"Financial Report - Company ID: {self.company_id}", ln=True, align='C')
+            self.cell(0, 10, self._safe_text(f"Financial Report - Company ID: {self.company_id}"), ln=True, align='C')
             self.ln(5)
             self.set_text_color(0, 0, 0)
 
@@ -91,7 +98,7 @@ class Report(FPDF):
             max_lines = 1
             
             for item, max_chars in zip(row, max_chars_per_col):
-                text = str(item) if item is not None else ''
+                text = self._safe_text(str(item) if item is not None else '')
                 
                 if len(text) > max_chars:
                     # Simple word wrapping
@@ -142,7 +149,7 @@ class Report(FPDF):
                         # Truncate if still too long
                         if len(line) > max_chars_per_col[col_idx]:
                             line = line[:max_chars_per_col[col_idx]-3] + '...'
-                        self.cell(w - 2, 4, line, border=0, align='L')
+                        self.cell(w - 2, 4, self._safe_text(line), border=0, align='L')
             
             # Move to next row
             self.set_xy(x_start, y_start + row_height)
@@ -205,10 +212,80 @@ def generate_report(company_id: int, output_path: str):
             pdf = Report(company_id)
             pdf.add_page()
 
+            # KPI summary (board-pack style) - focuses the output on decisions
+            def _to_float(v):
+                try:
+                    return float(v)
+                except Exception:
+                    return None
+
+            # Pivot metrics by line item and value_type for the latest period
+            latest_period = None
+            for row in metrics:
+                latest_period = row[1]
+            pivot = {}
+            for (line_item, period_label, value_type, value, currency, source_file, source_page, notes) in metrics:
+                if latest_period is None:
+                    latest_period = period_label
+                if period_label != latest_period:
+                    continue
+                pivot.setdefault(line_item, {})[value_type] = value
+
+            def _fmt_money(x):
+                if x is None:
+                    return ''
+                return f"{x:,.0f}"
+
+            def _fmt_delta(a, b):
+                if a is None or b is None:
+                    return ''
+                return _fmt_money(a - b)
+
+            def _fmt_pct(a, b):
+                if a is None or b is None or b == 0:
+                    return ''
+                return f"{((a - b) / abs(b)) * 100:.1f}%"
+
+            key_kpis = [
+                'Revenue',
+                'Gross Profit',
+                'Adjusted EBITDA',
+                'EBITDA',
+                'Reported EBITDA',
+            ]
+
+            summary_rows = []
+            for kpi in key_kpis:
+                if kpi not in pivot:
+                    continue
+                actual = _to_float(pivot[kpi].get('Actual'))
+                budget = _to_float(pivot[kpi].get('Budget'))
+                prior = _to_float(pivot[kpi].get('Prior Year'))
+                summary_rows.append((
+                    kpi,
+                    _fmt_money(actual),
+                    _fmt_money(budget),
+                    _fmt_delta(actual, budget),
+                    _fmt_money(prior),
+                    _fmt_delta(actual, prior),
+                ))
+
+            if summary_rows:
+                pdf.set_font(style='B', size=12)
+                pdf.set_text_color(0, 51, 102)
+                pdf.cell(0, 8, pdf._safe_text(f"KPI Summary ({latest_period})"), ln=True)
+                pdf.set_text_color(0, 0, 0)
+
+                s_headers = ['KPI', 'Actual', 'Budget', 'Vs Budget', 'Prior Year', 'Vs Prior']
+                s_widths = [55, 30, 30, 30, 30, 30]
+                s_max = [22, 10, 10, 10, 10, 10]
+                pdf.add_table_with_wrap(summary_rows, s_headers, s_widths, s_max)
+
+
             # Metrics table - optimized for landscape A4 (297mm width, ~270mm usable)
             headers = ['Line Item','Period','Type','Value','Currency','Source','Page','Notes']
-            col_widths = [35, 20, 15, 25, 20, 45, 12, 50]  # Total: 222mm
-            max_chars = [12, 8, 6, 10, 8, 20, 4, 25]  # Character limits per column
+            col_widths = [35, 20, 25, 25, 20, 45, 12, 40]  # Total: 222mm
+            max_chars = [12, 8, 18, 10, 8, 20, 4, 20]  # Character limits per column
             
             # Remove 'Status' column and truncate source filenames in data
             metrics_clean = []

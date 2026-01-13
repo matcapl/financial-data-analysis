@@ -31,6 +31,33 @@ export interface Report {
   company_id?: number;
 }
 
+export interface DemoQuestion {
+  text: string;
+  category?: string;
+  priority?: number;
+  created_at?: string | null;
+}
+
+export interface DemoRevenueSource {
+  source_file?: string | null;
+  source_page?: number | null;
+  source_row?: number | null;
+}
+
+export interface DemoRevenueSummary {
+  company_id: number;
+  revenue: {
+    period_label: string;
+    value: number;
+    currency?: string | null;
+    mom_change_pct?: number | null;
+    yoy_change_pct?: number | null;
+    vs_budget_pct?: number | null;
+    sources?: DemoRevenueSource[];
+  };
+  questions: DemoQuestion[];
+}
+
 export interface ProcessingStep {
   step: string;
   status: 'completed' | 'in_progress' | 'pending' | 'failed';
@@ -46,6 +73,7 @@ export interface AppState {
   companyId: string;
   processingSteps: string[];
   uploadProgress: UploadProgress;
+  demoSummary: DemoRevenueSummary | null;
 }
 
 export interface AppContextType extends AppState {
@@ -54,6 +82,7 @@ export interface AppContextType extends AppState {
   setCompanyId: (id: string) => void;
   clearMessages: () => void;
   refreshReports: () => Promise<void>;
+  refreshDemoSummary: () => Promise<void>;
   checkServerHealth: () => Promise<void>;
 }
 

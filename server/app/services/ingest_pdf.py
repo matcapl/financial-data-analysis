@@ -54,8 +54,8 @@ def extract_pdf_rows(file_path: Path) -> List[Dict[str, Any]]:
         # Try enhanced table extraction first
         page_rows.extend(_extract_enhanced_tables(page, page_index))
         
-        # If no meaningful data from tables, try text-based extraction
-        if not page_rows:
+        # If table extraction is sparse, augment with text-based extraction
+        if len(page_rows) < 20:
             page_rows.extend(_extract_text_based_data(page, file_path, page_index))
         
         raw_rows.extend(page_rows)
@@ -99,6 +99,11 @@ def _extract_enhanced_tables(page, page_index: int) -> List[Dict[str, Any]]:
 def _process_complex_table(table_data: List[List], page_index: int, tbl_idx: int) -> List[Dict[str, Any]]:
     """Process complex tables with merged cells and financial data structures"""
     rows = []
+
+    # First, try the dedicated board-pack P&L extractor (high signal)
+    pl_rows = _extract_board_pack_pl_table(table_data, page_index, tbl_idx)
+    if pl_rows:
+        return pl_rows
     
     if not table_data:
         return rows
@@ -152,6 +157,113 @@ def _process_complex_table(table_data: List[List], page_index: int, tbl_idx: int
     
     return rows
 
+
+
+
+def _extract_board_pack_pl_table(table_data: List[List], page_index: int, tbl_idx: int) -> List[Dict[str, Any]]:
+    """Extract the main board-pack P&L table structure produced by PyMuPDF.
+
+    The sample pack renders as a 5-column table where:
+    - Column 0 contains many line items separated by newlines
+    - Column 2 contains the Actual column values (often split across multiple table rows)
+    - Column 3 contains four values per line (Budget, Prior Year, Var to Budget, Var to Prior)
+
+    Returns metrics in the same row format expected by field_mapper/normalization.
+    """
+    import re
+
+    if not table_data or len(table_data) < 3:
+        return []
+
+    # Find the row that contains the long line-item list (usually includes 'Revenue' etc.)
+    line_item_cell = None
+    for row in table_data:
+        c0 = row[0] if len(row) > 0 else None
+        if isinstance(c0, str) and "\n" in c0 and 'Revenue' in c0 and 'PROFIT AND LOSS' not in c0:
+            line_item_cell = c0
+            break
+
+    if not line_item_cell:
+        return []
+
+    line_items = [ln.strip() for ln in line_item_cell.split("\n") if ln.strip()]
+
+    # Actual values: concatenate all strings found in column 2
+    actual_values: list[str] = []
+    for row in table_data:
+        c2 = row[2] if len(row) > 2 else None
+        if isinstance(c2, str) and c2.strip():
+            actual_values.extend([ln.strip() for ln in c2.split("\n") if ln.strip()])
+
+    # Bundle values: concatenate all lines in column 3
+    bundle_lines: list[str] = []
+    for row in table_data:
+        c3 = row[3] if len(row) > 3 else None
+        if isinstance(c3, str) and c3.strip():
+            bundle_lines.extend([ln.strip() for ln in c3.split("\n") if ln.strip()])
+
+    # Heuristic sanity: we need meaningful counts
+    if len(actual_values) < 5 or len(bundle_lines) < 5:
+        return []
+
+    # Attempt to detect reporting month/year from the table header (row 0)
+    header_text = str(table_data[0][0]) if table_data and table_data[0] and table_data[0][0] else ''
+    period_label = '2025-02'
+    m = re.search(r'(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})', header_text, re.IGNORECASE)
+    if m:
+        month_map = {
+            'january': 1, 'february': 2, 'march': 3, 'april': 4, 'may': 5, 'june': 6,
+            'july': 7, 'august': 8, 'september': 9, 'october': 10, 'november': 11, 'december': 12,
+        }
+        month = month_map[m.group(1).lower()]
+        year = int(m.group(2))
+        period_label = f"{year}-{month:02d}"
+
+    currency = 'GBP' if '£' in header_text else None
+
+    def split_bundle(line: str) -> list[str]:
+        # Split by whitespace into up to 4 columns (budget/prior/var/var)
+        parts = [p for p in line.replace(' ', ' ').split(' ') if p]
+        return parts
+
+    metrics: List[Dict[str, Any]] = []
+    n = min(len(line_items), len(actual_values), len(bundle_lines))
+
+    for i in range(n):
+        li = line_items[i]
+        act = actual_values[i]
+        bundle = split_bundle(bundle_lines[i])
+        if not bundle:
+            continue
+
+        base = {
+            'line_item': _clean_line_item_name(li),
+            'period_label': period_label,
+            'period_type': 'actual',
+            'frequency': 'Monthly',
+            'source_file': f"page_{page_index+1}_table_{tbl_idx+1}",
+            'source_page': page_index + 1,
+            'notes': 'PDF: Board pack P&L',
+            '_sheet_name': f"page_{page_index+1}_table_{tbl_idx+1}",
+            '_source_row': i,
+        }
+        if currency:
+            base['currency'] = currency
+
+        # Actual
+        metrics.append({**base, 'value_type': 'Actual', 'value': act})
+
+        # Budget/Prior/Variances (if present)
+        if len(bundle) >= 1:
+            metrics.append({**base, 'value_type': 'Budget', 'value': bundle[0]})
+        if len(bundle) >= 2:
+            metrics.append({**base, 'value_type': 'Prior Year', 'value': bundle[1]})
+        if len(bundle) >= 3:
+            metrics.append({**base, 'value_type': 'Variance to budget', 'value': bundle[2]})
+        if len(bundle) >= 4:
+            metrics.append({**base, 'value_type': 'Variance to prior year', 'value': bundle[3]})
+
+    return metrics
 
 def _identify_headers(table_data: List[List]) -> Dict[str, int]:
     """Identify column headers and their positions"""
@@ -423,32 +535,125 @@ def _parse_multiline_financial_data(main_cell: str, values_cells: List, headers:
 def _extract_text_based_data(page, file_path: Path, page_index: int) -> List[Dict[str, Any]]:
     """Text-based extraction with financial pattern recognition"""
     rows = []
-    
+
     try:
         # Get text from page
         text = page.get_text()
-        
+
         # Also try OCR as fallback
         try:
             images = convert_from_path(str(file_path), first_page=page_index+1, last_page=page_index+1)
             ocr_text = pytesseract.image_to_string(images[0])
             # Combine both text sources
-            combined_text = text + '\n' + ocr_text
-        except:
+            combined_text = text + "\n" + ocr_text
+        except Exception:
             combined_text = text
-        
-        # Parse financial data from text
+
+        # Prefer structured P&L extraction when present
+        pl_rows = _extract_pl_statement_rows(combined_text, page_number=page_index + 1)
+        if pl_rows:
+            for row in pl_rows:
+                row["_sheet_name"] = f"page_{page_index+1}_pl_text"
+                rows.append(row)
+            return rows
+
+        # Fallback: Parse single-value financial patterns from text
         financial_patterns = _extract_financial_patterns(combined_text)
-        
+
         for pattern in financial_patterns:
             pattern["_sheet_name"] = f"page_{page_index+1}_text"
             rows.append(pattern)
-            
+
     except Exception as e:
         log_event("pdf_text_extract_error", {"page": page_index + 1, "error": str(e)})
-    
+
     return rows
 
+
+
+
+def _extract_pl_statement_rows(text: str, page_number: int) -> List[Dict[str, Any]]:
+    """Extract structured P&L rows (Actual/Budget/Prior/Variances) from text.
+
+    This targets board-pack style monthly P&L tables where each line has:
+    Line Item + 5 numeric columns (Actual, Budget, Prior Year, Var to Budget, Var to Prior).
+    """
+    import re
+
+    month_map = {
+        'january': 1, 'february': 2, 'march': 3, 'april': 4, 'may': 5, 'june': 6,
+        'july': 7, 'august': 8, 'september': 9, 'october': 10, 'november': 11, 'december': 12,
+    }
+
+    # Currency (best-effort)
+    currency = 'GBP' if '£' in text else 'USD' if '$' in text else None
+
+    # Period label (best-effort, based on title like "February 2025")
+    period_label = None
+    m = re.search(r'(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})', text, re.IGNORECASE)
+    if m:
+        month = month_map[m.group(1).lower()]
+        year = int(m.group(2))
+        period_label = f"{year}-{month:02d}"
+
+    value_types = [
+        'Actual',
+        'Budget',
+        'Prior Year',
+        'Variance to budget',
+        'Variance to prior year',
+    ]
+
+    # Heuristic: only start parsing after we see the P&L section header.
+    lines = [ln.strip() for ln in text.split("\n")] 
+    try:
+        start_idx = next(i for i, ln in enumerate(lines) if 'PROFIT AND LOSS' in ln.upper())
+    except StopIteration:
+        start_idx = 0
+
+    number_re = re.compile(r'\(?-?[0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]+)?\)?')
+
+    rows: List[Dict[str, Any]] = []
+    for ln in lines[start_idx:]:
+        if not ln or len(ln) < 3:
+            continue
+
+        # Skip obvious headers
+        if any(k in ln.upper() for k in ['PROFIT AND LOSS', 'STATUTORY BASIS', 'MONTHLY P&L', 'VARIANCE', 'ACTUAL', 'BUDGET', 'PRIOR', '£']):
+            continue
+
+        nums = number_re.findall(ln)
+        if len(nums) < 5:
+            continue
+
+        # Line item is the part before the first number
+        first_num_pos = ln.find(nums[0])
+        if first_num_pos <= 0:
+            continue
+
+        line_item = ln[:first_num_pos].strip()
+        if not line_item or len(line_item) < 2:
+            continue
+
+        # Take first 5 numeric columns (ignore any trailing % etc.)
+        cols = nums[:5]
+        for vt, val in zip(value_types, cols):
+            row = {
+                'line_item': line_item,
+                'value': val,
+                'value_type': vt,
+                'frequency': 'Monthly',
+                'period_type': 'actual',
+                'source_page': page_number,
+                'notes': 'PDF: P&L table',
+            }
+            if currency:
+                row['currency'] = currency
+            if period_label:
+                row['period_label'] = period_label
+            rows.append(row)
+
+    return rows
 
 def _extract_financial_patterns(text: str) -> List[Dict[str, Any]]:
     """Extract financial patterns from raw text using regex"""
@@ -604,10 +809,26 @@ def ingest_pdf(file_path: Union[str, Path], company_id: int = 1) -> Dict[str, An
             "errors": map_errors + norm_errors
         }
     
-    # Extract company_id and period_id from first normalized row
-    pid = normalized[0]["period_id"]
-    cid = normalized[0]["company_id"]
-    persist_result = persist_data(normalized, cid, pid)
+    # Ensure the persisted rows use the caller-provided company_id (not any default from normalization)
+    for row in normalized:
+        row["company_id"] = company_id
+
+    # Persist per-period since persist_data expects a single period_id
+    from collections import defaultdict
+
+    grouped_by_period: dict[int, list[dict[str, Any]]] = defaultdict(list)
+    for row in normalized:
+        grouped_by_period[row["period_id"]].append(row)
+
+    total_inserted = 0
+    total_skipped = 0
+    total_errors = 0
+
+    for period_id, period_rows in grouped_by_period.items():
+        persist_result = persist_data(period_rows, company_id, period_id)
+        total_inserted += int(persist_result.get("inserted", 0) or 0)
+        total_skipped += int(persist_result.get("skipped", 0) or 0)
+        total_errors += int(persist_result.get("errors", 0) or 0)
 
     summary = {
         "file_path": str(file_path),
@@ -617,9 +838,9 @@ def ingest_pdf(file_path: Union[str, Path], company_id: int = 1) -> Dict[str, An
         "map_errors": map_errors,
         "rows_normalized": len(normalized),
         "norm_errors": norm_errors,
-        "persisted": persist_result.get("inserted", 0),
-        "skipped": persist_result.get("skipped", 0),
-        "persist_errors": persist_result.get("errors", 0),
+        "persisted": total_inserted,
+        "skipped": total_skipped,
+        "persist_errors": total_errors,
         "status": "completed"
     }
     log_event("pdf_ingestion_completed", summary)

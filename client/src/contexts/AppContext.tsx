@@ -6,7 +6,8 @@ import {
   Report, 
   UploadResponse, 
   ReportResponse, 
-  ApiError 
+  ApiError,
+  DemoRevenueSummary
 } from '../types';
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -24,7 +25,8 @@ const ACTIONS = {
   SET_PROCESSING_STEPS: 'SET_PROCESSING_STEPS',
   RESET_MESSAGES: 'RESET_MESSAGES',
   ADD_REPORT: 'ADD_REPORT',
-  SET_UPLOAD_PROGRESS: 'SET_UPLOAD_PROGRESS'
+  SET_UPLOAD_PROGRESS: 'SET_UPLOAD_PROGRESS',
+  SET_DEMO_SUMMARY: 'SET_DEMO_SUMMARY'
 } as const;
 
 type ActionType = 
@@ -37,7 +39,8 @@ type ActionType =
   | { type: 'SET_PROCESSING_STEPS'; payload: string[] }
   | { type: 'RESET_MESSAGES' }
   | { type: 'ADD_REPORT'; payload: Report }
-  | { type: 'SET_UPLOAD_PROGRESS'; payload: { step: keyof AppState['uploadProgress']; completed: boolean } };
+  | { type: 'SET_UPLOAD_PROGRESS'; payload: { step: keyof AppState['uploadProgress']; completed: boolean } }
+  | { type: 'SET_DEMO_SUMMARY'; payload: DemoRevenueSummary | null };
 
 // Initial state
 const initialState: AppState = {
@@ -58,7 +61,8 @@ const initialState: AppState = {
     calculation: false,
     questions: false,
     storage: false
-  }
+  },
+  demoSummary: null
 };
 
 // Reducer
@@ -109,6 +113,12 @@ function appReducer(state: AppState, action: ActionType): AppState {
       return {
         ...state,
         processingSteps: action.payload
+      };
+
+    case ACTIONS.SET_DEMO_SUMMARY:
+      return {
+        ...state,
+        demoSummary: action.payload
       };
     
     case ACTIONS.RESET_MESSAGES:
@@ -248,7 +258,9 @@ export function AppProvider({ children }: AppProviderProps) {
       
       // Refresh reports list
       await fetchReports();
-      
+      // Refresh demo summary (best-effort)
+      await refreshDemoSummary();
+
       return true;
 
     } catch (err) {
@@ -260,6 +272,30 @@ export function AppProvider({ children }: AppProviderProps) {
       return false;
     } finally {
       dispatch({ type: ACTIONS.SET_LOADING, payload: { type: 'upload', value: false } });
+    }
+  };
+
+  const refreshDemoSummary = async (): Promise<void> => {
+    if (!state.companyId || parseInt(state.companyId) <= 0) {
+      dispatch({ type: ACTIONS.SET_DEMO_SUMMARY, payload: null });
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `${API_URL}/api/demo/revenue-summary?company_id=${encodeURIComponent(state.companyId)}`
+      );
+
+      if (!response.ok) {
+        dispatch({ type: ACTIONS.SET_DEMO_SUMMARY, payload: null });
+        return;
+      }
+
+      const result: DemoRevenueSummary = await response.json();
+      dispatch({ type: ACTIONS.SET_DEMO_SUMMARY, payload: result });
+    } catch (err) {
+      console.warn('Failed to fetch demo summary:', err instanceof Error ? err.message : 'Unknown error');
+      dispatch({ type: ACTIONS.SET_DEMO_SUMMARY, payload: null });
     }
   };
 
@@ -336,6 +372,7 @@ export function AppProvider({ children }: AppProviderProps) {
     setCompanyId,
     clearMessages,
     refreshReports: fetchReports,
+    refreshDemoSummary,
     checkServerHealth
   };
 
