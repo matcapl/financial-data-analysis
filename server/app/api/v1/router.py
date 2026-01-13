@@ -5,7 +5,7 @@ Consolidates all endpoint routers for the v1 API
 
 from fastapi import APIRouter
 
-from .endpoints import upload, reports, health, metrics, errors, demo
+from .endpoints import upload, reports, health, metrics, errors, demo, reconcile
 
 api_router = APIRouter()
 
@@ -14,5 +14,6 @@ api_router.include_router(health.router)
 api_router.include_router(upload.router) 
 api_router.include_router(reports.router)
 api_router.include_router(demo.router)
+api_router.include_router(reconcile.router)
 api_router.include_router(metrics.router, prefix="/monitoring", tags=["monitoring"])
 api_router.include_router(errors.router, prefix="/monitoring", tags=["monitoring"])
