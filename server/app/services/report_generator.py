@@ -208,6 +208,65 @@ def generate_report(company_id: int, output_path: str):
                 logger.warning(f"Questions query failed: {e}. Using empty questions list.")
                 questions = []
 
+            # Fetch reconciliation findings (deterministic, evidence-first)
+            findings = []
+            try:
+                cur.execute(
+                    """
+                    SELECT id, finding_type, severity, metric_name, scenario, message, evidence, created_at
+                      FROM reconciliation_findings
+                     WHERE company_id = %s
+                     ORDER BY created_at DESC
+                     LIMIT 50
+                    """,
+                    (company_id,)
+                )
+                findings = cur.fetchall()
+            except Exception as e:
+                logger.warning(f"Findings query failed: {e}. Using empty findings list.")
+                findings = []
+
+            def _as_dict(evidence):
+                import json
+                if evidence is None:
+                    return {}
+                if isinstance(evidence, dict):
+                    return evidence
+                try:
+                    return json.loads(evidence)
+                except Exception:
+                    return {}
+
+            # Create findings-driven questions (deduped)
+            findings_questions = []
+            seen = set()
+            for (fid, ftype, severity, metric_name, scenario, message, evidence, created_at) in findings:
+                ev = _as_dict(evidence)
+                period_label = ev.get('period_label')
+                ctx = ev.get('context_key')
+                key = (ftype, metric_name, scenario, period_label, ctx)
+                if key in seen:
+                    continue
+                seen.add(key)
+
+                citation = ''
+                docs = ev.get('documents') or ev.get('occurrences') or []
+                if docs:
+                    d0 = docs[0]
+                    citation = f"doc {d0.get('document_id')} p{d0.get('source_page')} t{d0.get('source_table')} r{d0.get('source_row')} c{d0.get('source_col')}"
+
+                if ftype == 'cross_document_restatement':
+                    q = f"Goalpost move: {metric_name} ({scenario}) differs across packs for {period_label or ''}. ({citation})"
+                elif ftype == 'time_rollup_mismatch':
+                    q = f"Rollup mismatch: {metric_name} ({scenario}) totals do not reconcile for {period_label or ''}. ({citation})"
+                elif ftype == 'intra_document_inconsistency':
+                    q = f"Inconsistency in-pack: which value is correct for {metric_name} ({scenario}) {period_label or ''}? ({citation})"
+                else:
+                    q = f"Check: {message} ({citation})"
+
+                pr = 'High' if str(severity).lower() in ('critical', 'high') else 'Medium'
+                findings_questions.append((q[:160] + '...' if len(q) > 160 else q, 'Open', pr))
+
             # Generate PDF
             pdf = Report(company_id)
             pdf.add_page()
@@ -307,11 +366,46 @@ def generate_report(company_id: int, output_path: str):
             # Add page break before questions
             pdf.add_page()
             
-            # Questions table - optimized for landscape
+            # Findings-driven section (v1): show reconciliation first, then questions
+            pdf.set_font(style='B', size=12)
+            pdf.set_text_color(0, 51, 102)
+            pdf.cell(0, 8, pdf._safe_text('Data Quality & Reconciliation'), ln=True)
+            pdf.set_text_color(0, 0, 0)
+
+            f_headers = ['Type', 'Metric', 'Scenario', 'Period', 'Context', 'Message']
+            f_widths = [35, 35, 22, 22, 25, 120]
+            f_max = [18, 14, 10, 10, 12, 60]
+
+            findings_rows = []
+            for (fid, ftype, severity, metric_name, scenario, message, evidence, created_at) in findings:
+                ev = _as_dict(evidence)
+                findings_rows.append((
+                    str(ftype),
+                    str(metric_name or ''),
+                    str(scenario or ''),
+                    str(ev.get('period_label') or ''),
+                    str(ev.get('context_key') or ''),
+                    str(message or ''),
+                ))
+
+            if findings_rows:
+                pdf.add_table_with_wrap(findings_rows, f_headers, f_widths, f_max)
+            else:
+                pdf.set_font(style='', size=10)
+                pdf.multi_cell(0, 5, pdf._safe_text('No reconciliation findings for this company yet.'))
+
+            pdf.add_page()
+            pdf.set_font(style='B', size=12)
+            pdf.set_text_color(0, 51, 102)
+            pdf.cell(0, 8, pdf._safe_text('Questions (From Findings)'), ln=True)
+            pdf.set_text_color(0, 0, 0)
+
             q_headers = ['Question','Status','Priority']
             q_col_widths = [180, 40, 35]  # Total: 255mm
-            q_max_chars = [80, 12, 8]  # Character limits
-            pdf.add_table_with_wrap(questions, q_headers, q_col_widths, q_max_chars)
+            q_max_chars = [90, 12, 8]  # Character limits
+
+            q_source = findings_questions if findings_questions else questions
+            pdf.add_table_with_wrap(q_source, q_headers, q_col_widths, q_max_chars)
 
             pdf.output(output_path)
             logger.info(f"PDF written to {output_path}")
