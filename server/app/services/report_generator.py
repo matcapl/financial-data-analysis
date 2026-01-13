@@ -338,6 +338,50 @@ def generate_report(company_id: int, output_path: str):
                 s_headers = ['KPI', 'Actual', 'Budget', 'Vs Budget', 'Prior Year', 'Vs Prior']
                 s_widths = [55, 30, 30, 30, 30, 30]
                 s_max = [22, 10, 10, 10, 10, 10]
+                # KPI trend (v1): show last N periods for key KPIs
+                try:
+                    periods_sorted = []
+                    seen_periods = set()
+                    for (line_item, period_label, value_type, value, currency, source_file, source_page, notes) in metrics:
+                        if period_label not in seen_periods:
+                            seen_periods.add(period_label)
+                            periods_sorted.append(period_label)
+                    # period_label sorts lexicographically for YYYY-MM / YYYY-QN / YYYY
+                    periods_sorted = sorted(periods_sorted)
+                    last_periods = periods_sorted[-6:]
+
+                    trend_rows = []
+                    for pl in last_periods:
+                        for kpi in key_kpis:
+                            vals = {}
+                            for (li, p_label, vt, v, ccy, sf, sp, n) in metrics:
+                                if li == kpi and p_label == pl and v is not None:
+                                    vals[vt] = v
+                            if not vals:
+                                continue
+                            act = _to_float(vals.get('Actual'))
+                            bud = _to_float(vals.get('Budget'))
+                            trend_rows.append((
+                                pl,
+                                kpi,
+                                _fmt_money(act),
+                                _fmt_money(bud),
+                                _fmt_delta(act, bud),
+                            ))
+
+                    if trend_rows:
+                        pdf.set_font(style='B', size=12)
+                        pdf.set_text_color(0, 51, 102)
+                        pdf.cell(0, 8, pdf._safe_text('KPI Trend (Last Periods)'), ln=True)
+                        pdf.set_text_color(0, 0, 0)
+
+                        tr_headers = ['Period', 'KPI', 'Actual', 'Budget', 'Vs Budget']
+                        tr_widths = [25, 55, 30, 30, 30]
+                        tr_max = [10, 18, 10, 10, 10]
+                        pdf.add_table_with_wrap(trend_rows, tr_headers, tr_widths, tr_max)
+                except Exception:
+                    pass
+
                 pdf.add_table_with_wrap(summary_rows, s_headers, s_widths, s_max)
 
                 # Top findings summary (v1): put the most important issues near the front
