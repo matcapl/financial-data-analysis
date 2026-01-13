@@ -107,7 +107,8 @@ def _check_intra_document_inconsistencies(company_id: int, document_id: Optional
                     JOIN line_item_definitions lid ON lid.id=fm.line_item_id
                     JOIN periods p ON p.id=fm.period_id
                     WHERE fm.company_id=%s AND fm.document_id IS NOT NULL
-                    GROUP BY fm.document_id, lid.name, fm.period_id, p.period_label, fm.value_type, fm.currency
+                    GROUP BY fm.document_id, lid.name, fm.period_id, p.period_label, fm.value_type, fm.currency,
+                             COALESCE(NULLIF(fm.context_key,''), CONCAT('p', fm.source_page, '_t', COALESCE(fm.source_table, 0)))
                     HAVING COUNT(*) > 1 AND MIN(fm.value) IS DISTINCT FROM MAX(fm.value)
                     ORDER BY occurrences DESC
                     LIMIT 200
@@ -131,7 +132,8 @@ def _check_intra_document_inconsistencies(company_id: int, document_id: Optional
                     JOIN line_item_definitions lid ON lid.id=fm.line_item_id
                     JOIN periods p ON p.id=fm.period_id
                     WHERE fm.company_id=%s AND fm.document_id=%s
-                    GROUP BY fm.document_id, lid.name, fm.period_id, p.period_label, fm.value_type, fm.currency
+                    GROUP BY fm.document_id, lid.name, fm.period_id, p.period_label, fm.value_type, fm.currency,
+                             COALESCE(NULLIF(fm.context_key,''), CONCAT('p', fm.source_page, '_t', COALESCE(fm.source_table, 0)))
                     HAVING COUNT(*) > 1 AND MIN(fm.value) IS DISTINCT FROM MAX(fm.value)
                     ORDER BY occurrences DESC
                     LIMIT 200
@@ -142,7 +144,7 @@ def _check_intra_document_inconsistencies(company_id: int, document_id: Optional
             rows = cur.fetchall()
 
     finding_ids: List[int] = []
-    for (doc_id, metric_name, period_id, period_label, scenario, currency, min_value, max_value, occurrences) in rows:
+    for (doc_id, metric_name, period_id, period_label, scenario, currency, context_key, min_value, max_value, occurrences) in rows:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
@@ -154,22 +156,25 @@ def _check_intra_document_inconsistencies(company_id: int, document_id: Optional
                         fm.source_page,
                         fm.source_table,
                         fm.source_row,
-                        fm.source_col
+                        fm.source_col,
+                        fm.context_key
                     FROM financial_metrics fm
                     JOIN documents d ON d.id=fm.document_id
                     JOIN line_item_definitions lid ON lid.id=fm.line_item_id
                     WHERE fm.company_id=%s AND fm.document_id=%s
                       AND lid.name=%s AND fm.period_id=%s AND fm.value_type=%s AND fm.currency=%s
+                      AND COALESCE(NULLIF(fm.context_key,''), CONCAT('p', fm.source_page, '_t', COALESCE(fm.source_table, 0)))=%s
                     ORDER BY fm.value DESC NULLS LAST
                     LIMIT 50
                     """,
-                    (company_id, doc_id, metric_name, period_id, scenario, currency),
+                    (company_id, doc_id, metric_name, period_id, scenario, currency, context_key),
                 )
                 occ = cur.fetchall()
 
         evidence = {
             "period_label": period_label,
             "currency": currency,
+            "context_key": context_key,
             "min_value": float(min_value) if min_value is not None else None,
             "max_value": float(max_value) if max_value is not None else None,
             "occurrences": [
@@ -182,6 +187,7 @@ def _check_intra_document_inconsistencies(company_id: int, document_id: Optional
                     "source_table": r[4],
                     "source_row": r[5],
                     "source_col": r[6],
+                    "context_key": r[7],
                 }
                 for r in occ
             ],
@@ -250,7 +256,8 @@ def _check_time_rollups(company_id: int, document_id: Optional[int]) -> List[int
                         fm.source_page,
                         fm.source_table,
                         fm.source_row,
-                        fm.source_col
+                        fm.source_col,
+                        COALESCE(NULLIF(fm.context_key,''), CONCAT('p', fm.source_page, '_t', COALESCE(fm.source_table, 0))) AS context_key
                     FROM financial_metrics fm
                     JOIN line_item_definitions lid ON lid.id=fm.line_item_id
                     JOIN periods p ON p.id=fm.period_id
@@ -272,7 +279,8 @@ def _check_time_rollups(company_id: int, document_id: Optional[int]) -> List[int
                         fm.source_page,
                         fm.source_table,
                         fm.source_row,
-                        fm.source_col
+                        fm.source_col,
+                        COALESCE(NULLIF(fm.context_key,''), CONCAT('p', fm.source_page, '_t', COALESCE(fm.source_table, 0))) AS context_key
                     FROM financial_metrics fm
                     JOIN line_item_definitions lid ON lid.id=fm.line_item_id
                     JOIN periods p ON p.id=fm.period_id
@@ -290,14 +298,15 @@ def _check_time_rollups(company_id: int, document_id: Optional[int]) -> List[int
     # Store evidence for totals and components
     fact_evidence = {}
 
-    for (doc_id, metric_name, scenario, currency, period_type, period_label, value, sp, st, sr, sc) in rows:
-        key = (doc_id, metric_name, scenario, currency)
-        fact_evidence.setdefault((doc_id, metric_name, scenario, currency, period_type, period_label), {
+    for (doc_id, metric_name, scenario, currency, period_type, period_label, value, sp, st, sr, sc, ctx) in rows:
+        key = (doc_id, metric_name, scenario, currency, ctx)
+        fact_evidence.setdefault((doc_id, metric_name, scenario, currency, ctx, period_type, period_label), {
             'value': float(value) if value is not None else None,
             'source_page': sp,
             'source_table': st,
             'source_row': sr,
             'source_col': sc,
+            'context_key': ctx,
         })
 
         if period_type == 'Monthly':
@@ -315,7 +324,7 @@ def _check_time_rollups(company_id: int, document_id: Optional[int]) -> List[int
 
     # Check monthly -> quarterly
     for key, months in monthly.items():
-        doc_id, metric_name, scenario, currency = key
+        doc_id, metric_name, scenario, currency, ctx = key
         if key not in quarterly:
             continue
 
@@ -340,6 +349,7 @@ def _check_time_rollups(company_id: int, document_id: Optional[int]) -> List[int
                     'metric_name': metric_name,
                     'scenario': scenario,
                     'currency': currency,
+                    'context_key': ctx,
                     'quarter': ql,
                     'rolled_sum': rolled,
                     'reported_total': total,
@@ -347,11 +357,11 @@ def _check_time_rollups(company_id: int, document_id: Optional[int]) -> List[int
                         {
                             'period_label': pl,
                             'value': v,
-                            **fact_evidence.get((doc_id, metric_name, scenario, currency, 'Monthly', pl), {}),
+                            **fact_evidence.get((doc_id, metric_name, scenario, currency, ctx, 'Monthly', pl), {}),
                         }
                         for pl, v in sorted(parts)
                     ],
-                    'total_fact': fact_evidence.get((doc_id, metric_name, scenario, currency, 'Quarterly', ql), {}),
+                    'total_fact': fact_evidence.get((doc_id, metric_name, scenario, currency, ctx, 'Quarterly', ql), {}),
                 }
                 msg = (
                     f"Time rollup mismatch in document for {metric_name} ({scenario}) {ql} {currency}: "
@@ -372,7 +382,7 @@ def _check_time_rollups(company_id: int, document_id: Optional[int]) -> List[int
 
     # Check quarterly -> yearly
     for key, quarters in quarterly.items():
-        doc_id, metric_name, scenario, currency = key
+        doc_id, metric_name, scenario, currency, ctx = key
         if key not in yearly:
             continue
 
@@ -397,6 +407,7 @@ def _check_time_rollups(company_id: int, document_id: Optional[int]) -> List[int
                     'metric_name': metric_name,
                     'scenario': scenario,
                     'currency': currency,
+                    'context_key': ctx,
                     'year': yl,
                     'rolled_sum': rolled,
                     'reported_total': total,
@@ -404,11 +415,11 @@ def _check_time_rollups(company_id: int, document_id: Optional[int]) -> List[int
                         {
                             'period_label': pl,
                             'value': v,
-                            **fact_evidence.get((doc_id, metric_name, scenario, currency, 'Quarterly', pl), {}),
+                            **fact_evidence.get((doc_id, metric_name, scenario, currency, ctx, 'Quarterly', pl), {}),
                         }
                         for pl, v in sorted(parts)
                     ],
-                    'total_fact': fact_evidence.get((doc_id, metric_name, scenario, currency, 'Yearly', yl), {}),
+                    'total_fact': fact_evidence.get((doc_id, metric_name, scenario, currency, ctx, 'Yearly', yl), {}),
                 }
                 msg = (
                     f"Time rollup mismatch in document for {metric_name} ({scenario}) {yl} {currency}: "
