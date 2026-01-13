@@ -8,6 +8,7 @@ canonical_formats:
   monthly: YYYY-MM
   quarterly: YYYY-QN
   yearly: YYYY
+  ytd: YYYY-YTD-MM
 period_aliases:
   2015-01:
     period_type: Monthly
@@ -3700,6 +3701,9 @@ parsing:
     yearly:
     - ^\d{4}$
     - ^(FY|CY)\d{2,4}$
+    ytd:
+    - ^YTD\s+\d{4}-\d{2}$
+    - ^YTD\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[-\s]*\d{2,4}$
 validation:
   strict_alias_uniqueness: true
   unknown_period_action: log

@@ -55,6 +55,45 @@ def _derive_canonical_from_section(clean: str, section: str) -> Tuple[str, str]:
         y = re.search(r"(\d{4})", clean).group(1)
         q = re.search(r"[1-4]", clean).group(0)
         return f"{y}-Q{q}", "Quarterly"
+    if section == "ytd":
+        # Canonical: YYYY-YTD-MM (calendar year), e.g. 2025-YTD-02
+        m_iso = re.search(r"(\d{4})-(\d{2})", clean)
+        if m_iso:
+            return f"{m_iso.group(1)}-YTD-{m_iso.group(2)}", "YTD"
+
+        m_named = re.search(r"YTD\s+([A-Za-z]{3,9})[-\s]*(')?(\d{2,4})", clean, re.IGNORECASE)
+        if m_named:
+            month_name = m_named.group(1).lower()
+            year_s = m_named.group(3)
+            year = int(year_s)
+            if year < 100:
+                year += 2000
+            month_map = {
+                'jan': 1, 'january': 1,
+                'feb': 2, 'february': 2,
+                'mar': 3, 'march': 3,
+                'apr': 4, 'april': 4,
+                'may': 5,
+                'jun': 6, 'june': 6,
+                'jul': 7, 'july': 7,
+                'aug': 8, 'august': 8,
+                'sep': 9, 'september': 9,
+                'oct': 10, 'october': 10,
+                'nov': 11, 'november': 11,
+                'dec': 12, 'december': 12,
+            }
+            month = month_map.get(month_name[:3])
+            if month:
+                return f"{year}-YTD-{month:02d}", "YTD"
+
+        # Fallback: try to find year + month number
+        y = re.search(r"(\d{4})", clean)
+        m = re.search(r"\b(0?[1-9]|1[0-2])\b", clean)
+        if y and m:
+            return f"{y.group(1)}-YTD-{int(m.group(1)):02d}", "YTD"
+
+        return clean, "YTD"
+
     if section == "yearly":
         y = re.search(r"(\d{4})", clean).group(1)
         return y, "Yearly"
@@ -139,6 +178,11 @@ def _lookup_or_create_period(label: str, ptype: str) -> Optional[int]:
             elif ptype == "Yearly":
                 start = f"{label}-01-01"
                 end = f"{label}-12-31"
+            elif ptype == "YTD":
+                # label format: YYYY-YTD-MM
+                y, _, m = label.split('-')
+                start = f"{y}-01-01"
+                end = pd.to_datetime(f"{y}-{m}-01") + pd.offsets.MonthEnd(1)
             cur.execute(
                 "INSERT INTO periods (period_label,period_type,start_date,end_date,created_at,updated_at)"
                 " VALUES (%s,%s,%s,%s,NOW(),NOW()) RETURNING id",
