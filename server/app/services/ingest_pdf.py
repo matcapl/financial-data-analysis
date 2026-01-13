@@ -30,6 +30,7 @@ sys.path.insert(0, str(current_dir))
 from field_mapper import map_and_filter_row
 from normalization import normalize_data
 from persistence import persist_data
+from raw_persistence import persist_raw_facts
 from app.utils.utils import log_event
 
 # Configure logging
@@ -243,25 +244,29 @@ def _extract_board_pack_pl_table(table_data: List[List], page_index: int, tbl_id
             'frequency': 'Monthly',
             'source_file': f"page_{page_index+1}_table_{tbl_idx+1}",
             'source_page': page_index + 1,
+            'source_table': tbl_idx + 1,
+            'source_row': i,
             'notes': 'PDF: Board pack P&L',
             '_sheet_name': f"page_{page_index+1}_table_{tbl_idx+1}",
             '_source_row': i,
+            'extraction_method': 'pymupdf_table',
+            'confidence': 0.7,
         }
         if currency:
             base['currency'] = currency
 
         # Actual
-        metrics.append({**base, 'value_type': 'Actual', 'value': act})
+        metrics.append({**base, 'value_type': 'Actual', 'value': act, 'source_col': 'Actual'})
 
         # Budget/Prior/Variances (if present)
         if len(bundle) >= 1:
-            metrics.append({**base, 'value_type': 'Budget', 'value': bundle[0]})
+            metrics.append({**base, 'value_type': 'Budget', 'value': bundle[0], 'source_col': 'Budget'})
         if len(bundle) >= 2:
-            metrics.append({**base, 'value_type': 'Prior Year', 'value': bundle[1]})
+            metrics.append({**base, 'value_type': 'Prior Year', 'value': bundle[1], 'source_col': 'Prior Year'})
         if len(bundle) >= 3:
-            metrics.append({**base, 'value_type': 'Variance to budget', 'value': bundle[2]})
+            metrics.append({**base, 'value_type': 'Variance to budget', 'value': bundle[2], 'source_col': 'Variance to budget'})
         if len(bundle) >= 4:
-            metrics.append({**base, 'value_type': 'Variance to prior year', 'value': bundle[3]})
+            metrics.append({**base, 'value_type': 'Variance to prior year', 'value': bundle[3], 'source_col': 'Variance to prior year'})
 
     return metrics
 
@@ -759,9 +764,11 @@ def convert_text_rows_to_structured(raw_rows: List[Dict[str, Any]]) -> List[Dict
     return structured
 
 
-def ingest_pdf(file_path: Union[str, Path], company_id: int = 1) -> Dict[str, Any]:
+def ingest_pdf(file_path: Union[str, Path], company_id: int = 1, document_id: int = None) -> Dict[str, Any]:
     """
-    Main three-layer ingestion for PDF files.
+    PDF ingestion.
+
+    Also persists raw extracted facts (with coordinates) when document_id is provided.
     Returns summary dict with counts.
     """
     file_path = Path(file_path)
@@ -789,10 +796,18 @@ def ingest_pdf(file_path: Union[str, Path], company_id: int = 1) -> Dict[str, An
             log_event("pdf_map_error", {"row": idx, "error": str(e)})
             map_errors += 1
 
-    # 3) Normalization
-    normalized, norm_errors = normalize_data(mapped_rows, str(file_path), company_id)
+    # 3) Raw persistence (audit layer)
+    raw_inserted = 0
+    raw_errors = 0
+    if document_id is not None:
+        raw_result = persist_raw_facts(raw_rows, document_id=document_id, company_id=company_id)
+        raw_inserted = raw_result.get("inserted", 0)
+        raw_errors = raw_result.get("errors", 0)
 
-    # 4) Persistence
+    # 4) Normalization
+    normalized, norm_errors = normalize_data(mapped_rows, str(file_path), company_id, document_id)
+
+    # 5) Persistence
     if not normalized:
         # No data to persist after normalization
         log_event("pdf_no_data_after_normalization", {
@@ -833,9 +848,12 @@ def ingest_pdf(file_path: Union[str, Path], company_id: int = 1) -> Dict[str, An
     summary = {
         "file_path": str(file_path),
         "company_id": company_id,
+        "document_id": document_id,
         "rows_extracted": len(raw_rows),
         "rows_mapped": len(mapped_rows),
         "map_errors": map_errors,
+        "raw_persisted": raw_inserted,
+        "raw_persist_errors": raw_errors,
         "rows_normalized": len(normalized),
         "norm_errors": norm_errors,
         "persisted": total_inserted,

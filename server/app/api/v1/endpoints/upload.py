@@ -79,7 +79,17 @@ async def upload_file(
                 company_id=company_id
             )
             
-            ingest_result = processor.ingest_file(str(file_path), company_id)
+            # Create a document row for provenance
+            with get_db_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "INSERT INTO documents (company_id, original_filename, stored_path) VALUES (%s, %s, %s) RETURNING id",
+                        (company_id, file.filename, str(file_path)),
+                    )
+                    document_id = cur.fetchone()[0]
+                    conn.commit()
+
+            ingest_result = processor.ingest_file(str(file_path), company_id, document_id=document_id)
             if not ingest_result.success:
                 raise Exception(f"Ingestion failed: {ingest_result.message}")
             processing_steps.append("✓ Data ingested and persisted to database")

@@ -61,7 +61,7 @@ class FinancialDataProcessor:
     def __init__(self):
         self.logger = setup_logger('financial-data-processor')
     
-    def ingest_file(self, file_path: str, company_id: int) -> PipelineResult:
+    def ingest_file(self, file_path: str, company_id: int, document_id: int = None) -> PipelineResult:
         """
         Process file through the three-layer ingestion pipeline
         Routes PDF files to ingest_pdf service, other files to standard extraction
@@ -84,7 +84,7 @@ class FinancialDataProcessor:
                     filePath=file_path_obj.name
                 )
                 
-                pdf_result = ingest_pdf(file_path, company_id)
+                pdf_result = ingest_pdf(file_path, company_id, document_id=document_id)
                 
                 # Check if PDF ingestion was successful
                 if pdf_result.get('status') == 'no_data':
@@ -148,7 +148,7 @@ class FinancialDataProcessor:
             
             # Stage 3: Normalization
             log_pipeline_step(self.logger, 'data_normalization', True, stage=3)
-            normalized_data, normalization_error_count = normalize_data(mapped_rows, file_path, company_id)
+            normalized_data, normalization_error_count = normalize_data(mapped_rows, file_path, company_id, document_id)
             
             log_with_context(
                 self.logger, 'info', 'Data normalization completed',
@@ -307,7 +307,7 @@ def main():
         if operation == "ingest_file" and len(sys.argv) >= 4:
             file_path = sys.argv[2]
             company_id = int(sys.argv[3])
-            result = processor.ingest_file(file_path, company_id)
+            result = processor.ingest_file(file_path, company_id, document_id=None)
         
         elif operation == "calculate_metrics" and len(sys.argv) >= 3:
             company_id = int(sys.argv[2])

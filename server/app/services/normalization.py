@@ -189,7 +189,12 @@ def _lookup_or_create_line_item_id(name: str) -> Optional[int]:
         return None
 
 
-def normalize_data(mapped: List[Dict[str, Any]], src: str, company_id: int = 1) -> Tuple[List[Dict[str, Any]], int]:
+def normalize_data(
+    mapped: List[Dict[str, Any]],
+    src: str,
+    company_id: int = 1,
+    document_id: Optional[int] = None,
+) -> Tuple[List[Dict[str, Any]], int]:
     normalized_rows = []
     error_count = 0
     log_event("normalization_started", {"rows": len(mapped), "source": src})
@@ -231,6 +236,7 @@ def normalize_data(mapped: List[Dict[str, Any]], src: str, company_id: int = 1) 
 
         normalized_rows.append({
             "company_id": company_id,
+            "document_id": document_id,
             "period_id": pid,
             "line_item_id": lid,
             "value": float(val),
@@ -239,6 +245,11 @@ def normalize_data(mapped: List[Dict[str, Any]], src: str, company_id: int = 1) 
             "currency": normalize_text(row.get("currency")) or "USD",
             "source_file": source_file,
             "source_page": normalize_page_number(row.get("source_page")) or normalize_page_number(row.get("_sheet_name")),
+            "source_table": row.get("source_table"),
+            "source_row": row.get("source_row"),
+            "source_col": normalize_text(row.get("source_col")),
+            "extraction_method": normalize_text(row.get("extraction_method")),
+            "confidence": row.get("confidence"),
             "source_type": source_type,
             "notes": normalize_text(row.get("notes")),
             "hash": hsh,

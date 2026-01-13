@@ -34,7 +34,7 @@ async def process_file_async(file_path: str, company_id: int, filename: str) -> 
         start_time = datetime.now()
         
         # Step 1: Data Ingestion
-        ingest_result = processor.ingest_file(file_path, company_id)
+        ingest_result = processor.ingest_file(file_path, company_id, document_id=None)
         if not ingest_result.success:
             raise Exception(f"Ingestion failed: {ingest_result.message}")
         processing_steps.append("✓ Data ingested and persisted to database")
