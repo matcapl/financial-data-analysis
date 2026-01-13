@@ -148,7 +148,7 @@ class FinancialDataProcessor:
             
             # Stage 3: Normalization
             log_pipeline_step(self.logger, 'data_normalization', True, stage=3)
-            normalized_data, normalization_error_count = normalize_data(mapped_rows, file_path)
+            normalized_data, normalization_error_count = normalize_data(mapped_rows, file_path, company_id)
             
             log_with_context(
                 self.logger, 'info', 'Data normalization completed',

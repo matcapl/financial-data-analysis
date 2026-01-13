@@ -4,6 +4,8 @@ annotated-types==0.7.0
     # via pydantic
 anyio==4.10.0
     # via starlette
+httpx==0.28.1
+    # via starlette.testclient (tests)
 pytest>=7.0,<9.0
     # via financial-data-analysis (dev)
 camelot-py==1.0.9

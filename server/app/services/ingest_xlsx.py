@@ -178,7 +178,7 @@ def ingest_file_three_layer(file_path: Union[str, Path]) -> Dict[str, Any]:
         
         # STAGE 3: NORMALIZATION
         logger.info(f"Stage 3: Normalizing {len(mapped_rows)} rows")
-        normalized_rows, norm_errors = normalize_data(mapped_rows, str(file_path))
+        normalized_rows, norm_errors = normalize_data(mapped_rows, str(file_path), company_id)
         
         results['stages_completed'].append('normalization')
         results['rows_normalized'] = len(normalized_rows)

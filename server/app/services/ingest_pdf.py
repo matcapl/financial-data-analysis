@@ -790,7 +790,7 @@ def ingest_pdf(file_path: Union[str, Path], company_id: int = 1) -> Dict[str, An
             map_errors += 1
 
     # 3) Normalization
-    normalized, norm_errors = normalize_data(mapped_rows, str(file_path))
+    normalized, norm_errors = normalize_data(mapped_rows, str(file_path), company_id)
 
     # 4) Persistence
     if not normalized:

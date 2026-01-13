@@ -151,22 +151,45 @@ def _lookup_or_create_period(label: str, ptype: str) -> Optional[int]:
         log_event("period_db_error", {"label": label, "error": str(e)})
         return None
 
-def _lookup_line_item_id(name: str) -> Optional[int]:
+def _lookup_or_create_line_item_id(name: str) -> Optional[int]:
+    """Lookup a line item definition by name/alias; auto-create if missing."""
     try:
+        cleaned = normalize_text(name)
+        if not cleaned:
+            return None
+
         with get_db_connection() as conn:
             cur = conn.cursor()
-            cur.execute("SELECT id FROM line_item_definitions WHERE name=%s", (name,))
+            cur.execute("SELECT id FROM line_item_definitions WHERE name=%s", (cleaned,))
             r = cur.fetchone()
             if r:
                 return r[0]
-            cur.execute("SELECT id FROM line_item_definitions WHERE %s = ANY(aliases)", (name,))
+
+            cur.execute("SELECT id FROM line_item_definitions WHERE %s = ANY(aliases)", (cleaned,))
+            r = cur.fetchone()
+            if r:
+                return r[0]
+
+            cur.execute(
+                "INSERT INTO line_item_definitions (name, aliases, description) VALUES (%s, %s, %s) "
+                "ON CONFLICT (name) DO NOTHING RETURNING id",
+                (cleaned, [], "Auto-created from ingestion"),
+            )
+            r = cur.fetchone()
+            conn.commit()
+            if r:
+                return r[0]
+
+            cur.execute("SELECT id FROM line_item_definitions WHERE name=%s", (cleaned,))
             r = cur.fetchone()
             return r[0] if r else None
+
     except Exception as e:
         log_event("line_item_db_error", {"name": name, "error": str(e)})
         return None
 
-def normalize_data(mapped: List[Dict[str, Any]], src: str) -> Tuple[List[Dict[str, Any]], int]:
+
+def normalize_data(mapped: List[Dict[str, Any]], src: str, company_id: int = 1) -> Tuple[List[Dict[str, Any]], int]:
     normalized_rows = []
     error_count = 0
     log_event("normalization_started", {"rows": len(mapped), "source": src})
@@ -189,7 +212,7 @@ def normalize_data(mapped: List[Dict[str, Any]], src: str) -> Tuple[List[Dict[st
             error_count += 1
             continue
 
-        lid = _lookup_line_item_id(row["line_item"])
+        lid = _lookup_or_create_line_item_id(row["line_item"])
         if not lid:
             log_event("skip_line_item", {"row": idx, "item": row["line_item"]})
             error_count += 1
@@ -202,12 +225,12 @@ def normalize_data(mapped: List[Dict[str, Any]], src: str) -> Tuple[List[Dict[st
             continue
 
         source_file = os.path.basename(src)
-        hsh = create_hash(1, pid, lid, row.get("value_type") or "Actual", source_file)
+        hsh = create_hash(company_id, pid, lid, row.get("value_type") or "Actual", source_file)
 
         source_type = os.path.splitext(src)[1].lstrip('.').upper() or 'CSV'    
 
         normalized_rows.append({
-            "company_id": 1,
+            "company_id": company_id,
             "period_id": pid,
             "line_item_id": lid,
             "value": float(val),
