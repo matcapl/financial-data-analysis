@@ -340,6 +340,29 @@ def generate_report(company_id: int, output_path: str):
                 s_max = [22, 10, 10, 10, 10, 10]
                 pdf.add_table_with_wrap(summary_rows, s_headers, s_widths, s_max)
 
+                # Top findings summary (v1): put the most important issues near the front
+                top_rows = []
+                for (fid, ftype, severity, metric_name, scenario, message, evidence, created_at) in findings[:8]:
+                    ev = _as_dict(evidence)
+                    top_rows.append((
+                        str(ftype),
+                        str(metric_name or ''),
+                        str(scenario or ''),
+                        str(ev.get('period_label') or ''),
+                        str(ev.get('context_key') or ''),
+                    ))
+
+                if top_rows:
+                    pdf.set_font(style='B', size=12)
+                    pdf.set_text_color(0, 51, 102)
+                    pdf.cell(0, 8, pdf._safe_text('Top Findings'), ln=True)
+                    pdf.set_text_color(0, 0, 0)
+
+                    t_headers = ['Type', 'Metric', 'Scenario', 'Period', 'Context']
+                    t_widths = [55, 55, 35, 25, 45]
+                    t_max = [22, 18, 12, 10, 16]
+                    pdf.add_table_with_wrap(top_rows, t_headers, t_widths, t_max)
+
 
             # Metrics table - optimized for landscape A4 (297mm width, ~270mm usable)
             headers = ['Line Item','Period','Type','Value','Currency','Source','Page','Notes']
