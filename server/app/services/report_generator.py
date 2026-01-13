@@ -267,6 +267,23 @@ def generate_report(company_id: int, output_path: str):
                 pr = 'High' if str(severity).lower() in ('critical', 'high') else 'Medium'
                 findings_questions.append((q[:160] + '...' if len(q) > 160 else q, 'Open', pr))
 
+            def _finding_score(row):
+                # Higher score = more important
+                try:
+                    _fid, ftype, severity, metric_name, scenario, message, evidence, created_at = row
+                    ev = _as_dict(evidence)
+                    min_v = ev.get('min_value')
+                    max_v = ev.get('max_value')
+                    if min_v is not None and max_v is not None:
+                        return abs(float(max_v) - float(min_v))
+                except Exception:
+                    pass
+                # Fallback: severity weighting
+                sev = str(row[2]).lower()
+                return 1e6 if sev in ('critical','high') else 1e3 if sev == 'warning' else 1
+
+            findings_sorted = sorted(findings, key=_finding_score, reverse=True)
+
             # Generate PDF
             pdf = Report(company_id)
             pdf.add_page()
@@ -314,7 +331,7 @@ def generate_report(company_id: int, output_path: str):
             ]
 
             summary_rows = []
-            for kpi in key_kpis:
+            for kpi in ['Revenue','Gross Profit','EBITDA']:
                 if kpi not in pivot:
                     continue
                 actual = _to_float(pivot[kpi].get('Actual'))
@@ -348,11 +365,11 @@ def generate_report(company_id: int, output_path: str):
                             periods_sorted.append(period_label)
                     # period_label sorts lexicographically for YYYY-MM / YYYY-QN / YYYY
                     periods_sorted = sorted(periods_sorted)
-                    last_periods = periods_sorted[-6:]
+                    last_periods = periods_sorted[-3:]
 
                     trend_rows = []
                     for pl in last_periods:
-                        for kpi in key_kpis:
+                        for kpi in ['Revenue','Gross Profit','EBITDA']:
                             vals = {}
                             for (li, p_label, vt, v, ccy, sf, sp, n) in metrics:
                                 if li == kpi and p_label == pl and v is not None:
@@ -386,7 +403,7 @@ def generate_report(company_id: int, output_path: str):
 
                 # Top findings summary (v1): put the most important issues near the front
                 top_rows = []
-                for (fid, ftype, severity, metric_name, scenario, message, evidence, created_at) in findings[:8]:
+                for (fid, ftype, severity, metric_name, scenario, message, evidence, created_at) in findings_sorted[:3]:
                     ev = _as_dict(evidence)
                     top_rows.append((
                         str(ftype),
@@ -406,6 +423,19 @@ def generate_report(company_id: int, output_path: str):
                     t_widths = [55, 55, 35, 25, 45]
                     t_max = [22, 18, 12, 10, 16]
                     pdf.add_table_with_wrap(top_rows, t_headers, t_widths, t_max)
+
+                    # Top questions (from findings) on page 1
+                    tq = findings_questions[:3]
+                    if tq:
+                        pdf.set_font(style='B', size=12)
+                        pdf.set_text_color(0, 51, 102)
+                        pdf.cell(0, 8, pdf._safe_text('Top Questions'), ln=True)
+                        pdf.set_text_color(0, 0, 0)
+                        tq_headers = ['Question','Priority']
+                        tq_widths = [220, 35]
+                        tq_max = [120, 8]
+                        tq_rows = [(q, pr) for (q, _st, pr) in tq]
+                        pdf.add_table_with_wrap(tq_rows, tq_headers, tq_widths, tq_max)
 
 
             # Metrics table - optimized for landscape A4 (297mm width, ~270mm usable)
