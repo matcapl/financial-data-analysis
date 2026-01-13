@@ -441,6 +441,7 @@ def _check_cross_document_restatements(company_id: int) -> List[int]:
                     p.period_label,
                     fm.value_type,
                     fm.currency,
+                    COALESCE(NULLIF(fm.context_key, ''), CONCAT('p', fm.source_page, '_t', COALESCE(fm.source_table, 0))) AS context_key,
                     MIN(fm.value) AS min_value,
                     MAX(fm.value) AS max_value,
                     COUNT(DISTINCT fm.document_id) AS doc_count
@@ -448,7 +449,7 @@ def _check_cross_document_restatements(company_id: int) -> List[int]:
                 JOIN line_item_definitions lid ON lid.id=fm.line_item_id
                 JOIN periods p ON p.id=fm.period_id
                 WHERE fm.company_id=%s AND fm.document_id IS NOT NULL
-                GROUP BY lid.name, fm.period_id, p.period_label, fm.value_type, fm.currency
+                GROUP BY lid.name, fm.period_id, p.period_label, fm.value_type, fm.currency, COALESCE(NULLIF(fm.context_key, ''), CONCAT('p', fm.source_page, '_t', COALESCE(fm.source_table, 0)))
                 HAVING COUNT(DISTINCT fm.document_id) > 1 AND MIN(fm.value) IS DISTINCT FROM MAX(fm.value)
                 ORDER BY doc_count DESC
                 LIMIT 200
@@ -458,7 +459,7 @@ def _check_cross_document_restatements(company_id: int) -> List[int]:
             rows = cur.fetchall()
 
     finding_ids: List[int] = []
-    for (metric_name, period_id, period_label, scenario, currency, min_value, max_value, doc_count) in rows:
+    for (metric_name, period_id, period_label, scenario, currency, context_key, min_value, max_value, doc_count) in rows:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
@@ -471,22 +472,25 @@ def _check_cross_document_restatements(company_id: int) -> List[int]:
                         fm.source_page,
                         fm.source_table,
                         fm.source_row,
-                        fm.source_col
+                        fm.source_col,
+                        fm.context_key
                     FROM financial_metrics fm
                     JOIN documents d ON d.id=fm.document_id
                     JOIN line_item_definitions lid ON lid.id=fm.line_item_id
                     WHERE fm.company_id=%s
                       AND lid.name=%s AND fm.period_id=%s AND fm.value_type=%s AND fm.currency=%s
+                      AND COALESCE(NULLIF(fm.context_key,''), CONCAT('p', fm.source_page, '_t', COALESCE(fm.source_table, 0)))=%s
                     ORDER BY d.uploaded_at ASC, fm.value DESC
                     LIMIT 100
                     """,
-                    (company_id, metric_name, period_id, scenario, currency),
+                    (company_id, metric_name, period_id, scenario, currency, context_key),
                 )
                 occ = cur.fetchall()
 
         evidence = {
             "period_label": period_label,
             "currency": currency,
+            "context_key": context_key,
             "min_value": float(min_value) if min_value is not None else None,
             "max_value": float(max_value) if max_value is not None else None,
             "documents": [
@@ -499,6 +503,7 @@ def _check_cross_document_restatements(company_id: int) -> List[int]:
                     "source_table": r[5],
                     "source_row": r[6],
                     "source_col": r[7],
+                    "context_key": r[8],
                 }
                 for r in occ
             ],
