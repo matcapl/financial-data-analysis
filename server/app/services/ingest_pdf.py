@@ -15,6 +15,7 @@ Version: 3.0 (Three-Layer Integration)
 import sys
 import os
 import logging
+import re
 from pathlib import Path
 from typing import List, Dict, Any, Union
 
@@ -31,12 +32,48 @@ from field_mapper import map_and_filter_row
 from normalization import normalize_data, normalize_period_label
 from persistence import persist_data
 from raw_persistence import persist_raw_facts
-from app.utils.utils import log_event
+from app.utils.utils import log_event, get_db_connection
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
+def _period_hint_from_filename(filename: str) -> str | None:
+    """Best-effort monthly period label (YYYY-MM) derived from filename."""
+    if not filename:
+        return None
+
+    name = filename.lower()
+    month_map = {
+        'jan': 1, 'january': 1,
+        'feb': 2, 'february': 2,
+        'mar': 3, 'march': 3,
+        'apr': 4, 'april': 4,
+        'may': 5,
+        'jun': 6, 'june': 6,
+        'jul': 7, 'july': 7,
+        'aug': 8, 'august': 8,
+        'sep': 9, 'september': 9,
+        'oct': 10, 'october': 10,
+        'nov': 11, 'november': 11,
+        'dec': 12, 'december': 12,
+    }
+
+    # Common patterns: "Feb25", "Feb-25", "February 2025"
+    m = re.search(r"\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s_\-]*('?)(\d{2,4})\b", name)
+    if not m:
+        return None
+
+    month = month_map.get(m.group(1)[:3])
+    year = int(m.group(3))
+    if year < 100:
+        year += 2000
+
+    if not month:
+        return None
+
+    return f"{year}-{month:02d}"
 
 def extract_pdf_rows(file_path: Path) -> List[Dict[str, Any]]:
     """
@@ -143,7 +180,20 @@ def _extract_header_mapped_table(table_data: List[List], page_index: int, tbl_id
     if not table_data or len(table_data) < 2:
         return []
 
-    header_rows = table_data[:2]
+    # Find a plausible header row block by scanning the first few rows
+    scan_limit = min(8, len(table_data))
+    header_rows = []
+    for i in range(scan_limit):
+        row_text = " ".join(_coerce_cell_text(c) for c in table_data[i] if _coerce_cell_text(c))
+        if not row_text:
+            continue
+        # Heuristic: header rows mention periods or scenarios
+        if any(k in row_text.lower() for k in ["ytd", "q", "fy", "cy", "budget", "actual", "prior", "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]):
+            header_rows.append(table_data[i])
+        if len(header_rows) >= 2:
+            break
+    if not header_rows:
+        header_rows = table_data[:1]
     col_count = max(len(r) for r in header_rows)
 
     col_meta: List[Dict[str, Any]] = []
@@ -185,11 +235,12 @@ def _extract_header_mapped_table(table_data: List[List], page_index: int, tbl_id
             'period_type': period_type,
         })
 
-    # Find the first data row after header
+    # Find data rows (skip rows we used as headers, but keep simple)
+    header_row_count = len(header_rows)
     context_key = _detect_context_key(table_data, page_index, tbl_idx)
 
     rows: List[Dict[str, Any]] = []
-    for row_idx, row in enumerate(table_data[2:], start=2):
+    for row_idx, row in enumerate(table_data[header_row_count:], start=header_row_count):
         if not row or len(row) < 2:
             continue
         line_item = _coerce_cell_text(row[0])
@@ -900,14 +951,29 @@ def convert_text_rows_to_structured(raw_rows: List[Dict[str, Any]]) -> List[Dict
 
 
 def ingest_pdf(file_path: Union[str, Path], company_id: int = 1, document_id: int = None) -> Dict[str, Any]:
-    """
-    PDF ingestion.
+    """PDF ingestion.
 
     Also persists raw extracted facts (with coordinates) when document_id is provided.
-    Returns summary dict with counts.
+
+    Notes:
+    - For multi-pack ingestion, we apply a best-effort monthly period hint from the original
+      filename when a row lacks a period label (keeps the system useful without LLMs).
     """
     file_path = Path(file_path)
     log_event("pdf_ingestion_started", {"file_path": str(file_path), "company_id": company_id})
+
+    original_filename = None
+    if document_id is not None:
+        try:
+            with get_db_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT original_filename FROM documents WHERE id=%s", (document_id,))
+                    r = cur.fetchone()
+                    original_filename = r[0] if r else None
+        except Exception:
+            original_filename = None
+
+    period_hint = _period_hint_from_filename(original_filename or file_path.name)
 
     # 1) Extraction
     raw_rows = extract_pdf_rows(file_path)
@@ -925,6 +991,8 @@ def ingest_pdf(file_path: Union[str, Path], company_id: int = 1, document_id: in
     map_errors = 0
     for idx, row in enumerate(raw_rows, start=1):
         try:
+            if period_hint and not row.get('period_label'):
+                row['period_label'] = period_hint
             mapped = map_and_filter_row(row)
             mapped_rows.append(mapped)
         except Exception as e:
