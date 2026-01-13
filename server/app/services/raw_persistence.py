@@ -59,7 +59,9 @@ def persist_raw_facts(
                     (
                         document_id,
                         company_id,
-                        row.get("context_key"),
+                        row.get("context_key") or (
+                            f"p{row.get('source_page')}_t{row.get('source_table') or 0}" if row.get('source_page') else None
+                        ),
                         row.get("line_item"),
                         row.get("value_type"),
                         None if row.get("value") is None else str(row.get("value")),

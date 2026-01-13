@@ -96,6 +96,11 @@ def extract_pdf_rows(file_path: Path) -> List[Dict[str, Any]]:
         if len(page_rows) < 20:
             page_rows.extend(_extract_text_based_data(page, file_path, page_index))
         
+        # Ensure context_key is always present (at least page-level)
+        for r in page_rows:
+            if not r.get('context_key'):
+                r['context_key'] = f"p{page_index+1}_t{r.get('source_table') or 0}"
+
         raw_rows.extend(page_rows)
 
     doc.close()
