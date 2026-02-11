@@ -1,0 +1,26 @@
+# Company-specific overrides
+#
+# Purpose: allow per-company line-item aliasing without polluting the global taxonomy.
+# Keyed by Companies House number when available (preferred), else by company_id.
+
+companies_house:
+  "11986090":
+    name: nFamily
+    line_item_aliases:
+      # Sites / locations
+      "pre-launch sites": "Number of Sites"
+      "pre-lounch sites": "Number of Sites"
+      "central site": "Number of Sites"
+      "hove sites": "Number of Sites"
+
+      # Profit metrics (keep conservative; can refine later)
+      "profit": "Operating Profit"
+
+xlsx:
+  # Optional per-company sheet allow/deny patterns.
+  # If allow is set, only sheets matching allow patterns are processed.
+  # deny patterns are always excluded.
+  "11986090":
+    deny:
+      - "irr"
+      - "target"

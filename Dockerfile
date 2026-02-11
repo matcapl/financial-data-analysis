@@ -5,8 +5,9 @@ FROM node:18-alpine AS frontend-builder
 WORKDIR /app/client
 
 # Copy package files and install dependencies
+# Frontend build requires devDependencies (react-scripts etc.)
 COPY client/package*.json ./
-RUN npm ci --only=production
+RUN npm ci
 
 # Copy frontend source code
 COPY client/src ./src
@@ -50,7 +51,7 @@ WORKDIR /app
 
 # Copy and install Python dependencies first (better layer caching)
 COPY requirements.txt uv.lock ./
-RUN uv venv /app/.venv && \
+RUN uv venv /app/.venv --seed && \
     /app/.venv/bin/pip install --no-cache-dir -r requirements.txt && \
     /app/.venv/bin/pip install --no-cache-dir python-multipart
 

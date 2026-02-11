@@ -37,6 +37,7 @@ def persist_raw_facts(
             currency,
             period_label,
             period_type,
+            period_scope,
             source_page,
             source_table,
             source_row,
@@ -44,7 +45,7 @@ def persist_raw_facts(
             extraction_method,
             confidence
         )
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
     """
 
     inserted = 0
@@ -69,6 +70,10 @@ def persist_raw_facts(
                         row.get("currency"),
                         row.get("period_label"),
                         row.get("period_type"),
+                        (
+                            row.get("period_scope")
+                            or ('YTD' if 'ytd' in str(row.get('context_key') or '').lower() else 'Period')
+                        ),
                         row.get("source_page"),
                         row.get("source_table"),
                         row.get("source_row"),

@@ -23,7 +23,7 @@ const FileUpload: React.FC = () => {
   const [dragOver, setDragOver] = useState<boolean>(false);
 
   const allowedTypes = ['.xlsx', '.pdf', '.csv'];
-  const maxSize = 10 * 1024 * 1024; // 10MB
+  const maxSize = 12 * 1024 * 1024; // 12MB
 
   const validateFile = (file: File): string | null => {
     const fileExtension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
@@ -290,7 +290,7 @@ const FileUpload: React.FC = () => {
                   )}
                   
                   <div className="mt-4 text-xs text-gray-500">
-                    Maximum file size: 10MB
+                    Maximum file size: 12MB
                   </div>
                 </div>
               </div>
@@ -389,7 +389,7 @@ const FileUpload: React.FC = () => {
             <div className="text-xs text-gray-500 space-y-1 bg-gray-50 p-4 rounded-lg">
               <div className="font-medium text-gray-700 mb-2">File Requirements:</div>
               <p>• Formats: Excel (.xlsx), PDF (.pdf), CSV (.csv)</p>
-              <p>• Maximum size: 10MB</p>
+              <p>• Maximum size: 12MB</p>
               <p>• Contains financial data with recognizable headers</p>
             </div>
           </div>

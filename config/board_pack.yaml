@@ -1,0 +1,25 @@
+# Board-pack analysis configuration (v0.x)
+
+flat_threshold_pct: 1.0
+
+metrics:
+  Revenue:
+    currency: GBP
+    min_abs_kpi_value: 1000
+    ltm_months: 12
+
+  Gross Profit:
+    currency: GBP
+    min_abs_kpi_value: 1000
+    ltm_months: 12
+
+  EBITDA:
+    currency: GBP
+    min_abs_kpi_value: 1000
+    ltm_months: 12
+
+reconciliation:
+  restatement:
+    pct_threshold: 2.0
+    abs_threshold_gbp: 50000
+    closed_period_months_ago: 2

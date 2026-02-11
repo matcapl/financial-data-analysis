@@ -25,6 +25,7 @@ try:
     from normalization import normalize_data
     from persistence import persist_data
     from app.utils.utils import log_event, get_db_connection
+    from app.services.company_identity import resolve_company_id_for_upload
     from ingest_pdf import ingest_pdf
     
     # Import specific script functions (we'll refactor these)
@@ -62,18 +63,48 @@ class FinancialDataProcessor:
         self.logger = setup_logger('financial-data-processor')
     
     def ingest_file(self, file_path: str, company_id: int, document_id: int = None) -> PipelineResult:
-        """
-        Process file through the three-layer ingestion pipeline
-        Routes PDF files to ingest_pdf service, other files to standard extraction
+        """Process file through the three-layer ingestion pipeline.
+
+        Canonical entrypoints should provide a `document_id` (e.g. API upload).
+        For robustness (CLI runs, background tasks), if `document_id` is missing,
+        we create a `documents` row automatically so provenance and reconciliation
+        remain functional.
         """
         try:
             file_path_obj = Path(file_path)
+            if not file_path_obj.exists():
+                return PipelineResult(False, f"File not found: {file_path}")
+
             file_extension = file_path_obj.suffix.lower()
-            
+
+            if document_id is None:
+                try:
+                    with get_db_connection() as conn:
+                        with conn.cursor() as cur:
+                            cur.execute("SELECT 1 FROM companies WHERE id = %s", (company_id,))
+                            if cur.fetchone() is None:
+                                cur.execute(
+                                    "INSERT INTO companies (id, name) VALUES (%s, %s) ON CONFLICT (id) DO NOTHING",
+                                    (company_id, f"Company {company_id}"),
+                                )
+                                conn.commit()
+
+                            company_id = resolve_company_id_for_upload(conn, company_id=company_id, filename=file_path_obj.name)
+
+                            cur.execute(
+                                "INSERT INTO documents (company_id, original_filename, stored_path) VALUES (%s, %s, %s) RETURNING id",
+                                (company_id, file_path_obj.name, str(file_path_obj.resolve())), 
+                            )
+                            document_id = cur.fetchone()[0]
+                            conn.commit()
+                except Exception as e:
+                    return PipelineResult(False, f"Failed to create document provenance: {e}")
+
             log_with_context(
                 self.logger, 'info', 'Starting file ingestion',
                 filePath=file_path_obj.name,
                 companyId=company_id,
+                documentId=document_id,
                 fileExtension=file_extension
             )
             
@@ -93,24 +124,43 @@ class FinancialDataProcessor:
                 ingested_count = pdf_result.get('persisted', pdf_result.get('ingested', 0))
                 error_count = pdf_result.get('persist_errors', pdf_result.get('errors', 0))
                 
+                skipped = int(pdf_result.get('skipped', 0) or 0)
+                normalized_rows = int(pdf_result.get('rows_normalized', 0) or 0)
+
                 if ingested_count > 0:
                     return PipelineResult(
                         success=True,
                         message=f"Successfully processed {ingested_count} rows from PDF",
                         data={
                             "rows_extracted": pdf_result.get('rows_extracted', 0),
-                            "rows_mapped": pdf_result.get('rows_mapped', 0), 
-                            "rows_normalized": pdf_result.get('rows_normalized', 0),
+                            "rows_mapped": pdf_result.get('rows_mapped', 0),
+                            "rows_normalized": normalized_rows,
                             "rows_persisted": ingested_count,
-                            "pdf_processing_errors": error_count
-                        }
+                            "rows_skipped": skipped,
+                            "pdf_processing_errors": error_count,
+                        },
                     )
-                else:
+
+                # Treat dedupe-only runs as success (we still extracted and matched facts)
+                if normalized_rows > 0 and skipped > 0:
                     return PipelineResult(
-                        False,
-                        "PDF processing failed - no data persisted",
-                        errors=[f"PDF ingestion returned: {pdf_result}"]
+                        success=True,
+                        message=f"Processed PDF (deduped): skipped {skipped}",
+                        data={
+                            "rows_extracted": pdf_result.get('rows_extracted', 0),
+                            "rows_mapped": pdf_result.get('rows_mapped', 0),
+                            "rows_normalized": normalized_rows,
+                            "rows_persisted": 0,
+                            "rows_skipped": skipped,
+                            "pdf_processing_errors": error_count,
+                        },
                     )
+
+                return PipelineResult(
+                    False,
+                    "PDF processing failed - no data persisted",
+                    errors=[f"PDF ingestion returned: {pdf_result}"],
+                )
             
             # Standard pipeline for Excel/CSV files
             # Stage 1: Extract data
@@ -118,6 +168,44 @@ class FinancialDataProcessor:
             extracted_data = extract_data(file_path)
             if not extracted_data:
                 return PipelineResult(False, "No data extracted from file", errors=["Empty or invalid file"])
+
+            # Optional: per-company XLSX sheet filtering (avoid IRR models, etc.)
+            try:
+                from field_mapper import COMPANY_OVERRIDES
+
+                ch = None
+                with get_db_connection() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute('SELECT companies_house_number FROM companies WHERE id=%s', (company_id,))
+                        r = cur.fetchone()
+                        ch = r[0] if r else None
+
+                xcfg = (COMPANY_OVERRIDES or {}).get('xlsx', {}).get(str(ch), {}) if ch else {}
+                deny = [s.lower() for s in (xcfg.get('deny') or []) if isinstance(s, str)]
+                allow = [s.lower() for s in (xcfg.get('allow') or []) if isinstance(s, str)]
+
+                if deny or allow:
+                    def sheet_ok(sheet: str) -> bool:
+                        s = (sheet or '').lower()
+                        if allow and not any(p in s for p in allow):
+                            return False
+                        if deny and any(p in s for p in deny):
+                            return False
+                        return True
+
+                    before = len(extracted_data)
+                    extracted_data = [r for r in extracted_data if sheet_ok(r.get('_sheet_name'))]
+                    log_with_context(
+                        self.logger,
+                        'info',
+                        'XLSX sheet filter applied',
+                        rowsBefore=before,
+                        rowsAfter=len(extracted_data),
+                        allow=allow,
+                        deny=deny,
+                    )
+            except Exception:
+                pass
             
             rows_extracted = len(extracted_data)
             log_with_context(
@@ -130,10 +218,20 @@ class FinancialDataProcessor:
             log_pipeline_step(self.logger, 'field_mapping', True, stage=2)
             mapped_rows = []
             mapping_errors = []
-            
+
+            companies_house_number = None
+            try:
+                with get_db_connection() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute('SELECT companies_house_number FROM companies WHERE id=%s', (company_id,))
+                        r = cur.fetchone()
+                        companies_house_number = r[0] if r else None
+            except Exception:
+                companies_house_number = None
+
             for row in extracted_data:
                 try:
-                    mapped_row = map_and_filter_row(row)
+                    mapped_row = map_and_filter_row({**row, "companies_house_number": companies_house_number})
                     if mapped_row:
                         mapped_rows.append(mapped_row)
                 except Exception as e:
@@ -148,7 +246,16 @@ class FinancialDataProcessor:
             
             # Stage 3: Normalization
             log_pipeline_step(self.logger, 'data_normalization', True, stage=3)
-            normalized_data, normalization_error_count = normalize_data(mapped_rows, file_path, company_id, document_id)
+            normalized_data, normalization_error_count, rejected = normalize_data(mapped_rows, file_path, company_id, document_id)
+
+            # Best-effort persistence of rejected candidates for audit.
+            if rejected:
+                try:
+                    from rejections_persistence import persist_fact_rejections
+
+                    persist_fact_rejections(rejected, company_id=company_id, document_id=document_id)
+                except Exception:
+                    pass
             
             log_with_context(
                 self.logger, 'info', 'Data normalization completed',
@@ -187,7 +294,8 @@ class FinancialDataProcessor:
                         "rows_extracted": rows_extracted,
                         "rows_mapped": len(mapped_rows),
                         "rows_normalized": len(normalized_data),
-                        "rows_persisted": total_persisted
+                        "rows_persisted": total_persisted,
+                        "rows_rejected": len(rejected),
                     },
                     errors=mapping_errors + [f"{normalization_error_count} normalization errors"]
                 )
@@ -260,6 +368,34 @@ class FinancialDataProcessor:
             self.logger.error(error_msg)
             return PipelineResult(False, error_msg, errors=[str(e)])
     
+    def generate_findings(self, company_id: int) -> PipelineResult:
+        """Generate deterministic findings for board-pack prioritisation."""
+        try:
+            self.logger.info(f"Generating findings for company {company_id}")
+
+            import subprocess
+            project_root = current_dir.parent.parent.parent
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(current_dir / 'findings_engine.py'),
+                    str(company_id),
+                ],
+                capture_output=True,
+                text=True,
+                cwd=str(project_root),
+            )
+
+            if result.returncode == 0:
+                return PipelineResult(True, "Findings generated successfully", data={"output": result.stdout})
+            else:
+                return PipelineResult(False, "Findings generation failed", errors=[result.stderr])
+
+        except Exception as e:
+            error_msg = f"Findings generation failed: {str(e)}"
+            self.logger.error(error_msg)
+            return PipelineResult(False, error_msg, errors=[str(e)])
+
     def generate_report(self, company_id: int, output_path: str) -> PipelineResult:
         """
         Generate PDF report for a company
@@ -297,7 +433,7 @@ def main():
     """CLI interface for the pipeline processor"""
     if len(sys.argv) < 2:
         print("Usage: python pipeline_processor.py <operation> [args...]")
-        print("Operations: ingest_file, calculate_metrics, generate_questions, generate_report")
+        print("Operations: ingest_file, calculate_metrics, generate_questions, generate_findings, generate_report")
         sys.exit(1)
     
     processor = FinancialDataProcessor()
@@ -316,6 +452,10 @@ def main():
         elif operation == "generate_questions" and len(sys.argv) >= 3:
             company_id = int(sys.argv[2])
             result = processor.generate_questions(company_id)
+
+        elif operation == "generate_findings" and len(sys.argv) >= 3:
+            company_id = int(sys.argv[2])
+            result = processor.generate_findings(company_id)
         
         elif operation == "generate_report" and len(sys.argv) >= 4:
             company_id = int(sys.argv[2])

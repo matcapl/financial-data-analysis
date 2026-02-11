@@ -21,7 +21,7 @@ from typing import Dict, List, Optional, Union, Tuple, Any
 import os
 import sys
 
-# Add server/scripts to path for imports
+# Add canonical services path for imports
 current_dir = Path(__file__).resolve().parent
 sys.path.insert(0, str(current_dir))
 
@@ -33,7 +33,7 @@ try:
     from app.utils.utils import log_event, get_db_connection
 except ImportError as e:
     print(f"❌ Import error: {e}")
-    print("Please ensure all required modules are available in server/scripts/")
+    print("Please ensure all required modules are available in server/app/services/")
     sys.exit(1)
 
 # Configure logging
@@ -162,8 +162,11 @@ def ingest_file_three_layer(file_path: Union[str, Path]) -> Dict[str, Any]:
                 if 'source_file' not in row:
                     row['source_file'] = file_path.name
                 
+                # Provide company context for per-company alias overrides
+                row["companies_house_number"] = None
                 mapped_row = map_and_filter_row(row)
-                mapped_rows.append(mapped_row)
+                if mapped_row:
+                    mapped_rows.append(mapped_row)
                 
             except Exception as e:
                 logger.warning(f"Row {idx} field mapping failed: {e}")
@@ -178,7 +181,15 @@ def ingest_file_three_layer(file_path: Union[str, Path]) -> Dict[str, Any]:
         
         # STAGE 3: NORMALIZATION
         logger.info(f"Stage 3: Normalizing {len(mapped_rows)} rows")
-        normalized_rows, norm_errors = normalize_data(mapped_rows, str(file_path), company_id)
+        normalized_rows, norm_errors, rejected = normalize_data(mapped_rows, str(file_path), company_id)
+
+        if rejected:
+            try:
+                from rejections_persistence import persist_fact_rejections
+
+                persist_fact_rejections(rejected, company_id=company_id)
+            except Exception:
+                pass
         
         results['stages_completed'].append('normalization')
         results['rows_normalized'] = len(normalized_rows)
@@ -193,9 +204,24 @@ def ingest_file_three_layer(file_path: Union[str, Path]) -> Dict[str, Any]:
             results['success'] = False
             results['error'] = "No valid rows after normalization"
             return results
-        company_id = normalized_rows[0]["company_id"]
-        period_id  = normalized_rows[0]["period_id"]
-        persistence_results = persist_data(normalized_rows, company_id, period_id)
+        # Persist per-period since persist_data expects a single period_id
+        from collections import defaultdict
+
+        grouped_by_period = defaultdict(list)
+        for r in normalized_rows:
+            grouped_by_period[r["period_id"]].append(r)
+
+        total_inserted = 0
+        total_skipped = 0
+        total_errors = 0
+
+        for period_id, period_rows in grouped_by_period.items():
+            res = persist_data(period_rows, company_id, period_id)
+            total_inserted += res.get("inserted", 0)
+            total_skipped += res.get("skipped", 0)
+            total_errors += res.get("errors", 0)
+
+        persistence_results = {"inserted": total_inserted, "skipped": total_skipped, "errors": total_errors}
         
         results['stages_completed'].append('persistence')
         results['rows_persisted'] = persistence_results['inserted']

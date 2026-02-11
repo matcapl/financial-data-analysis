@@ -289,6 +289,7 @@ line_items:
       - top line
       - sales revenue
       - rev         # Preserved original
+      - group revenue
     description: Total revenue from operations
 
   - id: 11002
@@ -315,4 +316,179 @@ line_items:
       - operating profit
       - earnings before interest taxes
       - earnings_before_taxes
+      - group ebitda
     description: Earnings before interest taxes depreciation amortization
+
+  - id: 11004
+    name: Operating Profit
+    aliases:
+      - operating profit
+      - operating_profit
+      - op profit
+      - operating income
+      - operating_income
+      - ebit
+      - EBIT
+    description: Profit from operations (EBIT)
+
+  - id: 11005
+    name: Net Profit
+    aliases:
+      - net profit
+      - net_profit
+      - profit after tax
+      - profit_after_tax
+      - net income
+      - net_income
+      - pat
+    description: Profit after tax
+
+  - id: 11006
+    name: Cash Balance
+    aliases:
+      - cash
+      - cash balance
+      - cash_balance
+      - cash at bank
+      - cash_at_bank
+      - cash and cash equivalents
+      - cash_equivalents
+      - closing cash
+      - opening cash
+      - cash held on account
+      - cash held on accounts
+      - group cash position
+    description: Cash and cash equivalents (sometimes split as opening/closing cash)
+
+  - id: 11007
+    name: Net Debt
+    aliases:
+      - net debt
+      - net_debt
+      - total debt
+      - total_debt
+      - debt
+      - borrowings
+      - bank debt
+    description: Net debt (debt less cash)
+
+  - id: 11008
+    name: Operating Cash Flow
+    aliases:
+      - operating cash flow
+      - operating_cash_flow
+      - cash from operations
+      - cash_from_operations
+      - cash generated from operations
+    description: Cash generated from operations
+
+  - id: 11009
+    name: Free Cash Flow
+    aliases:
+      - free cash flow
+      - free_cash_flow
+      - fcf
+      - FCF
+    description: Free cash flow
+
+  - id: 11010
+    name: Working Capital
+    aliases:
+      - working capital
+      - working_capital
+      - net working capital
+      - net_working_capital
+      - nwb
+    description: Working capital
+
+  - id: 11011
+    name: Accounts Receivable
+    aliases:
+      - accounts receivable
+      - accounts_receivable
+      - trade receivables
+      - trade_receivables
+      - debtors
+    description: Trade receivables
+
+  - id: 11012
+    name: Accounts Payable
+    aliases:
+      - accounts payable
+      - accounts_payable
+      - trade payables
+      - trade_payables
+      - creditors
+    description: Trade payables
+
+  - id: 11013
+    name: Capital Expenditure
+    aliases:
+      - capex
+      - Capex
+      - capital expenditure
+      - capital_expenditure
+      - capital spend
+    description: Capital expenditure
+
+  - id: 11014
+    name: Start-up Costs
+    aliases:
+      - startup costs
+      - start-up costs
+      - start up costs
+      - startup_costs
+      - start_up_costs
+      - pre-opening costs
+      - pre opening costs
+      - startup losses
+      - start-up losses
+      - startup loss
+      - start-up loss
+      - startup losses (add back)
+      - start-up losses (add back)
+    description: Start-up / pre-opening costs (sometimes presented as start-up losses)
+
+  - id: 11015
+    name: Number of Sites
+    aliases:
+      - number of sites
+      - sites
+      - site count
+      - site_count
+      - locations
+      - number of locations
+      - pre-launch sites
+      - pre-lounch sites
+      - central site
+      - hove sites
+    description: Count of sites/locations
+
+  - id: 11016
+    name: Group Profit (excl Start-up Costs)
+    aliases:
+      - group profit excl start-up costs
+      - group profit excluding start-up costs
+      - profit excl start-up
+      - profit excluding startup costs
+      - profit excl startup costs
+    description: Profit excluding start-up costs (company-specific definition)
+
+  - id: 11017
+    name: EBITDA (excl Start-up Costs)
+    aliases:
+      - ebitda excl start-up costs
+      - ebitda excluding start-up costs
+      - ebitda excl startup costs
+      - ebitda excluding startup costs
+      - adjusted ebitda
+      - group ebitda (excl startup losses)
+      - group ebitda (excl startup losses)
+      - group ebitda (post startup losses)
+      - ebitda (excl startup losses)
+      - ebitda excl startup losses
+      - ebitda excluding startup losses
+      - site ebitda (excl startup losses)
+      - site ebitda (excl startup losses)
+      - group ebitda (excl startup losses)
+    description: EBITDA excluding start-up costs / start-up losses (adjusted)

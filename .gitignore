@@ -57,7 +57,7 @@ Thumbs.db
 
 # Sensitive data
 data/
-reports/*.pdf
+reports/
 
 # Database dumps
 # *.sql
@@ -82,3 +82,5 @@ install_poetry.py
 
 
 junk/
+
+

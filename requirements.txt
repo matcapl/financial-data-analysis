@@ -4,10 +4,6 @@ annotated-types==0.7.0
     # via pydantic
 anyio==4.10.0
     # via starlette
-httpx==0.28.1
-    # via starlette.testclient (tests)
-pytest>=7.0,<9.0
-    # via financial-data-analysis (dev)
 camelot-py==1.0.9
     # via financial-data-analysis (pyproject.toml)
 certifi==2025.8.3
@@ -28,6 +24,10 @@ cryptography==45.0.6
     # via pdfminer-six
 defusedxml==0.7.1
     # via fpdf2
+deprecated==1.3.1
+    # via pikepdf
+deprecation==2.1.0
+    # via ocrmypdf
 distro==1.9.0
     # via tabula-py
 et-xmlfile==2.0.0
@@ -44,10 +44,18 @@ idna==3.10
     # via
     #   anyio
     #   requests
+img2pdf==0.6.3
+    # via ocrmypdf
 jinja2==3.1.6
     # via financial-data-analysis (pyproject.toml)
+lxml==6.0.2
+    # via pikepdf
+markdown-it-py==4.0.0
+    # via rich
 markupsafe==3.0.2
     # via jinja2
+mdurl==0.1.2
+    # via markdown-it-py
 numpy==2.2.6
     # via
     #   camelot-py
@@ -55,6 +63,8 @@ numpy==2.2.6
     #   opencv-python-headless
     #   pandas
     #   tabula-py
+ocrmypdf==16.13.0
+    # via financial-data-analysis (pyproject.toml)
 opencv-python==4.12.0.88
     # via financial-data-analysis (pyproject.toml)
 opencv-python-headless==4.12.0.88
@@ -64,7 +74,11 @@ openpyxl==3.1.5
     #   financial-data-analysis (pyproject.toml)
     #   camelot-py
 packaging==25.0
-    # via pytesseract
+    # via
+    #   deprecation
+    #   ocrmypdf
+    #   pikepdf
+    #   pytesseract
 pandas==2.3.2
     # via
     #   financial-data-analysis (pyproject.toml)
@@ -73,13 +87,27 @@ pandas==2.3.2
 pdf2image==1.17.0
     # via financial-data-analysis (pyproject.toml)
 pdfminer-six==20250506
-    # via camelot-py
+    # via
+    #   camelot-py
+    #   ocrmypdf
+pi-heif==1.1.1
+    # via ocrmypdf
+pikepdf==10.2.0
+    # via
+    #   img2pdf
+    #   ocrmypdf
 pillow==11.3.0
     # via
     #   camelot-py
     #   fpdf2
+    #   img2pdf
+    #   ocrmypdf
     #   pdf2image
+    #   pi-heif
+    #   pikepdf
     #   pytesseract
+pluggy==1.6.0
+    # via ocrmypdf
 psycopg2-binary==2.9.10
     # via financial-data-analysis (pyproject.toml)
 pycparser==2.22
@@ -93,10 +121,12 @@ pydantic-core==2.33.2
     # via pydantic
 pydantic-settings==2.10.1
     # via financial-data-analysis (pyproject.toml)
+pygments==2.19.2
+    # via rich
 pymupdf==1.26.4
     # via financial-data-analysis (pyproject.toml)
 pypdf==3.17.4
-    # via camelot-py (camelot-py==1.0.9 requires pypdf<4)
+    # via camelot-py
 pypdfium2==4.30.0
     # via camelot-py
 pytesseract==0.3.13
@@ -115,6 +145,8 @@ pyyaml==6.0.2
     # via financial-data-analysis (pyproject.toml)
 requests==2.32.5
     # via financial-data-analysis (pyproject.toml)
+rich==14.2.0
+    # via ocrmypdf
 six==1.17.0
     # via python-dateutil
 sniffio==1.3.1
@@ -127,9 +159,11 @@ tabulate==0.9.0
     # via camelot-py
 typing-extensions==4.15.0
     # via
+    #   anyio
     #   fastapi
     #   pydantic
     #   pydantic-core
+    #   starlette
     #   typing-inspection
 typing-inspection==0.4.1
     # via
@@ -141,3 +175,7 @@ urllib3==2.5.0
     # via requests
 uvicorn==0.35.0
     # via financial-data-analysis (pyproject.toml)
+psutil==6.1.1
+    # via financial-data-analysis (app monitoring)
+wrapt==2.0.1
+    # via deprecated

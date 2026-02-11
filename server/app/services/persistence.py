@@ -1,4 +1,4 @@
-# server/scripts/persistence.py
+# Canonical module: server/app/services/persistence.py
 
 import logging
 from typing import List, Dict, Any
@@ -39,6 +39,7 @@ def persist_data(
                 period_id,
                 line_item_id,
                 value_type,
+                period_scope,
                 source_file
             FROM financial_metrics
             WHERE company_id = %s
@@ -47,8 +48,8 @@ def persist_data(
             (company_id, period_id),
         )
         existing_keys = {
-            (cid, pid, liid, vtype, src)
-            for cid, pid, liid, vtype, src in cursor.fetchall()
+            (cid, pid, liid, vtype, scope, src)
+            for cid, pid, liid, vtype, scope, src in cursor.fetchall()
         }
         logger.debug("Existing keys: %s", existing_keys)
 
@@ -60,6 +61,7 @@ def persist_data(
                 row["period_id"],
                 row["line_item_id"],
                 row["value_type"],
+                row.get("period_scope") or 'Period',
                 row["source_file"],
             )
             if key not in existing_keys:
@@ -70,7 +72,7 @@ def persist_data(
             return {"inserted": 0, "skipped": 0, "errors": 0}
 
         # 3. Bulk insert with ON CONFLICT on the compound key
-        values_template = ", ".join(["%s"] * 18)
+        values_template = ", ".join(["%s"] * 19)
         insert_sql = f"""
             INSERT INTO financial_metrics (
                 company_id,
@@ -80,6 +82,7 @@ def persist_data(
                 line_item_id,
                 value,
                 value_type,
+                period_scope,
                 frequency,
                 currency,
                 source_file,
@@ -98,6 +101,7 @@ def persist_data(
                 period_id,
                 line_item_id,
                 value_type,
+                period_scope,
                 source_file
             )
             DO NOTHING
@@ -112,6 +116,7 @@ def persist_data(
                 row["line_item_id"],
                 row["value"],
                 row["value_type"],
+                row.get("period_scope") or 'Period',
                 row.get("frequency"),
                 row.get("currency"),
                 row["source_file"],

@@ -13,6 +13,7 @@ from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Background
 from app.utils.utils import get_db_connection
 from app.utils.logging_config import setup_logger, log_with_context
 from app.services.pipeline_processor import FinancialDataProcessor
+from app.services.company_identity import resolve_company_id_for_upload
 from app.models.api.responses import UploadResponse
 from app.core.config import settings
 
@@ -43,13 +44,13 @@ async def upload_file(
             detail=f"Invalid file type: {file_ext}. Allowed types: {', '.join(allowed_extensions)}"
         )
     
-    # Validate file size (25MB limit)
-    max_size = 25 * 1024 * 1024  # 25MB
+    # Validate file size (12MB limit)
+    max_size = 12 * 1024 * 1024  # 12MB
     file_content = await file.read()
     if len(file_content) > max_size:
         raise HTTPException(
             status_code=400,
-            detail="File too large. Maximum size is 10MB."
+            detail="File too large. Maximum size is 12MB."
         )
     
     try:
@@ -79,8 +80,32 @@ async def upload_file(
                 company_id=company_id
             )
             
-            # Create a document row for provenance
+            # Ensure company exists (some environments start with an empty companies table)
+            # If the provided company_id doesn't exist, create a placeholder row so FK inserts succeed.
+            # Then resolve to a stable company_id using Companies House number when possible.
             with get_db_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT 1 FROM companies WHERE id = %s", (company_id,))
+                    if cur.fetchone() is None:
+                        cur.execute(
+                            "INSERT INTO companies (id, name) VALUES (%s, %s) ON CONFLICT (id) DO NOTHING",
+                            (company_id, f"Company {company_id}"),
+                        )
+                        conn.commit()
+                        log_with_context(logger, 'info', 'Created placeholder company', company_id=company_id)
+
+                resolved_company_id = resolve_company_id_for_upload(conn, company_id=company_id, filename=file.filename)
+                if resolved_company_id != company_id:
+                    log_with_context(
+                        logger,
+                        'info',
+                        'Resolved company via Companies House number',
+                        company_id=company_id,
+                        resolved_company_id=resolved_company_id,
+                        filename=file.filename,
+                    )
+                company_id = resolved_company_id
+
                 with conn.cursor() as cur:
                     cur.execute(
                         "INSERT INTO documents (company_id, original_filename, stored_path) VALUES (%s, %s, %s) RETURNING id",
@@ -99,12 +124,12 @@ async def upload_file(
             if not metrics_result.success:
                 raise Exception(f"Metrics calculation failed: {metrics_result.message}")
             processing_steps.append("✓ Financial metrics calculated")
-            
-            # Step 3: Generate Questions
-            questions_result = processor.generate_questions(company_id)
-            if not questions_result.success:
-                raise Exception(f"Question generation failed: {questions_result.message}")
-            processing_steps.append("✓ Analytical questions generated")
+
+            # Step 3: Generate Findings (prioritisation)
+            findings_result = processor.generate_findings(company_id)
+            if not findings_result.success:
+                raise Exception(f"Findings generation failed: {findings_result.message}")
+            processing_steps.append("✓ Findings generated (prioritisation)")
             
             log_with_context(logger, 'info', 'Pipeline processing completed', 
                 company_id=company_id,

@@ -1,0 +1,57 @@
+# contracts.yaml
+#
+# Pipeline validation contracts.
+#
+# Purpose:
+# - Keep validation rules explicit and reviewable.
+# - Avoid hardcoding company-specific assumptions in code.
+#
+# Notes:
+# - These are heuristics to improve robustness, not guarantees.
+# - Prefer "flag + quarantine" over silent correction.
+
+contracts:
+  revenue_analyst_v1:
+    description: >-
+      Minimum viability checks for FH-style "Group Revenue (always)" output.
+
+    required_metrics:
+      - name: Revenue
+        value_type: Actual
+        period_type: Monthly
+        ltm_months: 12
+
+    # Generic sanity filters to reduce obvious non-monthly/YTD/percentage contamination.
+    # These should generalise across companies.
+    sanity:
+      # Filter out values that are far outside the typical scale for the company.
+      # Computed against the median for that (company, metric, value_type) group.
+      outlier_factor_low: 0.1
+      outlier_factor_high: 10.0
+
+      # Hard floor used only when median can't be computed.
+      min_abs_value_fallback:
+        Revenue: 1000
+        EBITDA: 100
+        "EBITDA (excl Start-up Costs)": 100
+
+    # Prefer extraction methods when choosing between competing candidates.
+    method_preference:
+      - pymupdf_table
+      - pdftotext
+      - text_pattern
+
+    # Reconciliation checks between Period and YTD series.
+    reconciliation:
+      revenue_ytd:
+        enabled: true
+        tolerance_pct: 2.0
+        tolerance_abs: 1000
+      revenue_quarterly:
+        enabled: true
+        tolerance_pct: 2.0
+        tolerance_abs: 1000
+      revenue_yearly:
+        enabled: true
+        tolerance_pct: 2.0
+        tolerance_abs: 1000

@@ -158,8 +158,8 @@ observations:
         li.name  AS metric_name,
         p.period_label,
         a.company_id
-      FROM financial_metrics a
-      JOIN financial_metrics b
+      FROM financial_metrics_best a
+      JOIN financial_metrics_best b
         ON a.company_id = b.company_id
        AND a.period_id  = b.period_id
        AND a.line_item_id = b.line_item_id
@@ -188,8 +188,8 @@ observations:
         li.name  AS metric_name,
         p.period_label,
         a.company_id
-      FROM financial_metrics a
-      JOIN financial_metrics f
+      FROM financial_metrics_best a
+      JOIN financial_metrics_best f
         ON a.company_id = f.company_id
        AND a.period_id  = f.period_id
        AND a.line_item_id = f.line_item_id
@@ -251,7 +251,7 @@ observations:
           p.start_date,
           ROW_NUMBER() OVER (PARTITION BY fm.company_id, li.id
                              ORDER BY p.start_date) AS period_num
-        FROM financial_metrics fm
+        FROM financial_metrics_best fm
         JOIN periods p ON fm.period_id = p.id
         JOIN line_item_definitions li ON fm.line_item_id = li.id
         WHERE fm.value_type = 'Actual'
@@ -285,7 +285,7 @@ observations:
           fm.company_id,
           li.name      AS metric_name,
           STDDEV(fm.value)/AVG(fm.value) AS volatility
-        FROM financial_metrics fm
+        FROM financial_metrics_best fm
         JOIN periods p ON fm.period_id = p.id
         JOIN line_item_definitions li ON fm.line_item_id = li.id
         WHERE fm.value_type = 'Actual'
@@ -315,7 +315,7 @@ observations:
           li.name   AS metric_name,
           EXTRACT(MONTH FROM p.start_date) AS month_num,
           AVG(fm.value) AS seasonal_avg
-        FROM financial_metrics fm
+        FROM financial_metrics_best fm
         JOIN periods p ON fm.period_id = p.id
         JOIN line_item_definitions li ON fm.line_item_id = li.id
         WHERE fm.value_type = 'Actual'
@@ -330,7 +330,7 @@ observations:
           li.name   AS metric_name,
           fm.value  AS current_value,
           EXTRACT(MONTH FROM p.start_date) AS month_num
-        FROM financial_metrics fm
+        FROM financial_metrics_best fm
         JOIN periods p ON fm.period_id = p.id
         JOIN line_item_definitions li ON fm.line_item_id = li.id
         WHERE fm.value_type = 'Actual'
@@ -373,8 +373,8 @@ observations:
         li.name       AS metric_name,
         p.period_label,
         cur.company_id
-      FROM financial_metrics cur
-      JOIN financial_metrics pri
+      FROM financial_metrics_best cur
+      JOIN financial_metrics_best pri
         ON cur.company_id   = pri.company_id
        AND cur.line_item_id = pri.line_item_id
       JOIN periods p ON cur.period_id = p.id
@@ -408,7 +408,7 @@ observations:
           li.name        AS metric_name,
           AVG(fm.value)  AS mean_val,
           STDDEV(fm.value) AS stddev_val
-        FROM financial_metrics fm
+        FROM financial_metrics_best fm
         JOIN periods p ON fm.period_id = p.id
         JOIN line_item_definitions li ON fm.line_item_id = li.id
         WHERE fm.value_type = 'Actual'
@@ -422,7 +422,7 @@ observations:
           li.name       AS metric_name,
           fm.value      AS current_value,
           p.period_label
-        FROM financial_metrics fm
+        FROM financial_metrics_best fm
         JOIN periods p ON fm.period_id = p.id
         JOIN line_item_definitions li ON fm.line_item_id = li.id
         WHERE fm.value_type = 'Actual'
@@ -465,8 +465,8 @@ observations:
           gp.value/rev.value AS eff_ratio,
           p.period_label,
           li_gp.name      AS metric_name
-        FROM financial_metrics gp
-        JOIN financial_metrics rev
+        FROM financial_metrics_best gp
+        JOIN financial_metrics_best rev
           ON gp.company_id   = rev.company_id
          AND gp.period_id    = rev.period_id
         JOIN periods p ON gp.period_id = p.id
@@ -505,8 +505,8 @@ observations:
           (m.value/rev.value*100) AS margin_pct,
           p.period_label,
           li.name            AS metric_name
-        FROM financial_metrics m
-        JOIN financial_metrics rev
+        FROM financial_metrics_best m
+        JOIN financial_metrics_best rev
           ON m.company_id   = rev.company_id
          AND m.period_id    = rev.period_id
         JOIN periods p ON m.period_id = p.id

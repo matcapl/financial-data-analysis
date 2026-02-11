@@ -29,10 +29,25 @@ def clean_period_string(raw: Any) -> str:
     s = s.replace("–", "-").replace("—", "-")
     return s
 
-def normalize_period_label(raw: Any) -> Tuple[Optional[str], Optional[str]]:
+def normalize_period_label(raw: Any, period_type_hint: Optional[str] = None) -> Tuple[Optional[str], Optional[str]]:
     if raw is None or (isinstance(raw, float) and pd.isna(raw)):
         return None, None
     cleaned = clean_period_string(raw)
+
+    hint = (period_type_hint or '').strip().lower()
+
+    # If a hint is provided, avoid coercing a plain year like "2024" into a monthly date.
+    if hint in {'yearly', 'annual'} and re.fullmatch(r"\d{4}", cleaned):
+        return cleaned, 'Yearly'
+
+    # Support Excel-style datetime strings like "2020-05-01 00:00:00"
+    try:
+        dt = pd.to_datetime(cleaned, errors='coerce')
+        if pd.notna(dt):
+            return dt.strftime('%Y-%m'), 'Monthly'
+    except Exception:
+        pass
+
     low = cleaned.lower()
     for canon, cfg in PERIODS_CFG["period_aliases"].items():
         if any(low == a.lower() for a in cfg["aliases"]):
@@ -233,50 +248,173 @@ def _lookup_or_create_line_item_id(name: str) -> Optional[int]:
         return None
 
 
+def _detect_value_scale(row: Dict[str, Any]) -> int:
+    """Detect numeric scale (e.g. £000 / £m) from headers/notes.
+
+    Goal: normalise stored values into base currency units.
+    """
+
+    haystack = " ".join(
+        str(x) for x in [row.get("source_col"), row.get("notes"), row.get("period_label"), row.get("value_type")] if x
+    ).lower()
+
+    # Common board-pack conventions
+    if re.search(r"£\s*[’']?\s*000|\(\s*£\s*[’']?\s*000\s*\)|\b000s\b|\bthousand\b|\b\(000\)\b|\b\(k\)\b|\b£k\b", haystack):
+        return 1000
+
+    if re.search(r"£\s*m\b|\b\(m\)\b|\bmillion\b|\b£m\b", haystack):
+        return 1_000_000
+
+    return 1
+
+
+def _is_implausible_kpi_value(line_item: str, value: Decimal) -> Optional[str]:
+    """Return a reject reason if a KPI value is clearly junk.
+
+    This is intentionally conservative: it only rejects values that are extremely
+    likely to be extraction noise (e.g. years like 2024 ending up as Revenue).
+    """
+
+    try:
+        li = (line_item or '').strip()
+        if li not in {'Revenue', 'Gross Profit', 'EBITDA'}:
+            return None
+
+        v = abs(float(value))
+
+        # Common PDF/OCR leakage: years and year-like tokens
+        if 1900 <= v <= 2100:
+            return 'year_token'
+
+        # For board-pack KPIs, tiny magnitudes are almost always footnotes/page numbers.
+        if v < 1000:
+            return 'too_small'
+
+        return None
+    except Exception:
+        return None
+
+
 def normalize_data(
     mapped: List[Dict[str, Any]],
     src: str,
     company_id: int = 1,
     document_id: Optional[int] = None,
-) -> Tuple[List[Dict[str, Any]], int]:
-    normalized_rows = []
+) -> Tuple[List[Dict[str, Any]], int, List[Dict[str, Any]]]:
+    normalized_rows: List[Dict[str, Any]] = []
+    rejected_rows: List[Dict[str, Any]] = []
     error_count = 0
     log_event("normalization_started", {"rows": len(mapped), "source": src})
+
+    def reject(reason: str, *, row_idx: int, raw_row: Dict[str, Any], canon_period: Optional[str] = None, period_type: Optional[str] = None, details: Optional[Dict[str, Any]] = None) -> None:
+        rejected_rows.append(
+            {
+                "stage": "normalization",
+                "reason": reason,
+                "context_key": normalize_text(raw_row.get("context_key")),
+                "line_item_text": normalize_text(raw_row.get("line_item")),
+                "scenario": normalize_text(raw_row.get("value_type")),
+                "value_text": None if raw_row.get("value") is None else str(raw_row.get("value")),
+                "value_numeric": None,
+                "currency": normalize_text(raw_row.get("currency")),
+                "period_label_raw": None if raw_row.get("period_label") is None else str(raw_row.get("period_label")),
+                "period_label_canonical": canon_period,
+                "period_type": period_type or normalize_text(raw_row.get("period_type")),
+                "source_file": normalize_text(raw_row.get("source_file")) or os.path.basename(src),
+                "source_page": normalize_page_number(raw_row.get("source_page")) or normalize_page_number(raw_row.get("_sheet_name")),
+                "source_table": raw_row.get("source_table"),
+                "source_row": raw_row.get("source_row"),
+                "source_col": normalize_text(raw_row.get("source_col")),
+                "extraction_method": normalize_text(raw_row.get("extraction_method")),
+                "confidence": raw_row.get("confidence"),
+                "details": {"_row": row_idx, **(details or {})},
+            }
+        )
 
     for idx, row in enumerate(mapped, start=1):
         if not row.get("line_item") or not row.get("period_label") or row.get("value") is None:
             log_event("skip_incomplete", {"row": idx, "data": row})
+            reject("incomplete", row_idx=idx, raw_row=row)
             error_count += 1
             continue
 
-        canon, ptype = normalize_period_label(row["period_label"])
+        canon, ptype = normalize_period_label(row["period_label"], row.get("period_type"))
         if not canon:
             log_event("skip_period", {"row": idx, "raw": row["period_label"]})
+            reject("period_normalization_failed", row_idx=idx, raw_row=row)
             error_count += 1
             continue
 
         pid = _lookup_or_create_period(canon, ptype)
         if not pid:
             log_event("skip_period_id", {"row": idx, "canon": canon})
+            reject("period_lookup_failed", row_idx=idx, raw_row=row, canon_period=canon, period_type=ptype)
             error_count += 1
             continue
 
         lid = _lookup_or_create_line_item_id(row["line_item"])
         if not lid:
             log_event("skip_line_item", {"row": idx, "item": row["line_item"]})
+            reject("line_item_lookup_failed", row_idx=idx, raw_row=row, canon_period=canon, period_type=ptype)
             error_count += 1
             continue
 
         val = normalize_value(row["value"])
         if val is None:
             log_event("skip_value", {"row": idx, "raw": row["value"]})
+            reject("value_normalization_failed", row_idx=idx, raw_row=row, canon_period=canon, period_type=ptype)
             error_count += 1
             continue
 
-        source_file = os.path.basename(src)
+        scale = _detect_value_scale(row)
+        if scale != 1:
+            try:
+                val = Decimal(val) * Decimal(scale)
+            except Exception:
+                pass
+
+        reject_reason = _is_implausible_kpi_value(row.get("line_item"), Decimal(val))
+        if reject_reason:
+            log_event(
+                "skip_kpi_quality",
+                {
+                    "row": idx,
+                    "line_item": row.get("line_item"),
+                    "period_label": canon,
+                    "value": str(val),
+                    "reason": reject_reason,
+                },
+            )
+            reject(
+                f"kpi_quality_{reject_reason}",
+                row_idx=idx,
+                raw_row=row,
+                canon_period=canon,
+                period_type=ptype,
+                details={"scaled_value": str(val), "scale": scale},
+            )
+            error_count += 1
+            continue
+
+        source_file = normalize_text(row.get("source_file")) or os.path.basename(src)
+        # Avoid cross-document conflicts when extractors emit generic identifiers like "page_3_table_1".
+        # Include the originating filename in those cases.
+        if source_file.startswith('page_'):
+            source_file = f"{os.path.basename(src)}#{source_file}"
+
         hsh = create_hash(company_id, pid, lid, row.get("value_type") or "Actual", source_file)
 
         source_type = os.path.splitext(src)[1].lstrip('.').upper() or 'CSV'    
+
+        period_scope = normalize_text(row.get("period_scope"))
+        if not period_scope:
+            ck = normalize_text(row.get("context_key")) or ''
+            nt = (normalize_text(row.get("notes")) or '').lower()
+            # General heuristic: treat YTD-labelled tables as cumulative-to-date.
+            if 'ytd' in ck.lower() or 'ytd' in nt:
+                period_scope = 'YTD'
+            else:
+                period_scope = 'Period'
 
         normalized_rows.append({
             "company_id": company_id,
@@ -286,6 +424,7 @@ def normalize_data(
             "line_item_id": lid,
             "value": float(val),
             "value_type": normalize_text(row.get("value_type")) or "Actual",
+            "period_scope": period_scope,
             "frequency": normalize_text(row.get("frequency")) or ptype,
             "currency": normalize_text(row.get("currency")) or "USD",
             "source_file": source_file,
@@ -296,13 +435,14 @@ def normalize_data(
             "extraction_method": normalize_text(row.get("extraction_method")),
             "confidence": row.get("confidence"),
             "source_type": source_type,
-            "notes": normalize_text(row.get("notes")),
+            "notes": (normalize_text(row.get("notes")) or "") + (f" [scale={scale}]" if scale != 1 else ""),
             "hash": hsh,
             "_row": idx
         })
 
     log_event("normalization_completed", {
         "output_rows": len(normalized_rows),
-        "errors": error_count
+        "errors": error_count,
+        "rejected": len(rejected_rows),
     })
-    return normalized_rows, error_count
+    return normalized_rows, error_count, rejected_rows

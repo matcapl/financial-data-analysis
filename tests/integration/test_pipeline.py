@@ -36,7 +36,7 @@ def test_pipeline_processor_initialization(processor):
     assert processor is not None
     assert hasattr(processor, 'ingest_file')
     assert hasattr(processor, 'calculate_metrics')
-    assert hasattr(processor, 'generate_questions')
+    assert hasattr(processor, 'generate_findings')
     assert hasattr(processor, 'generate_report')
 
 

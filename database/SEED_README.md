@@ -57,8 +57,8 @@ python database/seed.py
 # Verify seeding results
 python -c "
 import sys
-sys.path.insert(0, 'server/scripts')
-from utils import get_db_connection
+sys.path.insert(0, 'server/app')
+from app.utils.utils import get_db_connection
 with get_db_connection() as conn:
     with conn.cursor() as cur:
         cur.execute('SELECT COUNT(*) FROM question_templates')
@@ -228,8 +228,8 @@ python database/seed.py
 # Check data counts manually
 python -c "
 import sys
-sys.path.insert(0, 'server/scripts')  
-from utils import get_db_connection
+sys.path.insert(0, 'server/app')
+from app.utils.utils import get_db_connection
 with get_db_connection() as conn:
     with conn.cursor() as cur:
         cur.execute('SELECT COUNT(*) FROM question_templates')
@@ -249,8 +249,8 @@ bash ci/04_seed_database.sh
 # Check seeding results
 python -c "
 import sys
-sys.path.insert(0, 'server/scripts')
-from utils import get_db_connection
+sys.path.insert(0, 'server/app')
+from app.utils.utils import get_db_connection
 
 with get_db_connection() as conn:
     with conn.cursor() as cur:

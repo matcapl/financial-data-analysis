@@ -47,8 +47,8 @@ check_database() {
     # Test database connection and migration status
     if $PYTHON_CMD -c "
 import sys
-sys.path.insert(0, 'server/scripts')
-from utils import get_db_connection
+sys.path.insert(0, 'server/app')
+from app.utils.utils import get_db_connection
 try:
     conn = get_db_connection()
     with conn.cursor() as cur:

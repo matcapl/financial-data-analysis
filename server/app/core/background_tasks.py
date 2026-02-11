@@ -43,6 +43,11 @@ async def process_file_async(file_path: str, company_id: int, filename: str) -> 
         metrics_result = processor.calculate_metrics(company_id)
         if not metrics_result.success:
             raise Exception(f"Metrics calculation failed: {metrics_result.message}")
+
+        # Step 3: Generate findings (prioritisation)
+        findings_result = processor.generate_findings(company_id)
+        if not findings_result.success:
+            raise Exception(f"Findings generation failed: {findings_result.message}")
         processing_steps.append("✓ Financial metrics calculated")
         
         # Step 3: Generate Questions
